@@ -39,6 +39,8 @@
   let shapes = [], history = [], future = [], drawing = null, gesture = null, selected = -1;
   let activeColor = 'currentColor';
   let cornerFraction695R = .20; // bezpečný poměr zaoblení 0–50 %
+  let activeNode695T=0; // only the active node and its neighbours are rendered
+  let joystickReady695T=false;
 
   // 693Z – strictly read-only diagnostic for PAN freeze in Android WebView.
   // Event listeners only observe; they never preventDefault or change drawing.
@@ -207,6 +209,7 @@
   }
   function updateSelection() {
     if (selectionLabel) selectionLabel.textContent = selected < 0 ? 'Žádný vybraný tvar' : `Vybraný tvar ${selected + 1} / ${shapes.length} (${shapes[selected]?.tag || '—'})`;
+    if(joystickReady695T)updateJoystick695T();
     // 694N: selection-only actions; keep the canvas area clear otherwise.
     const actions = document.getElementById('lnSvgObjectActions694N');
     if (actions) {
@@ -216,47 +219,138 @@
       actions.querySelector('[data-layer="back"]').disabled = !valid || selected === 0;
     }
   }
-  // 694I: edit absolute M/L/Q/C path points; untouched imported/arc paths stay intact.
-  // A single supported path segment may contain multiple coordinate pairs.
-  const pathArity694I={M:2,L:2,Q:4,C:6};
+  // 695T: safe node editor. Only actual SVG geometry is modified; never
+  // flatten paths, sample/replace curves, or change other shapes.
+  // Absolute M/L/Q/C/A/Z paths are supported; unsupported relative/imported
+  // commands stay untouched. An arc exposes its endpoint (not its flags).
+  const pathArity694I={M:2,L:2,Q:4,C:6,A:7,Z:0};
   function pathNodes694I(shape){
     if(shape?.tag!=='path')return null;
     const d=String(shape.props.d||'').trim();
     const tokens=d.match(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:e[-+]?\d+)?/gi)||[];
     if(tokens.join('').toLowerCase()!==d.replace(/[\s,]/g,'').toLowerCase())return null;
-    const parsed=[], handles=[];
-    let i=0,command=null;
+    const parsed=[],handles=[];let i=0,command=null;
     while(i<tokens.length){
-      if(/^[a-zA-Z]$/.test(tokens[i])){command=tokens[i++];if(!pathArity694I[command])return null;}
+      if(/^[a-zA-Z]$/.test(tokens[i])){
+        command=tokens[i++];
+        if(!Object.prototype.hasOwnProperty.call(pathArity694I,command))return null;
+      }
       if(!command)return null;
       const count=pathArity694I[command];
+      if(count===0){parsed.push({cmd:'Z',nums:[]});command=null;continue;}
       if(i+count>tokens.length)return null;
       const values=tokens.slice(i,i+count);
       if(values.some(v=>/^[a-zA-Z]$/.test(v)))return null;
       const nums=values.map(Number);
       if(nums.some(n=>!Number.isFinite(n)))return null;
+      if(command==='A' && (nums[0]<=0||nums[1]<=0||![0,1].includes(nums[3])||![0,1].includes(nums[4])))return null;
       const cmd=command==='M'&&parsed.length?'L':command;
-      parsed.push({cmd,nums});
-      const segment=parsed.length-1;
-      for(let k=0;k<count;k+=2)handles.push({segment,coordinate:k,kind:k===count-2?'anchor':'control',x:nums[k],y:nums[k+1]});
+      parsed.push({cmd,nums});const segment=parsed.length-1;
+      if(cmd==='A')handles.push({segment,coordinate:5,kind:'anchor',x:nums[5],y:nums[6]});
+      else for(let k=0;k<count;k+=2)handles.push({segment,coordinate:k,kind:k===count-2?'anchor':'control',x:nums[k],y:nums[k+1]});
       i+=count;if(command==='M')command='L';
-      if(parsed.length>400)return null;
+      if(parsed.length>3000)return null;
     }
     return parsed.length?{parsed,handles}:null;
   }
-  function writeNodes694I(parsed){return parsed.map(part=>part.cmd+part.nums.map(fmt).join(' ')).join(' ');}
+  function writeNodes694I(parsed){return parsed.map(part=>part.cmd+(part.nums.length?part.nums.map(fmt).join(' '):'')).join(' ');}
+  function shapeNodes695T(shape){
+    if(!shape||!affine694H(shape))return null;
+    const p=shape.props||{},num=k=>Number(p[k]);
+    if(shape.tag==='path'){
+      const data=pathNodes694I(shape);return data?.handles.length?{handles:data.handles,data}:null;
+    }
+    if(shape.tag==='line')return {handles:[
+      {kind:'anchor',key:'start',x:num('x1'),y:num('y1')},
+      {kind:'anchor',key:'end',x:num('x2'),y:num('y2')} ]};
+    if(shape.tag==='circle')return {handles:[
+      {kind:'center',key:'center',x:num('cx'),y:num('cy')},
+      {kind:'anchor',key:'radius',x:num('cx')+num('r'),y:num('cy')} ]};
+    if(shape.tag==='ellipse')return {handles:[
+      {kind:'center',key:'center',x:num('cx'),y:num('cy')},
+      {kind:'anchor',key:'radius-x',x:num('cx')+num('rx'),y:num('cy')},
+      {kind:'anchor',key:'radius-y',x:num('cx'),y:num('cy')+num('ry')} ]};
+    if(shape.tag==='rect'){
+      const x=num('x'),y=num('y'),w=num('width'),h=num('height');
+      const handles=[
+        {kind:'anchor',key:'tl',x,y},{kind:'anchor',key:'tr',x:x+w,y},
+        {kind:'anchor',key:'br',x:x+w,y:y+h},{kind:'anchor',key:'bl',x,y:y+h}];
+      if(Number.isFinite(num('rx'))&&num('rx')>0)handles.push({kind:'control',key:'radius',x:x+num('rx'),y});
+      return {handles};
+    }
+    if(shape.tag==='polyline'||shape.tag==='polygon'){
+      const text=String(p.points||'').trim();
+      const values=text.match(/[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:e[-+]?\d+)?/gi)||[];
+      if(values.length<4||values.length%2||values.join('')!==text.replace(/[\s,]/g,'')||values.length>6000)return null;
+      return {handles:Array.from({length:values.length/2},(_,i)=>({kind:'anchor',key:'vertex',index:i,x:Number(values[i*2]),y:Number(values[i*2+1])}))};
+    }
+    return null;
+  }
+  function editNode695T(shape,handle,local){
+    if(!shape||!handle||![local.x,local.y].every(Number.isFinite))return false;
+    const p=shape.props,x=clamp(local.x),y=clamp(local.y),key=handle.key;
+    if(shape.tag==='path'){
+      const data=pathNodes694I(shape),part=data?.parsed[handle.segment];
+      if(!part||!Number.isInteger(handle.coordinate))return false;
+      part.nums[handle.coordinate]=x;part.nums[handle.coordinate+1]=y;
+      p.d=writeNodes694I(data.parsed);return true;
+    }
+    if(shape.tag==='line'){
+      const prefix=key==='start'?'1':key==='end'?'2':null;if(!prefix)return false;
+      p['x'+prefix]=fmt(x);p['y'+prefix]=fmt(y);return true;
+    }
+    if(shape.tag==='circle'||shape.tag==='ellipse'){
+      const cx=Number(p.cx),cy=Number(p.cy);
+      if(key==='center'){p.cx=fmt(x);p.cy=fmt(y);return true;}
+      if(key==='radius'&&shape.tag==='circle'){p.r=fmt(Math.max(.01,Math.hypot(x-cx,y-cy)));return true;}
+      if(key==='radius-x'&&shape.tag==='ellipse'){p.rx=fmt(Math.max(.01,Math.abs(x-cx)));return true;}
+      if(key==='radius-y'&&shape.tag==='ellipse'){p.ry=fmt(Math.max(.01,Math.abs(y-cy)));return true;}
+      return false;
+    }
+    if(shape.tag==='rect'){
+      const oldX=Number(p.x),oldY=Number(p.y),oldR=Number(p.rx)||0;
+      const right=oldX+Number(p.width),bottom=oldY+Number(p.height);
+      if(key==='radius'){
+        p.rx=fmt(Math.max(0,Math.min(Math.abs(x-oldX),Number(p.width)/2,Number(p.height)/2)));return true;
+      }
+      const opposite={tl:[right,bottom],tr:[oldX,bottom],br:[oldX,oldY],bl:[right,oldY]}[key];
+      if(!opposite)return false;
+      const [ox,oy]=opposite;
+      p.x=fmt(Math.min(x,ox));p.y=fmt(Math.min(y,oy));
+      p.width=fmt(Math.max(.01,Math.abs(x-ox)));p.height=fmt(Math.max(.01,Math.abs(y-oy)));
+      if(oldR>0)p.rx=fmt(Math.min(oldR,Number(p.width)/2,Number(p.height)/2));
+      return true;
+    }
+    if(shape.tag==='polyline'||shape.tag==='polygon'){
+      const nums=(String(p.points||'').match(/[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:e[-+]?\d+)?/gi)||[]).map(Number);
+      if(!Number.isInteger(handle.index)||handle.index<0||handle.index*2+1>=nums.length)return false;
+      nums[handle.index*2]=x;nums[handle.index*2+1]=y;
+      p.points=Array.from({length:nums.length/2},(_,i)=>fmt(nums[2*i])+','+fmt(nums[2*i+1])).join(' ');return true;
+    }
+    return false;
+  }
   function nodePositions694I(){
     if(selected<0)return null;
-    const shape=shapes[selected], data=pathNodes694I(shape), t=affine694H(shape);
-    if(!data||!t)return null;
-    return {data,t,handles:data.handles.map(h=>({...h,x:world694J(t,h).x,y:world694J(t,h).y}))};
+    const shape=shapes[selected],data=shapeNodes695T(shape),t=affine694H(shape);
+    if(!data||!t||!data.handles.length)return null;
+    const handles=data.handles.map((h,index)=>({...h,index,...world694J(t,h)}));
+    activeNode695T=Math.max(0,Math.min(handles.length-1,activeNode695T));
+    return {data,t,handles};
   }
   function nearestNode694I(p){
     const info=nodePositions694I();if(!info)return null;
     const r=svg.getBoundingClientRect(),tol=18*(24/zoom693W)/Math.max(1,r.width);
     let closest=null,best=tol;
-    for(const h of info.handles){const d=Math.hypot(p.x-h.x,p.y-h.y);if(d<best){best=d;closest=h;}}
+    for(const h of info.handles.slice(Math.max(0,activeNode695T-1),activeNode695T+2)){
+      const d=Math.hypot(p.x-h.x,p.y-h.y);if(d<best){best=d;closest=h;}
+    }
     return closest;
+  }
+  function chooseClosestNode695T(p){
+    const info=nodePositions694I();if(!info)return;
+    let best=Infinity,which=0;
+    for(const h of info.handles){const d=Math.hypot(p.x-h.x,p.y-h.y);if(d<best){best=d;which=h.index;}}
+    activeNode695T=which;
   }
   // 694S: Preserve reference aspect ratio; never distort bitmap while tracing.
   // 694R: Reference image is a strictly visual, non-exportable canvas layer.
@@ -342,8 +436,9 @@
     if(tool.value==='nodes' && selected>=0){
       const info=nodePositions694I();
       if(info){
-        for(const h of info.handles){
-          const node=svgPart({tag:'circle',props:{cx:fmt(h.x),cy:fmt(h.y),r:fmt((h.kind==='anchor'?.34:.27)/zoom693W),fill:h.kind==='anchor'?'#ffc247':'#19ced1',stroke:'#202020','stroke-width':fmt(.10/zoom693W)}});
+        for(const h of info.handles.slice(Math.max(0,activeNode695T-1),activeNode695T+2)){
+          const isActive=h.index===activeNode695T;
+          const node=svgPart({tag:'circle',props:{cx:fmt(h.x),cy:fmt(h.y),r:fmt((isActive?.48:.28)/zoom693W),fill:isActive?'#ffdf62':h.kind==='control'?'#19ced1':'#ffc247',stroke:isActive?'#0b2634':'#202020','stroke-width':fmt((isActive?.18:.10)/zoom693W)}});
           node.style.pointerEvents='none';svg.appendChild(node);
         }
       }
@@ -795,12 +890,15 @@
       const node=nearestNode694I(p);
       if(node){
         gesture.mode='node-drag';gesture.chosen=selected;
-        gesture.node={segment:node.segment,coordinate:node.coordinate,transform:affine694H(shapes[selected])};
-        announce(node.kind==='control'?'Tažením tyrkysového bodu měníš zakřivení.':'Tažením žlutého bodu posuneš konec úseku.');
+        activeNode695T=node.index;
+        gesture.node={handle:{...node},transform:affine694H(shapes[selected])};
+        announce('Vybraný bod '+(activeNode695T+1)+'. Tažením upravíš jeho polohu.');
       }else{
-        selected=hitTest(p);gesture.mode='node-select';
-        if(selected>=0&&!nodePositions694I())announce('Tento tvar nemá editovatelné body M/L/Q/C. Oblouky A a jiné importy zatím ponechávám beze změny.');
-        else announce(selected<0?'Klepni na čáru a zobrazí se její body.':'Táhni žlutý nebo tyrkysový bod.');
+        const previous=selected;selected=hitTest(p);gesture.mode='node-select';
+        if(selected!==previous)activeNode695T=0;
+        if(selected>=0){chooseClosestNode695T(p);}
+        if(selected>=0&&!nodePositions694I())announce('Tento importovaný tvar nemá bezpečně editovatelné body. Originál zůstává beze změny.');
+        else announce(selected<0?'Klepni na tvar a zobrazí se jeho body.':'Zobrazen vybraný bod a sousedé. Další body vybereš šipkami ◀ ▶.');
       }
     } else if (kind === 'scale') {
       const bounds=selected>=0?shapeBounds694H(shapes[selected]):null;
@@ -862,15 +960,10 @@
     }
     if(g.mode==='rotate-select')return;
     if(g.mode==='node-drag'){
-      const shape=shapes[g.chosen],info=pathNodes694I(shape),z=g.node;
-      if(!info||!z||!z.transform)return;
-      const part=info.parsed[z.segment];if(!part)return;
-      const t=z.transform;
-      const local=local694J(t,snapPoint694U(p));
-      part.nums[z.coordinate]=local.x;
-      part.nums[z.coordinate+1]=local.y;
-      shape.props.d=writeNodes694I(info.parsed);
-      render();return;
+      const shape=shapes[g.chosen],z=g.node;
+      if(!shape||!z?.transform)return;
+      const local=local694J(z.transform,snapPoint694U(p));
+      if(editNode695T(shape,z.handle,local))render();return;
     }
     if(g.mode==='node-select')return;
     if (g.mode === 'resize') {
@@ -936,7 +1029,7 @@
   document.addEventListener('visibilitychange',()=>{if(document.hidden){touches694H.clear();pinch694H=null;muteTouches694H=false;cancelInterruptedGesture693X();}});
   // Changing tools while a stroke is still marked active must not freeze drawing.
   tool.addEventListener('change',cancelInterruptedGesture693X);
-  tool.addEventListener('change',()=>{selected=-1;render();announce(tool.value==='eraser'?'Guma maže jednotlivé tvary dotykem.':tool.value==='move'?'Klepni na tvar a přesuň ho tažením.':tool.value==='rotate'?'Vyber objekt a otoč ho žlutým úchytem.':tool.value==='nodes'?'Vyber čáru a táhni její žluté nebo tyrkysové body.':tool.value==='scale'?'Vyber tvar a uprav velikost rohovým úchytem.':tool.value==='bucket'?'Vyber barvu a klepni dovnitř uzavřeného tvaru.':'Nástroj připraven.');});
+  tool.addEventListener('change',()=>{selected=-1;render();announce(tool.value==='eraser'?'Guma maže jednotlivé tvary dotykem.':tool.value==='move'?'Klepni na tvar a přesuň ho tažením.':tool.value==='rotate'?'Vyber objekt a otoč ho žlutým úchytem.':tool.value==='nodes'?'Vyber tvar a uprav jeho aktivní bod nebo přepínej body šipkami.':tool.value==='scale'?'Vyber tvar a uprav velikost rohovým úchytem.':tool.value==='bucket'?'Vyber barvu a klepni dovnitř uzavřeného tvaru.':'Nástroj připraven.');});
   stroke.addEventListener('input',()=>{$('lnSvgStrokeValue693R').textContent=Number(stroke.value).toLocaleString('cs-CZ');});
   function changeColor(next) {
     const before = snapshot();
@@ -2097,6 +2190,9 @@
     ['svg694y-draft-validation', 'Uložené návrhy – validace tvarů'],
     ['svg694y-draft-snapshot', 'Návrh + podklad – sestavení kopie v RAM'],
     ['svg694y-color-safety', 'Bezpečná validace barvy'],
+    ['svg695t-shape-nodes', 'Body všech základních tvarů'],
+    ['svg695t-dense-nodes', 'Hustá křivka – výběr jednotlivých bodů'],
+    ['svg695t-precision-edit', 'Jemná úprava bodu bez změny ostatních dat'],
     ['svg694y-gesture', 'Skutečné kreslení, výběr, posun a pinch'],
     ['svg694y-undo-redo', 'Undo/Redo gest v živém plátně'],
     ['svg694y-native-svg-files', 'Android SVG picker – uložit a načíst'],
@@ -2218,13 +2314,48 @@
         assert(normalColor('url(javascript:alert(1))')==='currentColor','Nebezpečná barva přijata');
         return 'Platná barva zachována, nebezpečný výraz odmítnut.';
       });
+      check('svg695t-shape-nodes',()=>{
+        const items=[
+          [{tag:'line',props:{x1:2,y1:3,x2:20,y2:18}},2],
+          [{tag:'circle',props:{cx:12,cy:12,r:6}},2],
+          [{tag:'ellipse',props:{cx:12,cy:12,rx:8,ry:4}},3],
+          [{tag:'rect',props:{x:2,y:2,width:20,height:16,rx:3}},5],
+          [{tag:'path',props:{d:'M2 12 A8 8 0 0 1 18 12'}},2],
+          [{tag:'path',props:{d:'M18 3 A9 9 0 1 0 18 21 Q11 12 18 3 Z'}},4],
+          [{tag:'polyline',props:{points:'2,2 10,10 20,20'}},3]
+        ];
+        for(const [shape,count] of items){
+          const info=shapeNodes695T(shape);
+          assert(info?.handles.length===count,'Chybné body: '+shape.tag+' '+shape.props.d);
+        }
+        return '7 typů včetně A/Z oblouků, elipsy a zaobleného obdélníku.';
+      });
+      check('svg695t-dense-nodes',()=>{
+        const d='M2 2 '+Array.from({length:400},(_,i)=>`L${2+i%20} ${2+Math.floor(i/20)%20}`).join(' ');
+        const info=shapeNodes695T({tag:'path',props:{d}});
+        assert(info?.handles.length===401,'400 úseků se nepodařilo zpracovat');
+        const current=170,visible=info.handles.slice(current-1,current+2);
+        assert(visible.length===3,'Počet vykreslovaných bodů není omezen');
+        return '401 editovatelných bodů, v plátně aktivní a 2 sousední.';
+      });
+      check('svg695t-precision-edit',()=>{
+        const original={tag:'path',props:{d:'M2 2 L5 5 Q7 7 10 10'}};
+        const shape=deepCopy(original),info=shapeNodes695T(shape),h=info.handles[2];
+        assert(editNode695T(shape,h,{x:7.05,y:7}),'Bod nelze upravit');
+        assert(shape.props.d!==original.props.d,'Úprava se neuložila');
+        const changed=pathNodes694I(shape);
+        assert(near(changed.handles[2].x,7.05),'Posun o 0,05 nefunguje');
+        assert(near(changed.handles[0].x,2)&&near(changed.handles[1].x,5),'Ostatní body se změnily');
+        assert(original.props.d==='M2 2 L5 5 Q7 7 10 10','Originál testu se změnil');
+        return 'Posun 0,05 SVG jednotky; ostatní uzly i originál beze změny.';
+      });
     }finally{
       snapGrid694U=oldGrid;gridStep694U=oldStep;
     }
     if(JSON.stringify(shapes)!==original||reference694R!==oldReference){
       result.push({id:'svg694y-state-integrity',name:'Ochrana skutečných SVG návrhů',kind:statusKind,status:'APP_FAIL',ms:0,detail:'Test změnil uživatelský model nebo referenci – zakázáno.'});
     }
-    for(const [id,name] of expected.slice(12)){
+    for(const [id,name] of expected.filter(([id])=>['svg694y-gesture','svg694y-undo-redo','svg694y-native-svg-files','svg694y-native-png','svg694y-indexeddb'].includes(id))){
       result.push({id,name,kind:'SVG_STUDIO_MANUAL_694Y',status:'NOT_TESTED',ms:0,detail:'694Y neprovádí skutečný dotyk Androidu, zápis uživatelských návrhů ani nativní systémový dialog. Ověřit ručně v APK.'});
     }
     return result;
@@ -2324,5 +2455,79 @@
   new MutationObserver(syncFullscreen695S).observe(modal,{attributes:true,attributeFilter:['hidden']});
   syncFullscreen695S();
 
+  // 695T: draggable precision joystick. It is a DOM overlay, not an SVG
+  // shape, so it never appears in exported icons, history or image drafts.
+  const joystick695T=document.createElement('section');
+  joystick695T.className='lnSvgJoystick695T';
+  joystick695T.hidden=true;
+  joystick695T.setAttribute('aria-label','Jemné doladění bodu nebo objektu');
+  joystick695T.innerHTML=`
+    <div class="lnSvgJoyHead695T" title="Přetáhni panel za tuto lištu">✥ Jemný posun <button type="button" data-hide title="Skrýt joystick" aria-label="Skrýt joystick">×</button></div>
+    <div class="lnSvgJoyNodes695T" data-nodes hidden><button type="button" data-prev aria-label="Předchozí bod">◀</button><span data-count>Bod 1 / 1</span><button type="button" data-next aria-label="Další bod">▶</button></div>
+    <div class="lnSvgJoyPad695T"><button type="button" data-dir="up" aria-label="Nahoru">↑</button><button type="button" data-dir="left" aria-label="Doleva">←</button><button type="button" data-dir="right" aria-label="Doprava">→</button><button type="button" data-dir="down" aria-label="Dolů">↓</button></div>
+    <label class="lnSvgJoyStep695T">Krok <select aria-label="Velikost kroku"><option value="0.02">0,02</option><option value="0.05" selected>0,05</option><option value="0.1">0,1</option><option value="0.25">0,25</option><option value="0.5">0,5</option></select></label>`;
+  const joyHead695T=joystick695T.querySelector('.lnSvgJoyHead695T');
+  const joyNodes695T=joystick695T.querySelector('[data-nodes]');
+  const joyCount695T=joystick695T.querySelector('[data-count]');
+  const joyStep695T=joystick695T.querySelector('select');
+  const joyShow695T=document.createElement('button');
+  joyShow695T.type='button';joyShow695T.className='lnSvgJoyShow695T';
+  joyShow695T.textContent='✥ Jemný posun';joyShow695T.hidden=true;
+  board694K?.append(joystick695T,joyShow695T);
+  let joyManuallyHidden695T=false,joyDrag695T=null;
+  function updateJoystick695T(){
+    const valid=selected>=0&&selected<shapes.length&&['move','nodes','scale','rotate'].includes(tool.value);
+    const info=valid&&tool.value==='nodes'?nodePositions694I():null;
+    const canNudge=valid&&(tool.value!=='nodes'||!!info);
+    joystick695T.hidden=!canNudge||joyManuallyHidden695T;
+    joyShow695T.hidden=!canNudge||!joyManuallyHidden695T;
+    joyNodes695T.hidden=!info;
+    if(info)joyCount695T.textContent='Bod '+(activeNode695T+1)+' / '+info.handles.length;
+  }
+  joystick695T.querySelector('[data-hide]').addEventListener('click',()=>{joyManuallyHidden695T=true;updateJoystick695T();});
+  joyShow695T.addEventListener('click',()=>{joyManuallyHidden695T=false;updateJoystick695T();});
+  for(const [name,delta] of [['prev',-1],['next',1]]){
+    joystick695T.querySelector('[data-'+name+']').addEventListener('click',()=>{
+      const info=nodePositions694I();if(!info)return;
+      activeNode695T=Math.max(0,Math.min(info.handles.length-1,activeNode695T+delta));
+      render();
+    });
+  }
+  function nudge695T(dx,dy){
+    if(selected<0||selected>=shapes.length)return;
+    const shape=shapes[selected],before=snapshot();
+    if(tool.value==='nodes'){
+      const info=nodePositions694I(),h=info?.handles[activeNode695T];if(!h)return;
+      const local=local694J(info.t,{x:h.x+dx,y:h.y+dy});
+      if(!editNode695T(shape,h,local))return;
+    }else{
+      const t=affine694H(shape);if(!t)return;
+      assignAffine694H(shape,{...t,x:t.x+dx,y:t.y+dy});
+    }
+    record(before);render();announce(tool.value==='nodes'?'Bod jemně posunut.':'Objekt jemně posunut.');
+  }
+  for(const [name,dx,dy] of [['up',0,-1],['left',-1,0],['right',1,0],['down',0,1]]){
+    joystick695T.querySelector('[data-dir="'+name+'"]').addEventListener('click',()=>{
+      const step=Number(joyStep695T.value)||.05;nudge695T(dx*step,dy*step);
+    });
+  }
+  joyHead695T.addEventListener('pointerdown',e=>{
+    if(e.target.closest('button'))return;
+    e.preventDefault();
+    const box=joystick695T.getBoundingClientRect(),parent=board694K.getBoundingClientRect();
+    joyDrag695T={id:e.pointerId,x:e.clientX,y:e.clientY,left:box.left-parent.left,top:box.top-parent.top};
+    try{joyHead695T.setPointerCapture(e.pointerId);}catch(_){}
+  });
+  joyHead695T.addEventListener('pointermove',e=>{
+    if(!joyDrag695T||e.pointerId!==joyDrag695T.id)return;
+    e.preventDefault();const d=joyDrag695T;
+    const maxX=Math.max(0,board694K.clientWidth-joystick695T.offsetWidth);
+    const maxY=Math.max(0,board694K.clientHeight-joystick695T.offsetHeight);
+    joystick695T.style.left=Math.max(0,Math.min(maxX,d.left+e.clientX-d.x))+'px';
+    joystick695T.style.top=Math.max(0,Math.min(maxY,d.top+e.clientY-d.y))+'px';
+    joystick695T.style.right='auto';joystick695T.style.bottom='auto';
+  });
+  for(const name of ['pointerup','pointercancel','lostpointercapture'])joyHead695T.addEventListener(name,()=>{joyDrag695T=null;});
+  joystickReady695T=true;
   render();
 })();
