@@ -4886,6 +4886,14 @@ async function uploadExistingReconcileWinnerV2(noteId) {
     return false;
   }
 
+  if ((winner.note && jePoznamkaPouzeLokalniProSync(winner.note)) ||
+      (winner.record && jeSecretRecordPouzeLokalniProSync(winner.record))) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "V2", `695M RECONCILE LOCAL GUARD | id=${noteId}`
+    );
+    return false; // Never claim a local-only upload was sent.
+  }
+
   if (winner.type === "regular" && winner.note) {
     const detail = await uploadLocalNoteToSupabase(
       winner.note,
@@ -5029,6 +5037,23 @@ async function spustExistingClientReconcileV2(
       }
 
       const lokalni = nactiLokalniSnapshotProExistingReconcile();
+      /* 695M: LOKALNI poznamky nikdy nejsou kandidaty cloud uploadu.
+       * Zkontrolovat vsechny autoritativni lokalni zdroje, ne pouze
+       * vyherce podle casu (ten muze byt secret/legacy varianta).
+       * ID s local scope nesmi prepsat ani vzdaleny manifest/merge. */
+      const pouzeLokalniIds695M = new Set();
+      const pridejLocalScope695M = (seznam) => {
+        for (const zaznam of seznam) {
+          if (zaznam?.id && jePoznamkaPouzeLokalniProSync(zaznam)) {
+            pouzeLokalniIds695M.add(String(zaznam.id));
+          }
+        }
+      };
+      pridejLocalScope695M(lokalni.localRegular);
+      pridejLocalScope695M(lokalni.localEncrypted);
+      pridejLocalScope695M(lokalni.localLegacySecret);
+      pridejLocalScope695M(lokalni.localDecryptedSecret);
+      const localScopePreskoceno695M = new Set();
       const manifestMapa = new Map(
         manifest.map((row) => [String(row.id), row])
       );
@@ -5049,6 +5074,10 @@ async function spustExistingClientReconcileV2(
 
       for (const row of manifest) {
         const id = String(row.id);
+        if (pouzeLokalniIds695M.has(id)) {
+          localScopePreskoceno695M.add(id);
+          continue; // Ani vzdaleny tombstone nesmi sahnout na lokalni ID.
+        }
         const winner = lokalni.winners.get(id);
         const meta = ziskejCloudSyncMeta(id);
 
@@ -5128,6 +5157,10 @@ async function spustExistingClientReconcileV2(
        * bezpečně ji pošleme targeted. Známé ID chybějící ze serveru
        * nehádáme – mohlo dojít k převodu vlastnictví. */
       for (const [id] of lokalni.winners.entries()) {
+        if (pouzeLokalniIds695M.has(String(id))) {
+          localScopePreskoceno695M.add(id);
+          continue; // Cloud o teto ciste lokalni poznamce nevi a ani nema.
+        }
         if (manifestMapa.has(id)) continue;
 
         if (
@@ -5143,6 +5176,12 @@ async function spustExistingClientReconcileV2(
         } else {
           localUploadIds.add(id);
         }
+      }
+
+      if (localScopePreskoceno695M.size > 0) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "V2", `695M RECONCILE SKIP LOCAL | count=${localScopePreskoceno695M.size}`
+        );
       }
 
       const odhadFetchBytes = fetchManifestRows.reduce(
@@ -5232,13 +5271,16 @@ async function spustExistingClientReconcileV2(
       );
 
       for (const id of revizniMerge.vynutitLocalId) {
-        if (!vlastniSdileneId.has(id)) {
+        if (!vlastniSdileneId.has(id) &&
+            !pouzeLokalniIds695M.has(String(id))) {
           localUploadIds.add(String(id));
         }
       }
 
       for (const id of revizniMerge.konfliktniId) {
-        oznacUnresolved(id, "revision-merge-conflict");
+        if (!pouzeLokalniIds695M.has(String(id))) {
+          oznacUnresolved(id, "revision-merge-conflict");
+        }
       }
 
       for (const id of idEditovanychJinde) {
@@ -5255,7 +5297,8 @@ async function spustExistingClientReconcileV2(
           aktualniRegular.filter((n) => n?.id).map((n) => String(n.id))
         );
         const noveKopie = revizniMerge.konfliktniKopie.filter(
-          (note) => note?.id && !existujiciIds.has(String(note.id))
+          (note) => note?.id && !existujiciIds.has(String(note.id)) &&
+            !pouzeLokalniIds695M.has(String(note.syncConflict?.originalId || ""))
         );
 
         if (noveKopie.length > 0) {
@@ -5276,6 +5319,7 @@ async function spustExistingClientReconcileV2(
 
       const cloudApplyRows = cloudRows.filter((row) =>
         row?.id &&
+        !pouzeLokalniIds695M.has(String(row.id)) &&
         revizniMerge.prijmoutCloudMetaId.has(String(row.id)) &&
         !revizniMerge.konfliktniId.has(String(row.id)) &&
         !idEditovanychJinde.has(String(row.id))
@@ -5296,6 +5340,7 @@ async function spustExistingClientReconcileV2(
 
       for (const id of localUploadIds) {
         if (
+          pouzeLokalniIds695M.has(String(id)) ||
           unresolvedIds.has(id) ||
           vlastniSdileneId.has(id) ||
           window.LubaNoteSharingNotes
