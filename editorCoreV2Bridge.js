@@ -1760,24 +1760,25 @@
         : "neznámý obsah";
       zobrazToast(`Core V2 odmítl obsah bez změny dat (${prvky}).`, true);
       window.LubaNoteStartupDiag?.zapis?.("CORE V2 IMPORT BLOCK", prvky);
-      // 695E: Pouze read-only diagnostika. Nezapisuje HTML, URL, ID ani obsah poznámky.
+      // 695F: Kratke read-only radky; bez URL, ID, obsahu poznamek nebo hodnot atributu.
       if (prvky.includes("obrázek bez zdroje")) {
         try {
           const doc = new DOMParser().parseFromString(String(richContent || ""), "text/html");
           const images = Array.from(doc.querySelectorAll("img"));
           const missing = images.filter((img) => !String(img.getAttribute("src") || "").trim());
-          const info = missing.slice(0, 8).map((img) => {
+          const log = (label, value) => window.LubaNoteStartupDiag?.zapis?.(label, value);
+          log("CORE V2 IMG 695F COUNT", `images=${images.length} missing=${missing.length}`);
+          missing.slice(0, 4).forEach((img, index) => {
             const parent = img.parentElement;
-            const names = Array.from(img.attributes).map((a) => a.name).sort().join("+") || "none";
-            const parentNames = parent ? Array.from(parent.attributes).map((a) => a.name).sort().join("+") || "none" : "none";
-            return `tag=${parent?.tagName?.toLowerCase() || "none"},attrs=${names},parentAttrs=${parentNames},src=${img.hasAttribute("src") ? "empty" : "absent"}`;
+            const idb = img.getAttribute("data-lubanote-idb-image");
+            const src = img.getAttribute("src");
+            log("CORE V2 IMG 695F NODE", `n=${index + 1} parent=${parent?.tagName?.toLowerCase() || "none"}`);
+            log("CORE V2 IMG 695F SRC", `n=${index + 1} src=${src === null ? "absent" : src.trim() ? "present" : "empty"}`);
+            log("CORE V2 IMG 695F IDB", `n=${index + 1} attr=${idb === null ? "absent" : "present"} value=${idb === null ? "none" : idb.trim() ? "nonempty" : "empty"}`);
+            log("CORE V2 IMG 695F PARENT", `n=${index + 1} idb=${parent?.hasAttribute("data-lubanote-idb-image") ? "yes" : "no"}`);
           });
-          window.LubaNoteStartupDiag?.zapis?.(
-            "CORE V2 IMAGE SOURCE AUDIT 695E",
-            `images=${images.length} missing=${missing.length} examples=[${info.join(" | ")}]`
-          );
         } catch (err) {
-          window.LubaNoteStartupDiag?.zapis?.("CORE V2 IMAGE SOURCE AUDIT 695E", "audit-unavailable");
+          window.LubaNoteStartupDiag?.zapis?.("CORE V2 IMG 695F", "audit-unavailable");
         }
       }
       return false;
