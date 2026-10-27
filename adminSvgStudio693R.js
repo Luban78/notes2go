@@ -51,6 +51,7 @@
   let activeNode695T=0; // only the active node and its neighbours are rendered
   let joinDraft695X=null; // first endpoint stored for joining another object
   let joinAction695X=null;
+  let softCount695Z=1; // affected ANCHORS including the central one: 1/3/5/9/15
   let joystickReady695T=false;
 
   // 693Z – strictly read-only diagnostic for PAN freeze in Android WebView.
@@ -340,6 +341,68 @@
     }
     return false;
   }
+  // 695Z: Proportional anchor editing (soft selection). Never flatten the
+  // path or move unrelated objects. Shape geometry is calculated from an
+  // immutable baseline so pointermove cannot accumulate rounding/drift.
+  function softWeight695Z(distance,radius){
+    if(distance===0)return 1;
+    if(radius<=0||distance>radius)return 0;
+    return (1+Math.cos(Math.PI*distance/(radius+1)))/2;
+  }
+  function softAnchorScope695Z(shape,handle,count){
+    if(!shape||!handle||handle.kind!=='anchor'||count<=1)return null;
+    if(shape.tag==='path'){
+      const data=pathNodes694I(shape),parsed=data?.parsed;
+      // Reject multi-subpaths, close commands and arcs until we can
+      // guarantee their geometric invariants remain intact.
+      if(!parsed?.length||parsed[0].cmd!=='M'||parsed.slice(1).some(p=>!['L','Q','C'].includes(p.cmd)))return null;
+      const index=handle.segment;
+      if(!Number.isInteger(index)||index<0||index>=parsed.length)return null;
+      const radius=Math.floor((count-1)/2);
+      return {kind:'path',data,center:index,radius};
+    }
+    if(shape.tag==='polyline'){
+      const info=shapeNodes695T(shape);
+      if(!info?.handles?.length||!Number.isInteger(handle.index))return null;
+      const radius=Math.floor((count-1)/2);
+      return {kind:'polyline',center:handle.index,radius,handles:info.handles};
+    }
+    return null;
+  }
+  function proportionalGeometry695Z(shape,handle,dx,dy,count){
+    if(![dx,dy].every(Number.isFinite)||!dx&&!dy)return null;
+    const scope=softAnchorScope695Z(shape,handle,count);
+    if(!scope)return null;
+    const weight=i=>softWeight695Z(Math.abs(i-scope.center),scope.radius);
+    if(scope.kind==='path'){
+      const parsed=scope.data.parsed.map(p=>({cmd:p.cmd,nums:[...p.nums]}));
+      for(let i=0;i<parsed.length;i++){
+        const p=parsed[i],before=weight(i?i-1:i),current=weight(i);
+        const move=(k,w)=>{p.nums[k]=precisionCoord695U(p.nums[k]+dx*w);p.nums[k+1]=precisionCoord695U(p.nums[k+1]+dy*w);};
+        if(p.cmd==='M'||p.cmd==='L')move(0,current);
+        else if(p.cmd==='Q'){move(0,(before+current)/2);move(2,current);}
+        else if(p.cmd==='C'){move(0,before);move(2,current);move(4,current);}
+      }
+      return {d:writeNodes694I(parsed)};
+    }
+    if(scope.kind==='polyline'){
+      const pts=scope.handles.map((h,i)=>({x:precisionCoord695U(h.x+dx*weight(i)),y:precisionCoord695U(h.y+dy*weight(i))}));
+      return {points:pts.map(p=>fmt(p.x)+','+fmt(p.y)).join(' ')};
+    }
+    return null;
+  }
+  function softPreview695Z(){
+    if(tool.value!=='nodes'||softCount695Z<=1||selected<0)return [];
+    const shape=shapes[selected],info=shapeNodes695T(shape),handle=info?.handles?.[activeNode695T];
+    const scope=softAnchorScope695Z(shape,handle,softCount695Z),t=affine694H(shape);
+    if(!scope||!t)return [];
+    const handles=info.handles;
+    const targets=scope.kind==='path'?handles.filter(h=>h.kind==='anchor'):handles;
+    return targets.map(h=>{
+      const i=scope.kind==='path'?h.segment:h.index;
+      return {weight:softWeight695Z(Math.abs(i-scope.center),scope.radius),...world694J(t,h)};
+    }).filter(h=>h.weight>.00001);
+  }
   function nodePositions694I(){
     if(selected<0)return null;
     const shape=shapes[selected],data=shapeNodes695T(shape),t=affine694H(shape);
@@ -352,15 +415,21 @@
     const info=nodePositions694I();if(!info)return null;
     const r=svg.getBoundingClientRect(),tol=18*(24/zoom693W)/Math.max(1,r.width);
     let closest=null,best=tol;
+    const anchorsOnly=softCount695Z>1 && ['path','polyline'].includes(shapes[selected]?.tag);
     for(const h of info.handles.slice(Math.max(0,activeNode695T-1),activeNode695T+2)){
+      if(anchorsOnly&&h.kind!=='anchor')continue;
       const d=Math.hypot(p.x-h.x,p.y-h.y);if(d<best){best=d;closest=h;}
     }
     return closest;
   }
   function chooseClosestNode695T(p){
     const info=nodePositions694I();if(!info)return;
+    const anchorsOnly=softCount695Z>1 && ['path','polyline'].includes(shapes[selected]?.tag);
     let best=Infinity,which=0;
-    for(const h of info.handles){const d=Math.hypot(p.x-h.x,p.y-h.y);if(d<best){best=d;which=h.index;}}
+    for(const h of info.handles){
+      if(anchorsOnly&&h.kind!=='anchor')continue;
+      const d=Math.hypot(p.x-h.x,p.y-h.y);if(d<best){best=d;which=h.index;}
+    }
     activeNode695T=which;
   }
   function clearJoinDraft695X(){joinDraft695X=null;}
@@ -508,6 +577,53 @@
     announce(gap>.18?'Objekty spojeny. Konce byly jemně srovnány do společného bodu.':'Objekty spojeny do jedné cesty.');
     return true;
   }
+  // 695Y: G1 tangent continuity at a selected interior anchor. Preserve
+  // all other anchors and the surrounding path; only adjacent controls change.
+  function smoothJoinAtNode695Y(shape,handle){
+    const data=pathNodes694I(shape);
+    if(!data || !handle || handle.kind!=='anchor')return false;
+    const parts=data.parsed,idx=handle.segment;
+    if(idx<=0 || idx>=parts.length-1 || parts.some(p=>p.cmd==='Z') || parts.slice(1).some(p=>p.cmd==='M'))return false;
+    const incoming=parts[idx],outgoing=parts[idx+1];
+    if(!['L','Q','C'].includes(incoming.cmd)||!['L','Q','C'].includes(outgoing.cmd))return false;
+    const endpoint=part=>part.cmd==='C'?{x:part.nums[4],y:part.nums[5]}:part.cmd==='Q'?{x:part.nums[2],y:part.nums[3]}:{x:part.nums[0],y:part.nums[1]};
+    const joint=endpoint(incoming),before=endpoint(parts[idx-1]),after=endpoint(outgoing);
+    const d1=Math.hypot(joint.x-before.x,joint.y-before.y),d2=Math.hypot(after.x-joint.x,after.y-joint.y);
+    if(d1<.02||d2<.02)return false;
+    // Average normalized incoming/outgoing directions; reject a hairpin.
+    const ux=(joint.x-before.x)/d1,uy=(joint.y-before.y)/d1;
+    const vx=(after.x-joint.x)/d2,vy=(after.y-joint.y)/d2;
+    const sx=ux+vx,sy=uy+vy,len=Math.hypot(sx,sy);
+    if(len<.15)return false;
+    const dx=sx/len,dy=sy/len;
+    function cubicFor(part,start){
+      const end=endpoint(part);
+      if(part.cmd==='C')return [...part.nums];
+      if(part.cmd==='Q'){
+        const [qx,qy]=part.nums;
+        return [start.x+(qx-start.x)*2/3,start.y+(qy-start.y)*2/3,end.x+(qx-end.x)*2/3,end.y+(qy-end.y)*2/3,end.x,end.y];
+      }
+      return [start.x+(end.x-start.x)/3,start.y+(end.y-start.y)/3,start.x+(end.x-start.x)*2/3,start.y+(end.y-start.y)*2/3,end.x,end.y];
+    }
+    const left=cubicFor(incoming,before),right=cubicFor(outgoing,joint);
+    const oldLeft=Math.hypot(joint.x-left[2],joint.y-left[3]);
+    const oldRight=Math.hypot(right[0]-joint.x,right[1]-joint.y);
+    const handleLen=Math.min(.9,d1/3,d2/3,Math.max(.12,(oldLeft+oldRight)/2));
+    left[2]=joint.x-dx*handleLen;left[3]=joint.y-dy*handleLen;
+    right[0]=joint.x+dx*handleLen;right[1]=joint.y+dy*handleLen;
+    parts[idx]={cmd:'C',nums:left.map(precisionCoord695U)};
+    parts[idx+1]={cmd:'C',nums:right.map(precisionCoord695U)};
+    shape.props.d=writeNodes694I(parts);
+    return true;
+  }
+  function selectedSmoothJoinHandle695Y(){
+    if(tool.value!=='nodes'||selected<0||shapes[selected]?.tag!=='path')return null;
+    const data=pathNodes694I(shapes[selected]);
+    const handle=data?.handles[activeNode695T];
+    if(!handle || handle.kind!=='anchor'||handle.segment<=0||handle.segment>=data.parsed.length-1)return null;
+    if(data.parsed.some(p=>p.cmd==='Z')||!['L','Q','C'].includes(data.parsed[handle.segment].cmd)||!['L','Q','C'].includes(data.parsed[handle.segment+1].cmd))return null;
+    return handle;
+  }
   // 694S: Preserve reference aspect ratio; never distort bitmap while tracing.
   // 694R: Reference image is a strictly visual, non-exportable canvas layer.
   // It is NEVER inserted into shapes, history, exportSvg(), or PNG renderer.
@@ -597,6 +713,15 @@
           const node=svgPart({tag:'circle',props:{cx:fmt(h.x),cy:fmt(h.y),r:fmt((isActive?.48:.28)/zoom693W),fill:isActive?'#ffdf62':h.kind==='control'?'#19ced1':'#ffc247',stroke:isActive?'#0b2634':'#202020','stroke-width':fmt((isActive?.18:.10)/zoom693W)}});
           node.style.pointerEvents='none';svg.appendChild(node);
         }
+      }
+    }
+    // 695Z: visually show which neighbouring anchors will follow the
+    // active yellow anchor. Pure canvas overlays; never exported.
+    if(tool.value==='nodes' && softCount695Z>1){
+      for(const h of softPreview695Z()){
+        if(h.weight>.999)continue; // the active node already has a yellow marker
+        const marker=svgPart({tag:'circle',props:{cx:fmt(h.x),cy:fmt(h.y),r:fmt((.2+.19*h.weight)/zoom693W),fill:'#2bd7cf',opacity:fmt(.38+.56*h.weight),stroke:'#083445','stroke-width':fmt(.08/zoom693W)}});
+        marker.style.pointerEvents='none';svg.appendChild(marker);
       }
     }
     if(tool.value==='nodes' && joinDraft695X){
@@ -1120,8 +1245,10 @@
       if(node){
         gesture.mode='node-drag';gesture.chosen=selected;
         activeNode695T=node.index;
-        gesture.node={handle:{...node},transform:affine694H(shapes[selected])};
-        announce('Vybraný bod '+(activeNode695T+1)+'. Tažením upravíš jeho polohu.');
+        gesture.node={handle:{...node},transform:affine694H(shapes[selected]),original:deepCopy(shapes[selected]),softCount:softCount695Z};
+        announce(softAnchorScope695Z(shapes[selected],node,softCount695Z)
+          ?'Proporční posun: hlavní bod táhni, okolní ho budou jemně následovat.'
+          :'Vybraný bod '+(activeNode695T+1)+'. Tažením upravíš jeho polohu.');
       }else{
         const previous=selected;selected=hitTest(p);gesture.mode='node-select';
         if(selected!==previous)activeNode695T=0;
@@ -1192,6 +1319,11 @@
       const shape=shapes[g.chosen],z=g.node;
       if(!shape||!z?.transform)return;
       const local=local694J(z.transform,snapPoint694U(p));
+      const baseline=local694J(z.transform,z.handle);
+      const soft=proportionalGeometry695Z(z.original,z.handle,local.x-baseline.x,local.y-baseline.y,z.softCount);
+      if(soft){Object.assign(shape.props,soft);render();return;}
+      // Original single-point behaviour remains the fallback for curves,
+      // circle/rectangle controls and unsupported path commands.
       if(editNode695T(shape,z.handle,local))render();return;
     }
     if(g.mode==='node-select')return;
@@ -2433,6 +2565,9 @@
     ['svg695t-shape-nodes', 'Body všech základních tvarů'],
     ['svg695t-dense-nodes', 'Hustá křivka – výběr jednotlivých bodů'],
     ['svg695t-precision-edit', 'Jemná úprava bodu bez změny ostatních dat'],
+    ['svg695z-soft-three', 'Proporční posun 3 bodů – sousedé ustupují'],
+    ['svg695z-soft-curves', 'Proporční posun Q/C – zachovat řídicí body'],
+    ['svg695z-soft-guard', 'Proporční posun – bezpečné odmítnutí uzavřených cest'],
     ['svg694y-gesture', 'Skutečné kreslení, výběr, posun a pinch'],
     ['svg694y-undo-redo', 'Undo/Redo gest v živém plátně'],
     ['svg694y-native-svg-files', 'Android SVG picker – uložit a načíst'],
@@ -2589,6 +2724,40 @@
         assert(original.props.d==='M2 2 L5 5 Q7 7 10 10','Originál testu se změnil');
         return 'Posun 0,05 SVG jednotky; ostatní uzly i originál beze změny.';
       });
+      check('svg695z-soft-three',()=>{
+        const shape={tag:'path',props:{d:'M0 1 L2 1 L4 1 L6 1 L8 1'}};
+        const before=JSON.stringify(shape);
+        const handle=pathNodes694I(shape).handles.find(h=>h.kind==='anchor'&&h.segment===2);
+        const result=proportionalGeometry695Z(shape,handle,0,2,3);
+        assert(!!result&&JSON.stringify(shape)===before,'Změnil se zdrojový objekt');
+        const p=pathNodes694I({tag:'path',props:result}).parsed;
+        assert(near(p[2].nums[1],3),'Hlavní bod se neposunul o 2');
+        assert(near(p[1].nums[1],2)&&near(p[3].nums[1],2),'Sousedé nemají poloviční posun');
+        assert(near(p[0].nums[1],1)&&near(p[4].nums[1],1),'Vnější body se změnily');
+        return 'Centrum +2, sousedé +1, vzdálené body beze změny.';
+      });
+      check('svg695z-soft-curves',()=>{
+        const shape={tag:'path',props:{d:'M1 1 Q2 2 3 1 C4 0 5 0 6 1 L8 1'}};
+        const before=JSON.stringify(shape);
+        const handle=pathNodes694I(shape).handles.find(h=>h.kind==='anchor'&&h.segment===2);
+        const result=proportionalGeometry695Z(shape,handle,0,2,3);
+        assert(!!result&&JSON.stringify(shape)===before,'Došlo k mutaci originálu');
+        const p=pathNodes694I({tag:'path',props:result}).parsed;
+        assert(near(p[2].nums[5],3),'Vybraný C anchor se neposunul');
+        assert(near(p[2].nums[1],1)&&near(p[2].nums[3],2),'Řídicí body C se neposunuly vahami konců');
+        assert(near(p[1].nums[1],2.5),'Řídicí bod Q nemá plynulý přechod');
+        assert(near(p[3].nums[1],2),'Další anchor se neposunul na polovinu');
+        return 'Řídicí body Q/C sledují přilehlé konce, geometrie zůstává editovatelná.';
+      });
+      check('svg695z-soft-guard',()=>{
+        const closed={tag:'path',props:{d:'M1 1 L2 2 L3 3 Z'}},arc={tag:'path',props:{d:'M1 1 A2 2 0 0 0 3 3'}};
+        assert(proportionalGeometry695Z(closed,{kind:'anchor',segment:1},1,1,5)===null,'Uzavřená cesta změněna');
+        assert(proportionalGeometry695Z(arc,{kind:'anchor',segment:1},1,1,5)===null,'Oblouk změněn');
+        const line={tag:'polyline',props:{points:'0,0 2,0 4,0 6,0 8,0'}};
+        const geometry=proportionalGeometry695Z(line,{kind:'anchor',index:2},0,2,5);
+        assert(geometry?.points==='0,0.5 2,1.5 4,2 6,1.5 8,0.5','Polyline falloff není přesný');
+        return 'Uzavřená/oblouková cesta odmítnuta, polyline: 25/75/100/75/25 %.';
+      });
     }finally{
       snapGrid694U=oldGrid;gridStep694U=oldStep;
     }
@@ -2735,8 +2904,26 @@
     if(endpoint.shapeIndex===joinDraft695X.shapeIndex){announce('Pro spojení vyber koncový bod druhého objektu.');return;}
     joinEndpoints695X(joinDraft695X,endpoint);
   });
+  const smoothJoinAction695Y=document.createElement('button');
+  smoothJoinAction695Y.type='button';smoothJoinAction695Y.className='lnSvgQuickAction694L lnSvgSmoothJoin695Y';
+  smoothJoinAction695Y.setAttribute('aria-label','Plynulý spoj');
+  smoothJoinAction695Y.innerHTML='<span aria-hidden="true">⌁</span><small>Plynulý spoj</small>';
+  joinAction695X.insertAdjacentElement('afterend',smoothJoinAction695Y);
+  smoothJoinAction695Y.addEventListener('click',()=>{
+    const handle=selectedSmoothJoinHandle695Y();
+    if(!handle){announce('Vyber v režimu Body vnitřní bod v místě spojení.');return;}
+    const before=snapshot();
+    if(!smoothJoinAtNode695Y(shapes[selected],handle)){
+      announce('Tento spoj nejde bezpečně vyhladit. Zkontroluj sousední body.');return;
+    }
+    // Keep the same geometric joint selected after conversion to C.
+    activeNode695T=pathNodes694I(shapes[selected]).handles.findIndex(h=>h.segment===handle.segment&&h.kind==='anchor');
+    record(before);render();announce('Plynulý spoj hotov. Směr obou křivek nyní navazuje.');
+  });
   function updateJoinQuick695X(){
     if(!joinAction695X)return;
+    smoothJoinAction695Y.disabled=!selectedSmoothJoinHandle695Y();
+    smoothJoinAction695Y.title=smoothJoinAction695Y.disabled?'Vyber vnitřní bod v místě spoje':'Vyhladit návaznost křivek v tomto bodě';
     const endpoint=endpointInfo695X();
     const pending=!!joinDraft695X;
     joinAction695X.dataset.pending=String(pending);
@@ -2755,6 +2942,14 @@
     <div class="lnSvgJoyHead695T" title="Přetáhni panel za tuto lištu">✥ Jemný posun <button type="button" data-hide title="Skrýt joystick" aria-label="Skrýt joystick">×</button></div>
     <div class="lnSvgJoyNodes695T" data-nodes hidden><button type="button" data-prev aria-label="Předchozí bod">◀</button><span data-count>Bod 1 / 1</span><button type="button" data-next aria-label="Další bod">▶</button></div>
     <div class="lnSvgJoyPad695T"><button type="button" data-dir="up" aria-label="Nahoru">↑</button><button type="button" data-dir="left" aria-label="Doleva">←</button><button type="button" data-dir="right" aria-label="Doprava">→</button><button type="button" data-dir="down" aria-label="Dolů">↓</button></div>
+    <div class="lnSvgJoySoft695Z"><span>Okolí</span><button type="button" data-soft-trigger aria-haspopup="true" aria-expanded="false" aria-label="Počet společně posouvaných bodů">1 bod ▾</button></div>
+    <div class="lnSvgJoySoftMenu695Z" data-soft-menu hidden role="group" aria-label="Vyber počet okolních bodů">
+      <button type="button" data-soft-count="1" aria-pressed="true">1 bod</button>
+      <button type="button" data-soft-count="3">3 body</button>
+      <button type="button" data-soft-count="5">5 bodů</button>
+      <button type="button" data-soft-count="9">9 bodů</button>
+      <button type="button" data-soft-count="15">15 bodů</button>
+    </div>
     <div class="lnSvgJoyStep695T"><span>Krok</span><button type="button" class="lnSvgStepTrigger695U" data-step-trigger aria-haspopup="true" aria-expanded="false" aria-label="Velikost kroku">0,05 ▾</button></div>
     <div class="lnSvgStepMenu695U" data-step-menu hidden role="group" aria-label="Vyber krok jemného posunu">
       <button type="button" data-step="0.02">0,02</button><button type="button" data-step="0.05" aria-pressed="true">0,05</button>
@@ -2765,9 +2960,37 @@
   const joyCount695T=joystick695T.querySelector('[data-count]');
   const joyStepTrigger695U=joystick695T.querySelector('[data-step-trigger]');
   const joyStepMenu695U=joystick695T.querySelector('[data-step-menu]');
+  const joySoftTrigger695Z=joystick695T.querySelector('[data-soft-trigger]');
+  const joySoftMenu695Z=joystick695T.querySelector('[data-soft-menu]');
   let joyStep695U=.05;
+  const closeSoft695Z=()=>{joySoftMenu695Z.hidden=true;joySoftTrigger695Z.setAttribute('aria-expanded','false');};
+  joySoftTrigger695Z.addEventListener('click',()=>{
+    closeStep695U();
+    const opening=joySoftMenu695Z.hidden;joySoftMenu695Z.hidden=!opening;
+    joySoftTrigger695Z.setAttribute('aria-expanded',String(opening));
+  });
+  joySoftMenu695Z.querySelectorAll('[data-soft-count]').forEach(button=>button.addEventListener('click',()=>{
+    softCount695Z=Number(button.dataset.softCount);
+    joySoftTrigger695Z.textContent=button.textContent+' ▾';
+    joySoftMenu695Z.querySelectorAll('[data-soft-count]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));
+    if(softCount695Z>1 && selected>=0 && tool.value==='nodes'){
+      const info=nodePositions694I(),active=info?.handles[activeNode695T];
+      if(info&&active&&active.kind!=='anchor'){
+        let best=Infinity,closest=activeNode695T;
+        for(const h of info.handles){
+          if(h.kind!=='anchor')continue;
+          const d=Math.hypot(h.x-active.x,h.y-active.y);
+          if(d<best){best=d;closest=h.index;}
+        }
+        activeNode695T=closest;
+      }
+    }
+    closeSoft695Z();render();
+    announce(softCount695Z===1?'Úprava jen jednoho bodu.':'Proporční úprava '+softCount695Z+' bodů: hlavní bod se pohne nejvíce, sousedé méně.');
+  }));
   const closeStep695U=()=>{joyStepMenu695U.hidden=true;joyStepTrigger695U.setAttribute('aria-expanded','false');};
   joyStepTrigger695U.addEventListener('click',()=>{
+    closeSoft695Z();
     const open=joyStepMenu695U.hidden;joyStepMenu695U.hidden=!open;
     joyStepTrigger695U.setAttribute('aria-expanded',String(open));
   });
@@ -2778,9 +3001,9 @@
     closeStep695U();
   }));
   document.addEventListener('pointerdown',e=>{
-    if(!joystick695T.contains(e.target))closeStep695U();
+    if(!joystick695T.contains(e.target)){closeStep695U();closeSoft695Z();}
   },true);
-  joystick695T.addEventListener('keydown',e=>{if(e.key==='Escape')closeStep695U();});
+  joystick695T.addEventListener('keydown',e=>{if(e.key==='Escape'){closeStep695U();closeSoft695Z();}});
   const joyShow695T=document.createElement('button');
   joyShow695T.type='button';joyShow695T.className='lnSvgJoyShow695T';
   joyShow695T.textContent='✥ Jemný posun';joyShow695T.hidden=true;
@@ -2799,10 +3022,14 @@
     joystick695T.hidden=!supported||joyManuallyHidden695T;
     joyShow695T.hidden=!supported||!joyManuallyHidden695T;
     joyNodes695T.hidden=tool.value!=='nodes';
-    joyCount695T.textContent=info?'Bod '+(activeNode695T+1)+' / '+info.handles.length:'Vyber bod';
+    if(info && softCount695Z>1 && ['path','polyline'].includes(shapes[selected]?.tag)){
+      const anchors=info.handles.filter(h=>h.kind==='anchor');
+      joyCount695T.textContent='Kotva '+(anchors.findIndex(h=>h.index===activeNode695T)+1)+' / '+anchors.length;
+    }else joyCount695T.textContent=info?'Bod '+(activeNode695T+1)+' / '+info.handles.length:'Vyber bod';
     joystick695T.querySelectorAll('[data-dir],[data-prev],[data-next]').forEach(button=>{
       button.disabled=!canNudge;
     });
+    joySoftTrigger695Z.disabled=tool.value!=='nodes';
     joystick695T.title=canNudge?'Jemný posun vybraného bodu nebo objektu':'Nejprve klepni na objekt na plátně';
   }
   joystick695T.querySelector('[data-hide]').addEventListener('click',()=>{joyManuallyHidden695T=true;updateJoystick695T();});
@@ -2810,7 +3037,16 @@
   for(const [name,delta] of [['prev',-1],['next',1]]){
     joystick695T.querySelector('[data-'+name+']').addEventListener('click',()=>{
       const info=nodePositions694I();if(!info)return;
-      activeNode695T=Math.max(0,Math.min(info.handles.length-1,activeNode695T+delta));
+      // In the neighbourhood mode skip intermediate Bezier control handles.
+      const anchorsOnly=softCount695Z>1 && ['path','polyline'].includes(shapes[selected]?.tag);
+      if(anchorsOnly){
+        const indices=info.handles.filter(h=>h.kind==='anchor').map(h=>h.index);
+        let position=indices.indexOf(activeNode695T);
+        if(position<0)position=delta>0?-1:indices.length;
+        activeNode695T=indices[Math.max(0,Math.min(indices.length-1,position+delta))]??activeNode695T;
+      }else{
+        activeNode695T=Math.max(0,Math.min(info.handles.length-1,activeNode695T+delta));
+      }
       render();
     });
   }
@@ -2820,12 +3056,15 @@
     if(tool.value==='nodes'){
       const info=nodePositions694I(),h=info?.handles[activeNode695T];if(!h)return;
       const local=local694J(info.t,{x:h.x+dx,y:h.y+dy});
-      if(!editNode695T(shape,h,local))return;
+      const original=local694J(info.t,h);
+      const soft=proportionalGeometry695Z(shape,h,local.x-original.x,local.y-original.y,softCount695Z);
+      if(soft)Object.assign(shape.props,soft);
+      else if(!editNode695T(shape,h,local))return;
     }else{
       const t=affine694H(shape);if(!t)return;
       assignAffine694H(shape,{...t,x:t.x+dx,y:t.y+dy});
     }
-    record(before);render();announce(tool.value==='nodes'?'Bod jemně posunut.':'Objekt jemně posunut.');
+    record(before);render();announce(tool.value==='nodes'?(softCount695Z>1?'Body proporčně posunuty.':'Bod jemně posunut.'):'Objekt jemně posunut.');
   }
   for(const [name,dx,dy] of [['up',0,-1],['left',-1,0],['right',1,0],['down',0,1]]){
     joystick695T.querySelector('[data-dir="'+name+'"]').addEventListener('click',()=>{
@@ -2835,7 +3074,7 @@
   joyHead695T.addEventListener('pointerdown',e=>{
     if(e.target.closest('button'))return;
     e.preventDefault();
-    closeStep695U();
+    closeStep695U();closeSoft695Z();
     const box=joystick695T.getBoundingClientRect();
     joyDrag695T={id:e.pointerId,x:e.clientX,y:e.clientY,left:box.left,top:box.top};
     try{joyHead695T.setPointerCapture(e.pointerId);}catch(_){}
