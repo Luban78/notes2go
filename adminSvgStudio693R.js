@@ -741,6 +741,63 @@
     if(d===shape.props.d)return {reason:'Křivka už je dostatečně hladká.'};
     return {d};
   }
+  // 695W: close ONE selected open vector path, not separate strokes.
+  // The SVG Z command joins the end to the start without rasterizing the
+  // curve or altering its control points. Imported relative/compound paths
+  // are intentionally left unchanged, using the existing safe path parser.
+  function closablePath695W(shape){
+    if(shape?.tag!=='path')return null;
+    // The shared node parser normalizes later M commands to L. Detect those
+    // in the raw path first, or a compound import could be joined incorrectly.
+    if((String(shape.props.d||'').match(/M/g)||[]).length!==1)return null;
+    const parsed=pathNodes694I(shape)?.parsed;
+    if(!parsed||parsed.length<2||parsed[0].cmd!=='M'||
+       parsed.some((segment,i)=>
+         (i>0&&segment.cmd==='M')||segment.cmd==='Z'||
+         !['M','L','Q','C','A'].includes(segment.cmd)))return null;
+    const last=parsed[parsed.length-1];
+    const at=last.cmd==='A'?5:last.nums.length-2;
+    if(at<0)return null;
+    const start={x:parsed[0].nums[0],y:parsed[0].nums[1]};
+    const end={x:last.nums[at],y:last.nums[at+1]};
+    const distance=Math.hypot(start.x-end.x,start.y-end.y);
+    if(!Number.isFinite(distance))return null;
+    // A single zero-length segment does not form a closed shape.
+    if(parsed.length===2&&distance<.01)return null;
+    return {parsed,start,end,distance,at};
+  }
+  function closeSelectedPath695W(){
+    const shape=shapes[selected];
+    const info=closablePath695W(shape);
+    if(!info){
+      announce('Vyber jednu otevřenou cestu. Uzavřené nebo nepodporované tvary nelze znovu uzavřít.');
+      return;
+    }
+    // Large accidental gaps can create a diagonal slash across the icon.
+    // Ask the user to adjust the two endpoints first, rather than silently
+    // drawing a long closing segment.
+    if(info.distance>2.5){
+      announce('Konce jsou příliš daleko. Přibliž je nástrojem Body a zkus Uzavřít znovu.');
+      return;
+    }
+    const before=snapshot();
+    const parsed=info.parsed;
+    const last=parsed[parsed.length-1];
+    // Tiny imprecision from freehand drawing: weld the LAST anchor to the
+    // first. Keep all existing controls and intermediate anchors intact.
+    // For an SVG elliptical arc leave its endpoint alone (arc geometry).
+    const welded=info.distance>0&&info.distance<=.4&&last.cmd!=='A';
+    if(welded){
+      last.nums[info.at]=info.start.x;
+      last.nums[info.at+1]=info.start.y;
+    }
+    parsed.push({cmd:'Z',nums:[]});
+    shape.props.d=writeNodes694I(parsed);
+    if(record(before)){
+      render();
+      announce(welded?'Konce spojeny, cesta uzavřena.':'Cesta uzavřena.');
+    }
+  }
   // 695V: six intentional levels. Stage is keyed by the exact stored path
   // geometry, so Undo/Redo restores the correct level without extra fields
   // in saved SVG or exported shapes. Edits reset the limit naturally.
@@ -2567,6 +2624,22 @@
     smoothAction695V.title=!canSmooth?'Nejprve vyber křivku':isDone?'Vyhlazení dokončeno, můžeš použít Zpět':`Vyhladit křivku (${stage}/${smoothMax695V})`;
   }
 
+  // 695W: one compact action directly after Vyhladit.
+  const closeAction695W=document.createElement('button');
+  closeAction695W.type='button';
+  closeAction695W.className='lnSvgQuickAction694L lnSvgCloseAction695W';
+  closeAction695W.setAttribute('aria-label','Uzavřít cestu');
+  closeAction695W.innerHTML='<span aria-hidden="true">⬡</span><small>Uzavřít</small>';
+  smoothAction695V.insertAdjacentElement('afterend',closeAction695W);
+  closeAction695W.addEventListener('click',closeSelectedPath695W);
+  function updateCloseQuick695W(){
+    const shape=shapes[selected];
+    const allowedMode=['move','nodes','scale','rotate'].includes(tool.value);
+    const canClose=allowedMode&&!!closablePath695W(shape);
+    closeAction695W.disabled=!canClose;
+    closeAction695W.title=canClose?'Spojit první a poslední bod vybrané cesty':'Vyber otevřenou cestu nástrojem Výběr nebo Body';
+  }
+
   // 695T: draggable precision joystick. It is a DOM overlay, not an SVG
   // shape, so it never appears in exported icons, history or image drafts.
   const joystick695T=document.createElement('section');
@@ -2612,6 +2685,7 @@
   let joyManuallyHidden695T=false,joyDrag695T=null;
   function updateJoystick695T(){
     updateSmoothQuick695U();
+    updateCloseQuick695W();
     const valid=selected>=0&&selected<shapes.length&&['move','nodes','scale','rotate'].includes(tool.value);
     const info=valid&&tool.value==='nodes'?nodePositions694I():null;
     const canNudge=valid&&(tool.value!=='nodes'||!!info);
