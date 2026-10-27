@@ -6217,6 +6217,8 @@ async function smazPoznamkyPodleId(ids) {
 }
 
 function ukonciRezimVyberuKaret() {
+  // 695I: prekresleni pri ukonceni vyberu nesmi vratit seznam na zacatek.
+  const obnovPoziciKaret695I = zachytPoziciKaretPredKosem693H();
   rezimVyberuKaret = false;
   vybraneKarty.clear();
   
@@ -6232,6 +6234,7 @@ function ukonciRezimVyberuKaret() {
   cardMenu.hidden = true;
   
   renderTasks();
+  obnovPoziciKaret695I();
   
   if (
     navigator.onLine &&
@@ -6270,7 +6273,15 @@ function ziskejStavVybranychKaret() {
     vseHotove: vybrane.length > 0 &&
       vybrane.every(
         (task) => task.completed === true
-      )
+      ),
+    vseSkryte: vybrane.length > 0 &&
+      vybrane.every((task) => Boolean(task.hiddenAt)),
+    // Stejna ochrana jako u skryti jedne vlastni sdilene poznamky.
+    obsahujeNeskyvatelne: vybrane.some((task) =>
+      Boolean(task.id) &&
+      window.LubaNoteSharingNotes
+        ?.jeVlastniSdilenaPoznamka?.(task.id) === true
+    )
   };
 }
 
@@ -6349,6 +6360,10 @@ function zobrazAkceVybranychKaret() {
         ${stav.vseHotove ? "↩️ Vrátit" : "✅ Hotovo"}
       </button>
 
+      <button type="button" data-card-action="bulk-hide" ${stav.obsahujeNeskyvatelne ? 'disabled aria-disabled="true"' : ""}>
+        👁️ ${stav.vseSkryte ? "Zobrazit" : "Skrýt"}
+      </button>
+
       <button type="button" data-card-action="bulk-delete">
         🗑️ Smazat
       </button>
@@ -6386,6 +6401,11 @@ function zobrazAkceVybranychKaret() {
     <button type="button" class="lubaHasIcon" data-card-action="bulk-complete">
       <span class="lubaActionIcon" data-luba-icon="${stav.vseHotove ? "zpet" : "hotovo"}" aria-hidden="true"></span>
       <span>${stav.vseHotove ? "Vrátit" : "Hotovo"}</span>
+    </button>
+
+    <button type="button" class="lubaHasIcon" data-card-action="bulk-hide" ${stav.obsahujeNeskyvatelne ? 'disabled aria-disabled="true"' : ""}>
+      <span class="lubaActionIcon" data-luba-icon="skryte" aria-hidden="true"></span>
+      <span>${stav.vseSkryte ? "Zobrazit" : "Skrýt"}</span>
     </button>
 
     <button type="button" class="lubaHasIcon" data-card-action="bulk-delete">
@@ -6992,10 +7012,22 @@ cardMenu.addEventListener("click", async (event) => {
     vybraneKarty.add(idKarty);
     
     aktualizujListuVyberuKaret();
-    
-    renderTasks();
+
+    // 695I: Oznaceni nemeni poradi ani obsah karet. Prekresleni celeho
+    // seznamu tu zbytecne rusilo scroll anchor a skakalo na prvni kartu.
+    const karta = kartaOtevrenehoPanelu?.isConnected
+      ? kartaOtevrenehoPanelu
+      : document.querySelector(`.taskCard[data-card-source-index="${selectedCardIndex}"]`);
+    if (karta) {
+      karta.classList.add("cardSelected");
+    } else {
+      // Fallback pro kartu prekreslenou mezitim synchronizaci.
+      const obnovPoziciKaret695I = zachytPoziciKaretPredKosem693H();
+      renderTasks();
+      obnovPoziciKaret695I();
+    }
     zobrazAkceVybranychKaret();
-    
+
     console.log(
       "Rezim vyberu:",
       rezimVyberuKaret
@@ -7037,7 +7069,9 @@ cardMenu.addEventListener("click", async (event) => {
       rezimVyberuKaret = true;
       if (vysledek.doplnenaId) {
         /* Po prideleni ID potrebuje karta obnovit i drag key. */
+        const obnovPoziciKaret695I = zachytPoziciKaretPredKosem693H();
         renderTasks();
+        obnovPoziciKaret695I();
       } else {
         /* Bezne oznaceni uz ma stabilni ID: bez draheho renderTasks(). */
         vysledek.nodes.forEach((node) => node.classList.add("cardSelected"));
@@ -7107,6 +7141,40 @@ cardMenu.addEventListener("click", async (event) => {
     return;
   }
   
+  if (action === "bulk-hide") {
+    const stav = ziskejStavVybranychKaret();
+    if (stav.obsahujeNeskyvatelne) {
+      zobrazZpravuAplikace(
+        "Skryté",
+        "Vlastní sdílené poznámky zatím nelze skrývat. Odeber je z výběru."
+      );
+      return;
+    }
+
+    const budeSkryte = !stav.vseSkryte;
+    const cas = new Date().toISOString();
+    const vysledek = await provedHromadnouZmenuVybranychKaret((task) => {
+      if (budeSkryte) task.hiddenAt = cas;
+      else delete task.hiddenAt;
+    });
+
+    if (vysledek?.lokalneUlozeno) {
+      const pocet = vysledek.pocet;
+      ukonciRezimVyberuKaret();
+      const pocetText = pocet === 1
+        ? "1 poznámka"
+        : pocet >= 2 && pocet <= 4
+          ? `${pocet} poznámky`
+          : `${pocet} poznámek`;
+      zobrazPotvrzeniAkce(
+        budeSkryte
+          ? `Přesunuto do Skrytých: ${pocetText}`
+          : `Vráceno ze Skrytých: ${pocetText}`
+      );
+    }
+    return;
+  }
+
   if (action === "bulk-delete") {
     const ids =
       await ziskejIdVybranychKaret();
