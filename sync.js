@@ -5318,6 +5318,37 @@ async function spustExistingClientReconcileV2(
           `RECONCILE UPLOAD | id=${id}`
         );
 
+        // 695K: stejna IDB obnova musi platit i pro full reconcile.
+        // Neodesilat odlehcenou kopii a nenechat ji blokovat ostatni ID.
+        const winnerPred695K = najdiAktualniWinnerProExistingReconcile(id);
+        if (winnerPred695K?.type === "regular" &&
+            maOdlehcenouIdbZnacku695J(winnerPred695K.note)) {
+          const sluzba695K = window.LubaNoteImageSyncRepair695J;
+          const puvodni695K = winnerPred695K.note;
+          const opravena695K =
+            typeof sluzba695K?.obnovPlnouCache === "function" &&
+            await sluzba695K.obnovPlnouCache(puvodni695K);
+          const winnerPo695K = opravena695K
+            ? najdiAktualniWinnerProExistingReconcile(id) : null;
+          if (winnerPo695K?.note &&
+              sluzba695K?.jeJenObnovenyIdbObrazek?.(
+                puvodni695K, winnerPo695K.note
+              ) === true &&
+              !maOdlehcenouIdbZnacku695J(winnerPo695K.note)) {
+            window.LubaNoteStartupDiag?.zapis?.(
+              "V2", `695K RECONCILE IDB REPAIRED | id=${id}`
+            );
+            // IDB obnova muze zmenit lokalni generaci: stary
+            // manifest/plan uz neplati, vyzadat nove porovnani.
+            oznacUnresolved(id, "idb-repaired-recheck");
+            break;
+          }
+          window.LubaNoteStartupDiag?.zapis?.(
+            "V2", `695K RECONCILE IDB DEFER | id=${id}`
+          );
+          oznacUnresolved(id, "idb-image-unresolved");
+          continue;
+        }
         const ok = await uploadExistingReconcileWinnerV2(id);
         if (ok !== true) {
           oznacUnresolved(id, "upload-failed");
