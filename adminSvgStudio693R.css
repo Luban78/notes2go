@@ -263,3 +263,75 @@
 
 /* 695D: obsolete 693Z pan diagnostic panel is retired; the actual Pan tool stays intact. */
 #adminSvgStudio693RView #lnSvgDiag693Z {display:none!important}
+
+
+/* 695R – the existing SVG Studio fills desktop Admin Dashboard; phone keeps its layout. */
+.lnSvgStudio .lnSvgWorkspace695R {display:flex;flex-direction:column;gap:9px;min-width:0;}
+.lnSvgStudio .lnSvgWorkspaceLeft695R,
+.lnSvgStudio .lnSvgWorkspaceCenter695R,
+.lnSvgStudio .lnSvgWorkspaceRight695R {min-width:0;}
+.lnSvgStudio .lnSvgToolGrid694L.lnSvgGrouped695R {
+  display:flex!important;flex-direction:column;gap:8px!important;grid-template-columns:none!important;
+  width:100%;margin:6px 0 9px!important;padding:0!important;overflow:visible!important;
+}
+.lnSvgStudio .lnSvgToolGroup695R {min-width:0;}
+.lnSvgStudio .lnSvgToolGroupTitle695R {
+  color:var(--color-text-secondary);font-size:11px;letter-spacing:.045em;
+  font-weight:750;margin:0 0 5px 2px;
+}
+.lnSvgStudio .lnSvgToolGroupButtons695R {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;min-width:0;}
+.lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgToolButton693W,
+.lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgQuickAction694L {box-sizing:border-box;width:100%;min-width:0;max-width:none;min-height:61px;margin:0;}
+.lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgQuickAction694L small,
+.lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgToolButton693W span {overflow-wrap:anywhere;hyphens:auto;white-space:normal;}
+.lnSvgStudio .lnSvgCorners695R {display:flex;align-items:center;gap:8px;padding:8px 4px;font-size:13px;min-width:0;}
+.lnSvgStudio .lnSvgCorners695R input {flex:1;min-width:50px;padding:0;}
+.lnSvgStudio .lnSvgCorners695R output {min-width:37px;font-variant-numeric:tabular-nums;text-align:right;font-size:12px;}
+.lnSvgStudio .lnSvgWorkspaceLeft695R>.lnSvgReference694R {margin:5px 0 8px;}
+.lnSvgStudio .lnSvgWorkspaceCenter695R>.lnSvgObjectActions694N {margin:8px 0 10px;}
+.lnSvgStudio .lnSvgWorkspaceCenter695R>.lnSvgStudioBoard {margin:8px auto;}
+.lnSvgStudio .lnSvgWorkspaceRight695R>.lnSvgDraftPanel694K {margin-top:6px;}
+@media (min-width:900px) {
+  .adminDashboardModal:has(#adminSvgStudio693RView:not([hidden])) {padding:0;align-items:stretch;}
+  .adminDashboardModal:has(#adminSvgStudio693RView:not([hidden])) .adminDashboardContent {
+    box-sizing:border-box;width:100vw;max-width:none;height:100dvh;max-height:none;
+    border-radius:0;border:0;box-shadow:none;padding:15px clamp(12px,2vw,36px) 20px;
+  }
+  .lnSvgStudio .lnSvgWorkspace695R {
+    display:grid;grid-template-columns:minmax(225px,285px) minmax(340px,1fr) minmax(215px,290px);
+    align-items:start;gap:14px;width:100%;
+  }
+  .lnSvgStudio .lnSvgWorkspaceLeft695R,
+  .lnSvgStudio .lnSvgWorkspaceRight695R {
+    max-height:calc(100dvh - 104px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;
+    padding:0 4px 12px;
+  }
+  .lnSvgStudio .lnSvgWorkspaceCenter695R {min-width:0;}
+  .lnSvgStudio .lnSvgWorkspaceCenter695R>.lnSvgStudioBoard {
+    box-sizing:border-box;width:min(100%,calc(100dvh - 475px),860px);max-width:none;
+    margin:8px auto;aspect-ratio:1;
+  }
+  .lnSvgStudio .lnSvgToolGroupButtons695R {grid-template-columns:repeat(8,minmax(0,1fr));gap:5px;}
+  .lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgToolButton693W,
+  .lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgQuickAction694L {min-height:54px;padding:4px 1px;}
+  .lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgToolButton693W svg {width:19px;height:19px;flex-basis:19px;}
+  .lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgToolButton693W span,
+  .lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgQuickAction694L small {font-size:10px;}
+}
+@media (min-width:900px) and (max-width:1260px) {
+  .lnSvgStudio .lnSvgWorkspace695R {grid-template-columns:minmax(185px,240px) minmax(320px,1fr) minmax(180px,230px);gap:9px;}
+  .lnSvgStudio .lnSvgToolGroupButtons695R {grid-template-columns:repeat(5,minmax(0,1fr));}
+}
+@media (max-width:899px) {
+  .lnSvgStudio .lnSvgWorkspaceCenter695R>.lnSvgStudioBoard {max-width:360px;}
+  .lnSvgStudio .lnSvgWorkspaceRight695R>.lnSvgStudioPreviewArea693S {margin-top:10px;}
+}
+
+@media (min-width:1261px) {
+  .lnSvgStudio .lnSvgToolGroup695R:nth-child(2) .lnSvgToolGroupButtons695R {
+    grid-template-columns:repeat(9,minmax(0,1fr));
+  }
+  .lnSvgStudio .lnSvgWorkspaceCenter695R>.lnSvgStudioBoard {
+    width:min(100%,calc(100dvh - 420px),860px);
+  }
+}

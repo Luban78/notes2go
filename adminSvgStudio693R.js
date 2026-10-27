@@ -19,11 +19,15 @@
     option.textContent = '✋ Posun plátna';
     tool.appendChild(option);
   }
-  const validTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'pan', 'arc', 'moon', 'partial-eraser', 'scale', 'nodes', 'rotate', 'bucket']);
-  const drawingTools694B = new Set(['pen', 'line', 'circle', 'rect', 'move', 'eraser', 'arc', 'moon', 'partial-eraser', 'scale', 'nodes', 'rotate', 'bucket']);
-  for (const [value,label] of [['bucket','▨ Vyplnit tvar'],['rotate','↻ Otočit objekt'],['nodes','◉ Úprava bodů'],['scale','⤡ Změna velikosti'],['arc','◠ Přesný půlkruh'],['moon','☾ Přesný měsíček'],['partial-eraser','⌁ Částečná guma']]) { if (!Array.from(tool.options).some(o=>o.value===value)) { const o=document.createElement('option');o.value=value;o.textContent=label;tool.appendChild(o); } }
+  const validTools694B = new Set(['pen', 'line', 'circle', 'rect', 'ellipse', 'roundrect', 'move', 'eraser', 'pan', 'arc', 'moon', 'partial-eraser', 'scale', 'nodes', 'rotate', 'bucket']);
+  const drawingTools694B = new Set(['pen', 'line', 'circle', 'rect', 'ellipse', 'roundrect', 'move', 'eraser', 'arc', 'moon', 'partial-eraser', 'scale', 'nodes', 'rotate', 'bucket']);
+  for (const [value,label] of [['ellipse','⬭ Elipsa'],['roundrect','▢ Zaoblený obdélník'],['bucket','▨ Vyplnit tvar'],['rotate','↻ Otočit objekt'],['nodes','◉ Úprava bodů'],['scale','⤡ Změna velikosti'],['arc','◠ Přesný půlkruh'],['moon','☾ Přesný měsíček'],['partial-eraser','⌁ Částečná guma']]) { if (!Array.from(tool.options).some(o=>o.value===value)) { const o=document.createElement('option');o.value=value;o.textContent=label;tool.appendChild(o); } }
   const color = $('lnSvgColor693S'), themeColor = $('lnSvgThemeColor693S');
   const fill = $('lnSvgFill693S'), preview = $('lnSvgPreview693S'), previewLarge = $('lnSvgPreviewLarge693S');
+  if (fill?.parentElement?.classList.contains('lnSvgFillLabel693S')) {
+    const textNode=Array.from(fill.parentElement.childNodes).find(n=>n.nodeType===Node.TEXT_NODE);
+    if(textNode)textNode.textContent=' Vyplnit uzavřené tvary';
+  }
   const notice = $('lnSvgMessage693R'), undoBtn = $('lnSvgUndo693R'), redoBtn = $('lnSvgRedo693S');
   const selectionLabel = $('lnSvgSelection693S');
   const allowed = new Set(['path', 'circle', 'rect', 'line', 'ellipse', 'polyline', 'polygon']);
@@ -34,6 +38,7 @@
   const announce = message => { if (notice) notice.textContent = message; };
   let shapes = [], history = [], future = [], drawing = null, gesture = null, selected = -1;
   let activeColor = 'currentColor';
+  let cornerFraction695R = .20; // bezpečný poměr zaoblení 0–50 %
 
   // 693Z – strictly read-only diagnostic for PAN freeze in Android WebView.
   // Event listeners only observe; they never preventDefault or change drawing.
@@ -432,15 +437,19 @@
     return normalized('path',{d,fill:fill?.checked?activeColor:'none'});
   }
   function shapeAt(a, b, kind) {
-    const filled = fill?.checked && (kind === 'circle' || kind === 'rect');
+    const filled = fill?.checked && ['circle','rect','ellipse','roundrect'].includes(kind);
     let props;
     if (kind === 'arc' || kind === 'moon') return shapeArc694F(a,b,kind);
     if (kind === 'circle') props = {cx:fmt(a.x),cy:fmt(a.y),r:fmt(Math.hypot(b.x-a.x,b.y-a.y))};
-    else if (kind === 'rect') props = {x:fmt(Math.min(a.x,b.x)),y:fmt(Math.min(a.y,b.y)),width:fmt(Math.abs(b.x-a.x)),height:fmt(Math.abs(b.y-a.y))};
+    else if (kind === 'rect' || kind === 'roundrect') {
+      const w=Math.abs(b.x-a.x),h=Math.abs(b.y-a.y);
+      props={x:fmt(Math.min(a.x,b.x)),y:fmt(Math.min(a.y,b.y)),width:fmt(w),height:fmt(h)};
+      if(kind==='roundrect')props.rx=fmt(Math.max(0,Math.min(w,h)*cornerFraction695R));
+    } else if(kind==='ellipse') props={cx:fmt(a.x),cy:fmt(a.y),rx:fmt(Math.abs(b.x-a.x)),ry:fmt(Math.abs(b.y-a.y))};
     else if (kind === 'line') props = {x1:fmt(a.x),y1:fmt(a.y),x2:fmt(b.x),y2:fmt(b.y)};
     else return null;
     if (filled) props.fill = activeColor;
-    return normalized(kind, props);
+    return normalized(kind==='roundrect'?'rect':kind, props);
   }
   function distance(a,b) { return Math.hypot(a.x-b.x,a.y-b.y); }
   function hitTest(p) {
@@ -618,7 +627,7 @@
     return Math.hypot(p.x-x,p.y-y)<=tol;
   }
   // Icon shortcuts mirror the existing select; they do not create a second tool state.
-  const tools693W=[['move','mouse-pointer-2','Výběr'],['scale','maximize','Velikost'],['nodes','nodes','Body'],['rotate','rotate-cw','Rotace'],['pen','pencil','Tužka'],['bucket','bucket','Výplň'],['line','minus','Úsečka'],['circle','circle','Kruh'],['rect','square','Obdélník'],['arc','arc','Půlkruh'],['moon','moon','Měsíček'],['eraser','eraser','Guma'],['partial-eraser','partial-eraser','Guma část'],['pan','hand','Posun plátna']];
+  const tools693W=[['ellipse','ellipse','Elipsa'],['roundrect','roundrect','Zaoblený'],['move','mouse-pointer-2','Výběr'],['scale','maximize','Velikost'],['nodes','nodes','Body'],['rotate','rotate-cw','Rotace'],['pen','pencil','Tužka'],['bucket','bucket','Výplň'],['line','minus','Úsečka'],['circle','circle','Kruh'],['rect','square','Obdélník'],['arc','arc','Půlkruh'],['moon','moon','Měsíček'],['eraser','eraser','Guma'],['partial-eraser','partial-eraser','Guma část'],['pan','hand','Posun plátna']];
   const toolBar693W=document.createElement('div');toolBar693W.className='lnSvgToolBar693W';
   toolBar693W.setAttribute('role','group');toolBar693W.setAttribute('aria-label','Nástroje kreslení');
   const icons693W={
@@ -630,6 +639,8 @@
     bucket:'<path d="M3 14l8-8 9 9-8 8-9-9Z M8 9l6 6 M15 5l1.5-2 M18 8l2-2"/><path d="M18 19q2-5 4-1a2 2 0 0 1-4 1Z"/>',
     minus:'<path d="M4 12h16"/>',circle:'<circle cx="12" cy="12" r="8"/>',
     square:'<rect x="4" y="4" width="16" height="16" rx="2"/>',
+    ellipse:'<ellipse cx="12" cy="12" rx="9" ry="5"/>',
+    roundrect:'<rect x="3" y="5" width="18" height="14" rx="4"/>',
     arc:'<path d="M4 16 A8 8 0 0 1 20 16"/>',
     moon:'<path d="M18 3 A9 9 0 1 0 18 21 A7 7 0 0 1 18 3 Z"/>',
     'partial-eraser':'<path d="M4 20 L10 14 M14 10 L20 4 M4 4h16"/>',
@@ -762,7 +773,7 @@
     const p = point(e), kind = tool.value;
     try { svg.setPointerCapture?.(e.pointerId); } catch (_) { /* window listeners cover no-capture WebViews */ }
     gesture = {id:e.pointerId,startedAt693X:performance.now(),mode:kind,
-      start:['line','rect','circle','arc','moon'].includes(kind)?snapPoint694U(p):p,originClientX:e.clientX,originClientY:e.clientY,before:snapshot(),rawPath:`M${fmt(p.x)} ${fmt(p.y)}`,points:[p]};
+      start:['line','rect','circle','ellipse','roundrect','arc','moon'].includes(kind)?snapPoint694U(p):p,originClientX:e.clientX,originClientY:e.clientY,before:snapshot(),rawPath:`M${fmt(p.x)} ${fmt(p.y)}`,points:[p]};
     if (kind === 'pan') {
       gesture.initialPan={x:panX693W,y:panY693W};
     } else if(kind==='rotate'){
@@ -1551,8 +1562,7 @@
       ['⊞','Vše',()=>$('lnSvgCenterAll693S')?.click()],
       ['◎','Vybraný',()=>$('lnSvgCenterSelected693S')?.click()],
       ['⌫','Vymazat',async()=>{if(shapes.length && await confirm694W1('Opravdu vymazat celou kresbu?'))$('lnSvgClear693R')?.click();}],
-      ['▤','Uložit',()=>draftPanel694K.querySelector('[data-save]')?.click()],
-      ['⋯','Více',()=>{const d=$('lnSvgMore694L');if(d){d.open=!d.open;if(d.open)d.scrollIntoView({block:'nearest'});}}]
+      ['▤','Uložit',()=>draftPanel694K.querySelector('[data-save]')?.click()]
     ];
     actions694L.forEach(([symbol,label,callback,originalId])=>{
       const b=document.createElement('button');b.type='button';
@@ -2220,6 +2230,63 @@
     return result;
   }
   window.LubaNoteSvgStudioTest694Y=Object.freeze({expected:Object.freeze(svgTests694Y.map(row=>row[0])),run:runSvgTests694Y});
+
+
+  // 695R: Three stable tool groups, preserving the ORIGINAL handlers and select.
+  // No duplicated tool state or cloned buttons.
+  const toolGroups695R = [
+    { label:'TVARY', tools:['pen','line','circle','ellipse','rect','roundrect','arc','moon'], actions:[] },
+    { label:'VÝBĚR A ÚPRAVY', tools:['move','nodes','scale','rotate','pan'], actions:['Vše','Vybraný','Zpět','Vpřed'] },
+    { label:'BARVA A GUMA', tools:['bucket','eraser','partial-eraser'], actions:['Vymazat','Uložit'] }
+  ];
+  const originalTools695R = Array.from(toolBar693W.children);
+  const groupFor695R = entry => {
+    const group=document.createElement('section'); group.className='lnSvgToolGroup695R';
+    group.setAttribute('aria-label',entry.label);
+    const caption=document.createElement('div');caption.className='lnSvgToolGroupTitle695R';caption.textContent=entry.label;
+    const buttons=document.createElement('div');buttons.className='lnSvgToolGroupButtons695R';
+    group.append(caption,buttons);
+    for(const name of entry.tools){
+      const b=originalTools695R.find(el=>el.dataset.tool===name);
+      if(b)buttons.appendChild(b);
+    }
+    for(const name of entry.actions){
+      const b=originalTools695R.find(el=>el.getAttribute('aria-label')===name && !el.dataset.tool);
+      if(b)buttons.appendChild(b);
+    }
+    return group;
+  };
+  toolBar693W.replaceChildren(...toolGroups695R.map(groupFor695R));
+  toolBar693W.classList.add('lnSvgGrouped695R');
+  toolBar693W.setAttribute('aria-label','SVG Studio – Tvary, Výběr a úpravy, Barva a guma');
+
+  // Radius of next rounded rectangles; kept separate from existing geometry.
+  const corners695R=document.createElement('label');
+  corners695R.className='lnSvgCorners695R';
+  corners695R.innerHTML='<span>Zaoblení rohů</span><input type="range" min="5" max="50" step="5" value="20" aria-label="Zaoblení obdélníku"><output>20 %</output>';
+  const cornersInput695R=corners695R.querySelector('input');
+  cornersInput695R.addEventListener('input',()=>{
+    cornerFraction695R=Number(cornersInput695R.value)/100;
+    corners695R.querySelector('output').textContent=cornersInput695R.value+' %';
+  });
+  const optionsBody695R=view.querySelector('.lnSvgOptionsBody694L');
+  optionsBody695R?.appendChild(corners695R);
+
+  // 695R: Move the existing selected-object toolbar below canvas. Showing it
+  // can no longer shift the drawing surface under the user's finger.
+  // Reference and color options stay next to the workbench, not hidden in More.
+  const workspace695R=document.createElement('div');
+  workspace695R.className='lnSvgWorkspace695R';
+  const left695R=document.createElement('aside');left695R.className='lnSvgWorkspaceLeft695R';
+  const center695R=document.createElement('section');center695R.className='lnSvgWorkspaceCenter695R';
+  const right695R=document.createElement('aside');right695R.className='lnSvgWorkspaceRight695R';
+  toolBar693W.insertAdjacentElement('beforebegin',workspace695R);
+  workspace695R.append(left695R,center695R,right695R);
+  for(const x of [refPanel694R, view.querySelector('.lnSvgStudioColor693S'), view.querySelector('.lnSvgOptions694L')]) if(x)left695R.appendChild(x);
+  for(const x of [toolBar693W,controls693W,board694L,selectionLabel,objectActions694N]) if(x)center695R.appendChild(x);
+  for(const x of [draftPanel694K,view.querySelector('.lnSvgStudioPreviewArea693S'),view.querySelector('#lnSvgMore694L'),notice]) if(x)right695R.appendChild(x);
+  // Preserve existing reference slider events, draft autosave, icon export,
+  // Undo/Redo, and non-exported canvas guides after reparenting.
 
   render();
 })();
