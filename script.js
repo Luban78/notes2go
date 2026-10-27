@@ -4696,7 +4696,8 @@ window.LubaNoteSharedEditorHost = {
  * Při chybějící lokální plné fotografii se použije jediný READ-ONLY
  * targeted cloud read. Mění se jen src in-memory kopie pro editor,
  * a to pouze při shodné DOM struktuře veškerého ostatního obsahu.
- * Neprovádí se žádný přímý zápis do IndexedDB ani sync upload. */
+ * Serverový dotaz je read-only; 695H po kontrole uloží úplnou
+ * lokální kopii do IndexedDB. Cloudový zápis se neprovádí. */
 function vytvorHtmlSablonu695G(html) {
   const sablona = document.createElement("template");
   sablona.innerHTML = String(html || "");
@@ -4822,11 +4823,102 @@ async function pripravIdbObrazkyCoreV2695G(note) {
       diag("BLOCK no-images-recovered");
       return note;
     }
+    const obnovena = { ...note, richContent: rich.html, todos };
     diag(`PASS restored=${count} source=cloud read-only`);
-    return { ...note, richContent: rich.html, todos };
+
+    /* 695H: Po úspěšné a přesně ověřené obnově opravíme také lokální
+     * plnou IndexedDB cache. Bez změny revize, bez sync uploadu a bez
+     * uložení editoru. Pokud se lokální poznámka mezitím změnila, cache
+     * nepřepisujeme a opravený obsah použijeme jen v tomto editoru. */
+    await ulozObnovenyIdbObrazekDoCache695H(note, obnovena);
+    return obnovena;
   } catch (_) {
     diag("BLOCK read-error");
     return note;
+  }
+}
+
+
+/* 695H – Trvalá lokální oprava pouze v IndexedDB overflow režimu.
+ * 695G zachraňoval obrázky jen pro aktuální otevření. Když se v IDB
+ * už nachází odlehčený HTML snapshot, opakoval by se cloudový read i
+ * při příštím otevření. Vracejí se POUZE src již ověřených obrázků;
+ * nikdy se nemaže poznámka, nezvyšuje uživatelská revize a nic se
+ * neposílá do cloudu. Zápis probíhá existující serializovanou cestou
+ * storage.js a zachovává i obsah Koše a legacy Secret záznamy. */
+async function ulozObnovenyIdbObrazekDoCache695H(puvodni, obnovena) {
+  const diag = (stav) => window.LubaNoteStartupDiag?.zapis?.(
+    "CORE V2 IMG CACHE 695H", stav
+  );
+  const store = window.LubaNoteRegularNotesStore;
+  if (!store?.jeOverflowRezim?.() ||
+      store?.chybiPlnaCacheProSync?.() === true ||
+      typeof store?.cekejNaUlozeni !== "function" ||
+      typeof nactiBeznePoznamkyZUloziste !== "function" ||
+      typeof ulozBeznePoznamkyPrimo !== "function") {
+    diag("SKIP full-idb-cache-unavailable");
+    return false;
+  }
+  if (!puvodni?.id || puvodni?.isSecret === true ||
+      puvodni?.storageScope === "local" ||
+      window.LubaNoteStorageScope?.jePouzeLokalni?.(puvodni) === true ||
+      window.LubaNoteSharingNotes?.jeVlastniSdilenaPoznamka?.(puvodni.id) === true ||
+      !maChybejiciIdbObrazek695G(puvodni) ||
+      maChybejiciIdbObrazek695G(obnovena)) {
+    diag("SKIP invalid-restore");
+    return false;
+  }
+
+  try {
+    // Počkáme na starší zápisy; žádný starší snapshot nesmí opravu
+    // následně přepsat. Novější uživatelské zápisy se zařadí až za ni.
+    await store.cekejNaUlozeni();
+
+    // Čteme VŠECHNY běžné záznamy včetně Koše (ne jen loadTask()).
+    const vsechny = nactiBeznePoznamkyZUloziste();
+    if (!Array.isArray(vsechny)) {
+      diag("SKIP missing-notes");
+      return false;
+    }
+    const index = vsechny.findIndex((task) => task?.id === puvodni.id);
+    if (index < 0 ||
+        // Plná kontrola brání přepsání i změn titulu, tagů, úkolů,
+        // revizí nebo obrázků, které nastaly během cloudového čtení.
+        JSON.stringify(vsechny[index]) !== JSON.stringify(puvodni)) {
+      diag("SKIP note-changed");
+      return false;
+    }
+
+    const bezpecnaKopie = vsechny.slice();
+    bezpecnaKopie[index] = {
+      ...vsechny[index],
+      richContent: obnovena.richContent,
+      todos: obnovena.todos
+    };
+
+    // NIKDY saveAllTasks(): ten by změnil uživatelskou revizi a mohl
+    // spustit synchronizaci. Storage zapíše plnou IDB a zvlášť lehký
+    // bootstrap localStorage přes vlastní frontu.
+    const vysledek = await ulozBeznePoznamkyPrimo(bezpecnaKopie);
+    if (vysledek !== true) {
+      diag("FAIL idb-write");
+      return false;
+    }
+    // Potvrzujeme, že se opravdu obnovilo celé HTML v autoritativní
+    // cache, a ne že nám zápis pouze nespadl na výjimce.
+    const kontrola = nactiBeznePoznamkyZUloziste().find(
+      (task) => task?.id === puvodni.id
+    );
+    if (kontrola?.richContent !== obnovena.richContent ||
+        JSON.stringify(kontrola?.todos) !== JSON.stringify(obnovena.todos)) {
+      diag("FAIL verify-cache");
+      return false;
+    }
+    diag("PASS persisted-idb no-cloud-write");
+    return true;
+  } catch (_) {
+    diag("FAIL idb-exception");
+    return false;
   }
 }
 
@@ -5015,8 +5107,8 @@ async function openTaskEditorById(taskId) {
     }
   }
   
-  // 695G: Jen pracovní kopie pro editor; nikdy nepiseme obnovenou fotografii
-  // zpět do IndexedDB při pouhém otevření poznámky.
+  // 695G/695H: Bezpečné obnovení ze serveru a následná oprava
+  // lokální plné IndexedDB cache, pokud se poznámka nezměnila.
   if (maChybejiciIdbObrazek695G(currentTaskProEditor)) {
     currentTaskProEditor = await pripravIdbObrazkyCoreV2695G(currentTaskProEditor);
   }
