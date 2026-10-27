@@ -7972,13 +7972,21 @@ async function startSync() {
     );
   }
 
-  if (
-    typeof window.LubaNoteRecurring
-      ?.migrujStareOpakovaniPlanneru ===
-    "function"
-  ) {
-    await window.LubaNoteRecurring
-      .migrujStareOpakovaniPlanneru();
+  /* 695N – u jiz overene instalace nesmi historicka migrace
+   * opakovani blokovat splash, kdyz FAST SYNC skoncil SKIP.
+   * Prvni/neovereny start zachova puvodni poradi. Migrace u
+   * overene instalace probehne po UI READY, ale stale PRED obnovou
+   * opakovanych notifikaci, aby nedoslo k jejich rozchazeni. */
+  const migraceOpakovani695N =
+    typeof window.LubaNoteRecurring?.migrujStareOpakovaniPlanneru === "function"
+      ? () => window.LubaNoteRecurring.migrujStareOpakovaniPlanneru()
+      : null;
+  if (migraceOpakovani695N && !lzeOdlozitServisStartu) {
+    const zacatek695N = performance.now();
+    await migraceOpakovani695N();
+    window.LubaNoteStartupDiag?.zapis?.(
+      "FAST", `695N LEGACY MIGRATION PRE-UI | ms=${Math.round(performance.now()-zacatek695N)}`
+    );
   }
 
   let stitkyNactenyZCache = false;
@@ -8066,6 +8074,24 @@ async function startSync() {
       await cleanupSafeDeletedNotes();
     } finally {
       window.LubaNoteStartupDiag?.konec?.(cleanupDiag691AV, "DONE");
+    }
+
+    if (migraceOpakovani695N && lzeOdlozitServisStartu) {
+      // Pustit browser nejdrive k vykresleni po splash-ready.
+      // Zadny dalsi serverovy request kvuli teto zmene nepridavame.
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const zacatek695N = performance.now();
+      try {
+        await migraceOpakovani695N();
+        window.LubaNoteStartupDiag?.zapis?.(
+          "FAST", `695N LEGACY MIGRATION POST-UI | ms=${Math.round(performance.now()-zacatek695N)}`
+        );
+      } catch (error) {
+        window.LubaNoteStartupDiag?.zapis?.(
+          "FAST", "695N LEGACY MIGRATION DEFER | retry-next-start"
+        );
+        throw error;
+      }
     }
 
     if (
