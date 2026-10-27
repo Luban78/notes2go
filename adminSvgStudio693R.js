@@ -257,9 +257,137 @@
       return `  [${JSON.stringify(s.tag)}, ${JSON.stringify(p)}]`;
     });
     const text='[\n'+rows.join(',\n')+'\n]';
-    return {text,original:source.length,optimized:output.length,merged};
+    return {text,original:source.length,optimized:output.length,merged,items:output.map(s=>({tag:s.tag,props:s.props}))};
   }
-  function exportForLuba() {return exportForLuba696C().text;}
+  // 696D – optional export-only geometry simplifier. Original editable shapes,
+  // history, local drafts and cloud-sync payloads are NEVER modified.
+  // Only absolute M/Q subpaths are approximated; unsupported SVG commands,
+  // lines, ellipses, fills and transforms are left completely untouched.
+  let optimizationLevel696D=0;
+  let scheduleOptimizationPreview696D=()=>{};
+  const round696D=n=>{const v=Math.round(n*1000)/1000;return String(Object.is(v,-0)?0:v);};
+  function simplifyPath696D(d,tolerance){
+    const raw=String(d||'').trim();
+    const words=raw.match(/[A-Za-z]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?/g)||[];
+    if(!words.length||words.join('').toLowerCase()!==raw.replace(/[\s,]/g,'').toLowerCase())return null;
+    const subpaths=[];let pos=0,current=null;
+    while(pos<words.length){
+      const c=words[pos++];
+      if(c==='M' && pos+1<words.length){
+        const x=Number(words[pos++]),y=Number(words[pos++]);
+        if(!Number.isFinite(x)||!Number.isFinite(y))return null;
+        current={start:[x,y],segments:[]};subpaths.push(current);
+      }else if(c==='Q' && current && pos+3<words.length){
+        const a=words.slice(pos,pos+4).map(Number);pos+=4;
+        if(a.some(n=>!Number.isFinite(n)))return null;
+        current.segments.push([[a[0],a[1]],[a[2],a[3]]]);
+      }else return null;
+      if(subpaths.length>500||subpaths.reduce((sum,p)=>sum+p.segments.length,0)>3000)return null;
+    }
+    if(!subpaths.length)return null;
+    let oldCount=0,newCount=0;
+    const output=[];
+    // Fit a cubic Bezier using chord-length parameterization, with endpoints
+    // fixed exactly. Each attempted merge checks all original curve samples.
+    function cubicFit(points,first,last){
+      const n=last-first;let total=0;const u=[0];
+      for(let i=first+1;i<=last;i++){
+        total+=Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);u.push(total);
+      }
+      if(total<1e-8)return null;
+      const p0=points[first],p3=points[last];
+      let aa=0,ab=0,bb=0,ax=0,ay=0,bx=0,by=0;
+      for(let i=0;i<=n;i++){
+        const t=u[i]/total, inv=1-t;
+        const a=3*inv*inv*t,b=3*inv*t*t;
+        const baseX=inv*inv*inv*p0[0]+t*t*t*p3[0];
+        const baseY=inv*inv*inv*p0[1]+t*t*t*p3[1];
+        const dx=points[first+i][0]-baseX,dy=points[first+i][1]-baseY;
+        aa+=a*a;ab+=a*b;bb+=b*b;ax+=a*dx;ay+=a*dy;bx+=b*dx;by+=b*dy;
+      }
+      const det=aa*bb-ab*ab;
+      if(det<1e-14)return null;
+      const c1=[(ax*bb-bx*ab)/det,(ay*bb-by*ab)/det];
+      const c2=[(bx*aa-ax*ab)/det,(by*aa-ay*ab)/det];
+      if(![...c1,...c2].every(Number.isFinite))return null;
+      let worst=0,split=0;
+      for(let i=1;i<n;i++){
+        const t=u[i]/total,k=1-t;
+        const x=k*k*k*p0[0]+3*k*k*t*c1[0]+3*k*t*t*c2[0]+t*t*t*p3[0];
+        const y=k*k*k*p0[1]+3*k*k*t*c1[1]+3*k*t*t*c2[1]+t*t*t*p3[1];
+        const error=Math.hypot(x-points[first+i][0],y-points[first+i][1]);
+        if(error>worst){worst=error;split=i;}
+      }
+      // Catch a cubic that loops far outside the source polyline: handles
+      // are never allowed extreme excursions relative to their segment.
+      const bound=Math.max(total*1.6,tolerance*3);
+      const outlier=[c1,c2].some(c=>Math.hypot(c[0]-p0[0],c[1]-p0[1])>bound && Math.hypot(c[0]-p3[0],c[1]-p3[1])>bound);
+      return {c1,c2,end:p3,worst:outlier?Infinity:worst,split};
+    }
+    for(const part of subpaths){
+      const begin=part.start;
+      output.push('M'+round696D(begin[0])+' '+round696D(begin[1]));
+      if(!part.segments.length)continue;
+      oldCount+=part.segments.length;
+      const samples=[begin];let point=begin;
+      for(const [control,end] of part.segments){
+        for(let i=1;i<=4;i++){
+          const t=i/4,k=1-t;
+          samples.push([k*k*point[0]+2*k*t*control[0]+t*t*end[0],
+                        k*k*point[1]+2*k*t*control[1]+t*t*end[1]]);
+        }
+        point=end;
+      }
+      const pending=[[0,part.segments.length]];let ops=0;
+      while(pending.length){
+        const [start,stop]=pending.pop(),count=stop-start;
+        const fit=count>=2?cubicFit(samples,start*4,stop*4):null;
+        if(fit&&fit.worst<=tolerance){
+          output.push('C'+[...fit.c1,...fit.c2,...fit.end].map(round696D).join(' '));newCount++;continue;
+        }
+        if(count===1){
+          const [ctl,end]=part.segments[start];
+          output.push('Q'+[...ctl,...end].map(round696D).join(' '));newCount++;continue;
+        }
+        const worst=Math.round((fit?.split||count*2)/4),cut=Math.max(start+1,Math.min(stop-1,start+worst));
+        pending.push([cut,stop],[start,cut]);
+        if(++ops>3500)return null;
+      }
+    }
+    const result=output.join(' ');
+    return {d:result,oldCount,newCount};
+  }
+  function optimizedExport696D(level=optimizationLevel696D){
+    const packed=exportForLuba696C();
+    const originalQ=(packed.items.map(x=>x.tag==='path'?(x.props.d.match(/Q/g)||[]).length:0)).reduce((a,b)=>a+b,0);
+    let beforeQ=0,afterQ=0,optimizedPaths=0;
+    const tol=level<=0?0:0.002+Math.pow(level/100,2)*0.105;
+    const items=packed.items.map(item=>{
+      const props={...item.props};
+      if(item.tag==='path' && tol>0 && props.d && props.d.includes('Q')){
+        const result=simplifyPath696D(props.d,tol);
+        if(result&&result.newCount<result.oldCount&&result.d.length<props.d.length){
+          beforeQ+=result.oldCount;afterQ+=result.newCount;
+          props.d=result.d;optimizedPaths++;
+        }
+      }
+      return {tag:item.tag,props};
+    });
+    const rows=items.map(item=>{
+      const out={};
+      for(const [key,value] of Object.entries(item.props)){
+        if(Object.prototype.hasOwnProperty.call(lubaDefaults696C,key)&&String(value)===lubaDefaults696C[key])continue;
+        out[key]=value;
+      }
+      return `  [${JSON.stringify(item.tag)}, ${JSON.stringify(out)}]`;
+    });
+    const text='[\n'+rows.join(',\n')+'\n]';
+    return {text,items,originalQ,afterSegments:originalQ-beforeQ+afterQ,
+      optimizedPaths,percent:packed.text.length?Math.round((1-text.length/packed.text.length)*100):0,
+      bytesBefore:new Blob([packed.text]).size,bytesAfter:new Blob([text]).size};
+  }
+  function exportForLuba(){return optimizedExport696D().text;}
+
   function updatePalette() {
     if (color) color.value = activeColor === 'currentColor' ? '#333333' : activeColor;
     themeColor?.setAttribute('aria-pressed', String(activeColor === 'currentColor'));
@@ -711,6 +839,7 @@
   // 694M: centered non-exported guides live ONLY in the canvas render, never in shapes.
   let showCenter694M = true;
   function render() {
+    scheduleOptimizationPreview696D();
     // Keep pointer capture on the persistent SVG root while redrawing children.
     svg.replaceChildren();
     for (let i = 0; i <= 24; i += 2) {
@@ -1539,11 +1668,12 @@
     return ok;
   };
   $('lnSvgCopy693R').addEventListener('click',()=>copy(exportSvg()));
-  $('lnSvgCopyLuba693R').addEventListener('click',async()=>{
-    const result=exportForLuba696C();
+  async function copyOptimized696D(){
+    const result=optimizedExport696D();
     const copied=await copy(result.text);
-    if(copied)announce(`Kód pro LubaNote zkopírován. SVG prvků: ${result.original} → ${result.optimized} (spojeno ${result.merged} tahů). Editovatelný návrh nezměněn.`);
-  });
+    if(copied)announce(`Kód pro LubaNote zkopírován. Křivky: ${result.originalQ} → ${result.afterSegments}, velikost ${Math.round(result.bytesBefore/102.4)/10} → ${Math.round(result.bytesAfter/102.4)/10} kB. Originál nezměněn.`);
+  }
+  $('lnSvgCopyLuba693R').addEventListener('click',copyOptimized696D);
   $('lnSvgCopySource693R').addEventListener('click',()=>copy(source.value));
 
   // An explicit paste control works where the custom WebView selection menu
@@ -3125,6 +3255,69 @@
   for(const x of [refPanel694R, view.querySelector('.lnSvgStudioColor693S'), view.querySelector('.lnSvgOptions694L')]) if(x)left695R.appendChild(x);
   for(const x of [toolBar693W,controls693W,board694L,selectionLabel,objectActions694N]) if(x)center695R.appendChild(x);
   for(const x of [draftPanel694K,view.querySelector('.lnSvgStudioPreviewArea693S'),view.querySelector('#lnSvgMore694L'),notice]) if(x)right695R.appendChild(x);
+  // 696D: visible live comparison, independent from the edit canvas and draft storage.
+  // The slider only changes exported text, never shapes or saved plans.
+  const optimizePanel696D=document.createElement('details');
+  optimizePanel696D.className='lnSvgOptimizePanel696D';
+  optimizePanel696D.open=true;
+  optimizePanel696D.innerHTML=`<summary>✨ Optimalizace ikony <small>živý náhled</small></summary>
+    <div class="lnSvgOptBody696D">
+      <label class="lnSvgOptSlider696D"><span>Úspora kódu <output data-level>0 % – bez úpravy</output></span>
+        <input type="range" min="0" max="100" step="5" value="0" aria-label="Míra zjednodušení SVG křivek"></label>
+      <div class="lnSvgOptCompare696D">
+        <div><strong>Originál</strong><div class="lnSvgOptView696D" data-original></div></div>
+        <div><strong>Optimalizováno</strong><div class="lnSvgOptView696D" data-optimized></div></div>
+      </div>
+      <div class="lnSvgOptInfo696D" data-stat role="status">Otevři uloženou ikonu a pohybuj posuvníkem.</div>
+      <button type="button" data-copy-opt>📋 Kopírovat pro LubaNote</button>
+      <small class="lnSvgOptSafety696D">Pouze export. Uložená kresba, body, historie i synchronizace zůstávají beze změny. Při vyšší úspoře sleduj drobné detaily.</small>
+    </div>`;
+  const more696D=view.querySelector('#lnSvgMore694L');
+  if(more696D?.parentElement===right695R)right695R.insertBefore(optimizePanel696D,more696D);
+  else right695R.appendChild(optimizePanel696D);
+  const levelInput696D=optimizePanel696D.querySelector('input[type=range]');
+  const levelOutput696D=optimizePanel696D.querySelector('[data-level]');
+  const stat696D=optimizePanel696D.querySelector('[data-stat]');
+  const originalView696D=optimizePanel696D.querySelector('[data-original]');
+  const optimView696D=optimizePanel696D.querySelector('[data-optimized]');
+  let pendingPreview696D=false,lastPreviewKey696D='';
+  function miniSvg696D(target,parts){
+    const mini=document.createElementNS(NS,'svg');
+    mini.setAttribute('viewBox','0 0 24 24');mini.setAttribute('aria-hidden','true');
+    mini.setAttribute('fill','none');mini.setAttribute('stroke','currentColor');
+    mini.setAttribute('stroke-width','1.85');
+    mini.setAttribute('stroke-linecap','round');mini.setAttribute('stroke-linejoin','round');
+    for(const part of parts){if(part&&allowed.has(part.tag))mini.appendChild(svgPart(part));}
+    target.replaceChildren(mini);
+  }
+  function updatePreview696D(){
+    pendingPreview696D=false;
+    if(!optimizePanel696D.open||view.hidden)return;
+    const key=optimizationLevel696D+':'+JSON.stringify(shapes);
+    if(key===lastPreviewKey696D)return;
+    lastPreviewKey696D=key;
+    try{
+      const result=optimizedExport696D();
+      miniSvg696D(originalView696D,shapes);
+      miniSvg696D(optimView696D,result.items);
+      const kb=n=>(n/1024).toFixed(1).replace('.',',');
+      const saved=result.bytesBefore-result.bytesAfter;
+      stat696D.textContent=`${kb(result.bytesBefore)} → ${kb(result.bytesAfter)} kB (${saved>=0?'−':'+'}${kb(Math.abs(saved))} kB) · křivek ${result.originalQ} → ${result.afterSegments}${result.optimizedPaths?'':' · bez další úspory'}`;
+    }catch(error){stat696D.textContent='Náhled se nepodařilo vytvořit: '+String(error?.message||error);}
+  }
+  scheduleOptimizationPreview696D=()=>{
+    if(pendingPreview696D||!optimizePanel696D.open||view.hidden)return;
+    pendingPreview696D=true;
+    requestAnimationFrame(updatePreview696D);
+  };
+  levelInput696D.addEventListener('input',()=>{
+    optimizationLevel696D=Number(levelInput696D.value);
+    levelOutput696D.textContent=optimizationLevel696D===0?'0 % – bez úpravy':`${optimizationLevel696D} %`;
+    scheduleOptimizationPreview696D();
+  });
+  optimizePanel696D.addEventListener('toggle',scheduleOptimizationPreview696D);
+  optimizePanel696D.querySelector('[data-copy-opt]').addEventListener('click',copyOptimized696D);
+  scheduleOptimizationPreview696D();
   // Preserve existing reference slider events, draft autosave, icon export,
   // Undo/Redo, and non-exported canvas guides after reparenting.
 
