@@ -1,7 +1,6 @@
 package cz.luban.notes2go;
 
 import android.app.AlarmManager;
-import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -27,46 +26,46 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     return manager != null && (Build.VERSION.SDK_INT < 31 || manager.canScheduleExactAlarms());
   }
 
+  /* 695Q: Native does not display Android AlertDialog. A single existing
+   * LubaNote choice modal in WebView handles the human-facing request.
+   * Preserve the proven reminder restoration after exact permission is granted. */
   private void checkExactAlarmPermission692R() {
-    if (Build.VERSION.SDK_INT < 31 || exactAlarmPromptShown692R) return;
+    if (Build.VERSION.SDK_INT < 31 || exactAlarmPromptShown692R || !canScheduleExact692R()) return;
     exactAlarmPromptShown692R = true;
     getActivity().runOnUiThread(() -> {
-      boolean allowed = canScheduleExact692R();
-      if (allowed) {
+      if (!getActivity().isFinishing() && !getActivity().isDestroyed()) {
         LubaNoteRemoteAlarm692O.restoreOnBoot(getContext());
       }
-      if (getActivity().isFinishing() || getActivity().isDestroyed()) return;
-      SharedPreferences diagnostic = getContext().getSharedPreferences("lubanote_alarm_diag_692T", Context.MODE_PRIVATE);
-      if (!diagnostic.getBoolean("shown", false)) {
-        diagnostic.edit().putBoolean("shown", true).apply();
-        if (allowed) {
-          new AlertDialog.Builder(getActivity())
-              .setTitle("Diagnostika připomínek 692T")
-              .setMessage("Android API " + Build.VERSION.SDK_INT + "\nPřesné alarmy: POVOLENY\nRežim: setExactAndAllowWhileIdle\nTo neprokazuje přesnost doručení.")
-              .setPositiveButton("OK", (dialog, which) -> {})
-              .show();
-          return;
+    });
+  }
+
+  /* 695Q: One strictly opt-in native action after tapping the existing
+   * LubaNote modal's 'Otevřít nastavení' button. No alarm schedule is changed. */
+  @PluginMethod public void openExactAlarmSettings695Q(PluginCall call) {
+    if (Build.VERSION.SDK_INT < 31 || canScheduleExact692R()) {
+      call.resolve();
+      return;
+    }
+    getActivity().runOnUiThread(() -> {
+      if (getActivity().isFinishing() || getActivity().isDestroyed()) {
+        call.reject("ACTIVITY_NOT_AVAILABLE");
+        return;
+      }
+      try {
+        Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+            Uri.parse("package:" + getContext().getPackageName()));
+        getActivity().startActivity(intent);
+        call.resolve();
+      } catch (Exception firstError) {
+        try {
+          Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+              Uri.parse("package:" + getContext().getPackageName()));
+          getActivity().startActivity(fallback);
+          call.resolve();
+        } catch (Exception secondError) {
+          call.reject("ALARM_SETTINGS_UNAVAILABLE");
         }
       }
-      if (allowed) return;
-      new AlertDialog.Builder(getActivity())
-          .setTitle("Diagnostika připomínek 692T")
-          .setMessage("Android API " + Build.VERSION.SDK_INT + "\nPřesné alarmy: NEPOVOLENY\nRežim: setAndAllowWhileIdle (nepřesný)\nOtevřít nastavení Budíky a připomínky?")
-          .setNegativeButton("Později", (dialog, which) -> {})
-          .setPositiveButton("Otevřít nastavení", (dialog, which) -> {
-            try {
-              Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                  Uri.parse("package:" + getContext().getPackageName()));
-              getActivity().startActivity(intent);
-            } catch (Exception ignored) {
-              try {
-                Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:" + getContext().getPackageName()));
-                getActivity().startActivity(fallback);
-              } catch (Exception ignoredAgain) { /* no crash */ }
-            }
-          })
-          .show();
     });
   }
 

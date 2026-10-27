@@ -623,6 +623,62 @@
     modal.hidden = false;
   }
 
+  /* 695Q: Jednoduche potvrzeni pouziva existujici choiceModal / choiceDialog.
+   * Nove modalove DOM, styly, globalni klavesnice ani Android dialog nevznikaji. */
+  function otevriPotvrzovaciModalLubaNote({
+    nadpis = "Upozornění",
+    text = "",
+    popisekZrusit = "Později",
+    popisekPotvrdit = "Otevřít nastavení",
+    poZruseni = null,
+    poPotvrzeni = null
+  } = {}) {
+    vytvorModalPokudChybi();
+    // Nezamenovat jiny prave otevreny modal (datum, nastaveni, volba).
+    if (!modal.hidden) return false;
+    predchoziFokus = document.activeElement;
+    nadpisElement.textContent = nadpis;
+    moznostiElement.replaceChildren();
+
+    const zprava = document.createElement("p");
+    zprava.className = "choiceDialogFieldLabel";
+    zprava.style.whiteSpace = "pre-line";
+    zprava.textContent = text;
+
+    const akce = document.createElement("div");
+    akce.className = "choiceDialogActions";
+    const pozdeji = document.createElement("button");
+    pozdeji.type = "button";
+    pozdeji.className = "choiceDialogSecondary";
+    pozdeji.textContent = popisekZrusit;
+    const potvrdit = document.createElement("button");
+    potvrdit.type = "button";
+    potvrdit.className = "choiceDialogSave";
+    potvrdit.textContent = popisekPotvrdit;
+
+    pozdeji.addEventListener("click", () => {
+      try { poZruseni?.(); } finally { zavriVyberovyModal(); }
+    });
+    potvrdit.addEventListener("click", async () => {
+      potvrdit.disabled = true;
+      try {
+        if (typeof poPotvrzeni === "function") await poPotvrzeni();
+        zavriVyberovyModal();
+      } catch (error) {
+        console.warn("LubaNote: otevření nastavení přesných alarmů selhalo", error);
+        potvrdit.disabled = false;
+      }
+    });
+    akce.append(pozdeji, potvrdit);
+    moznostiElement.append(zprava, akce);
+    pripravKlavesniciProModal();
+    modal.hidden = false;
+    // Zadaná funkce neotevírá klávesnici.
+    return true;
+  }
+
+  window.otevriPotvrzovaciModalLubaNote = otevriPotvrzovaciModalLubaNote;
+
   window.otevriVyberovyModal =
     otevriVyberovyModal;
   

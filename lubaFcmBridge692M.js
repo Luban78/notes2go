@@ -15,6 +15,59 @@
   const pendingUpdates = new Map();
   const perNoteRevisions = new Map();
 
+  /* 695Q: Opravneni presnych alarmu se zobrazuje az po startu aplikace,
+   * uvnitr existujiciho choiceModal. Native plugin pouze overi stav a
+   * na vyslovne potvrzeni otevre Android nastaveni. Zadny novy modal.
+   * Po "Pozdeji" neopakovat po kazdem getToken/resume; maximalne jednou
+   * behem jednoho spusteni a nejdrive za 24 hodin. */
+  let uiPripravenoProAlarm695Q = false;
+  let dotazNaAlarmPraveBezi695Q = false;
+  let alarmModalZobrazen695Q = false;
+  const ALARM_ODLOZENI_KEY_695Q = 'lubanoteExactAlarmDeferred695Q';
+  async function nabidniNastaveniAlarmu695Q() {
+    if (!isNative || !uiPripravenoProAlarm695Q || document.hidden ||
+        dotazNaAlarmPraveBezi695Q || alarmModalZobrazen695Q ||
+        typeof window.otevriPotvrzovaciModalLubaNote !== 'function' ||
+        typeof plugin.getExactAlarmStatus !== 'function' ||
+        typeof plugin.openExactAlarmSettings695Q !== 'function') return;
+    dotazNaAlarmPraveBezi695Q = true;
+    try {
+      const session = await currentSession();
+      if (!session?.user?.id || document.hidden) return;
+      const status = await plugin.getExactAlarmStatus();
+      if (status?.allowed !== false || Number(status?.androidApi || 0) < 31) return;
+      let posledniOdlozeni = 0;
+      try { posledniOdlozeni = Number(localStorage.getItem(ALARM_ODLOZENI_KEY_695Q)) || 0; }
+      catch (_) {}
+      if (posledniOdlozeni > 0 && Date.now() - posledniOdlozeni < 24 * 60 * 60 * 1000) return;
+      if (document.hidden || alarmModalZobrazen695Q) return;
+      const otevreno = window.otevriPotvrzovaciModalLubaNote({
+        nadpis: 'Připomínky LubaNote',
+        text: 'Pro spolehlivé doručení připomínek je potřeba povolit přesné alarmy.\n' +
+          'Teď jsou v telefonu vypnuté, takže se připomínky mohou zpozdit.\n' +
+          'Chceš otevřít nastavení „Budíky a připomínky“?',
+        popisekZrusit: 'Později',
+        popisekPotvrdit: 'Otevřít nastavení',
+        poZruseni: () => {
+          try { localStorage.setItem(ALARM_ODLOZENI_KEY_695Q, String(Date.now())); }
+          catch (_) {}
+        },
+        poPotvrzeni: async () => {
+          await plugin.openExactAlarmSettings695Q();
+        }
+      });
+      if (otevreno) alarmModalZobrazen695Q = true;
+    } catch (error) {
+      console.warn('LubaNote: kontrola přesných alarmů selhala', error);
+    } finally { dotazNaAlarmPraveBezi695Q = false; }
+  }
+  window.addEventListener('lubanote:splash-ready', () => {
+    uiPripravenoProAlarm695Q = true;
+    // Nechat aplikaci nejdrive dokoncit prvni vykresleni.
+    setTimeout(() => { void nabidniNastaveniAlarmu695Q(); }, 350);
+  });
+
+
   function deviceId() {
     try {
       const id = window.LubaNoteSync?.ziskejDeviceId?.() || localStorage.getItem('lubanoteDeviceId');
@@ -103,6 +156,7 @@
     try { await window.LubaNoteReminders?.obnovIndexLokalnichAlarmu692V?.(); }
     catch (_) { /* native registration remains best effort */ }
     await registerToken();
+    void nabidniNastaveniAlarmu695Q();
     await checkPendingSync();
     void checkRemoteOpen692T();
   }
