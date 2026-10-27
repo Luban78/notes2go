@@ -4922,6 +4922,78 @@ async function ulozObnovenyIdbObrazekDoCache695H(puvodni, obnovena) {
   }
 }
 
+
+/* 695J – Obnova obrazku take pro cilene V2 uploady.
+ * Stejny overeny postup 695G/695H jako pri otevreni editoru;
+ * navic lze prokazat, ze se mezi snapshoty zmenil POUZE
+ * prazdny IDB img src na bezpecny a plny obrazek.
+ * Zadna uprava revizi, user-save, editoru ani cloudovy zapis. */
+function jeJenObnovenyIdbObrazek695J(puvodni, dalsi) {
+  if (!puvodni || !dalsi ||
+      String(puvodni.id || "") !== String(dalsi.id || "") ||
+      !maChybejiciIdbObrazek695G(puvodni)) return false;
+  const povolenyZdroj = (src) =>
+    /^(?:data:image\/[a-z0-9.+-]+(?:;[a-z0-9=+-]+)*,|https:\/\/)/i.test(src);
+  let pocet = 0;
+  const porovnejHtml = (a, b) => {
+    const prvni = vytvorHtmlSablonu695G(a);
+    const druhy = vytvorHtmlSablonu695G(b);
+    const stare = [...prvni.content.querySelectorAll("img")];
+    const nove = [...druhy.content.querySelectorAll("img")];
+    if (stare.length !== nove.length) return false;
+    for (let i = 0; i < stare.length; i += 1) {
+      const stary = stare[i];
+      const novy = nove[i];
+      if (stary.hasAttribute("data-lubanote-idb-image") &&
+          !String(stary.getAttribute("src") || "").trim()) {
+        const zdroj = String(novy.getAttribute("src") || "").trim();
+        if (!povolenyZdroj(zdroj) ||
+            novy.hasAttribute("data-lubanote-idb-image")) return false;
+        stary.setAttribute("src", "");
+        stary.removeAttribute("data-lubanote-idb-image");
+        novy.setAttribute("src", "");
+        pocet += 1;
+      }
+    }
+    return prvni.innerHTML === druhy.innerHTML;
+  };
+  if (!porovnejHtml(puvodni.richContent, dalsi.richContent)) return false;
+  const pTodos = Array.isArray(puvodni.todos) ? puvodni.todos : [];
+  const dTodos = Array.isArray(dalsi.todos) ? dalsi.todos : [];
+  if (pTodos.length !== dTodos.length) return false;
+  for (let i = 0; i < pTodos.length; i += 1) {
+    if (!porovnejHtml(pTodos[i]?.html, dTodos[i]?.html)) return false;
+  }
+  if (pocet < 1 || maChybejiciIdbObrazek695G(dalsi)) return false;
+
+  // Bezpecna ekvivalence VSECH metadat poznamky i TODO polozek.
+  const zrcadlo = (note) => ({
+    ...note,
+    richContent: "[idb-image-695J-checked]",
+    todos: (Array.isArray(note.todos) ? note.todos : []).map((todo) => ({
+      ...todo,
+      html: "[idb-image-695J-checked]"
+    }))
+  });
+  return JSON.stringify(zrcadlo(puvodni)) === JSON.stringify(zrcadlo(dalsi));
+}
+
+window.LubaNoteImageSyncRepair695J = Object.freeze({
+  jeJenObnovenyIdbObrazek: jeJenObnovenyIdbObrazek695J,
+  async obnovPlnouCache(note) {
+    if (!note?.id || !maChybejiciIdbObrazek695G(note)) return false;
+    const doplnena = await pripravIdbObrazkyCoreV2695G(note);
+    if (!jeJenObnovenyIdbObrazek695J(note, doplnena)) return false;
+    // Opravu povolime pro sync jen po potvrzenem zapisu do IDB.
+    const ulozena = nactiBeznePoznamkyZUloziste()?.find(
+      (karta) => karta?.id === note.id
+    );
+    return jeJenObnovenyIdbObrazek695J(note, ulozena) &&
+      JSON.stringify(ulozena) === JSON.stringify(doplnena);
+  }
+});
+
+
 async function openTaskEditorById(taskId) {
   const tokenOpenCele = window.LubaNoteStartupDiag?.zacni?.(
     `NOTE OPEN TOTAL | id=${taskId}`

@@ -8195,6 +8195,17 @@ const cekajiciCilenePrivateV2 = new Map();
  * bounded pause, on a changed content fingerprint, or after app restart. */
 const odmitnuteCileneV2Pauzy688U = new Map();
 const ODMITNUTY_TARGET_PAUZA_MS_688U = 60000;
+/* 695J – neustale opakovani neobnovitelneho IDB obrazku
+ * by jinak zahltilo targeted frontu kazdych cca 1.5 s. */
+const odmitnuteIdbImagePauzy695J = new Map();
+const OPRAVA_IDB_RETRY_MS_695J = 60000;
+function maOdlehcenouIdbZnacku695J(note) {
+  return [note?.richContent,
+    ...(Array.isArray(note?.todos) ? note.todos.map((todo) => todo?.html) : [])
+  ].some((html) => typeof html === "string" &&
+    html.includes("data-lubanote-idb-image"));
+}
+
 function jeServeroveOdmitnutiTargetu688U(error) {
   if (!error || jeSitovaChybaTargetV2(error)) return false;
   const kod = String(error.code || "").toUpperCase();
@@ -9460,19 +9471,85 @@ async function synchronizujCilenePrivateZmenyV2() {
             continue;
           }
 
-          const aktualni = zaznam.secret === true
+          let aktualni = zaznam.secret === true
             ? nactiAktualniSecretPoznamkuProCilenyV2(id)
             : nactiSnapshotBeznychPoznamekProCilenyV2()?.get(id);
 
-          if (
-            !aktualni?.note ||
-            aktualni.otisk !== zaznam.otisk
-          ) {
-            continue;
+          if (!aktualni?.note) continue;
+          let otiskProUpload695J = zaznam.otisk;
+          const opravnaSluzba695J = window.LubaNoteImageSyncRepair695J;
+
+          // 695H mohla doplnit obrazek pri otevreni karty po zarazeni
+          // targeted targetu. Pri shode VSEHO ostatniho obnovime frontu;
+          // jinou lokalni zmenu bez noveho targetu nikdy nepotvrdime.
+          if (aktualni.otisk !== otiskProUpload695J) {
+            if (zaznam.secret === true ||
+                opravnaSluzba695J?.jeJenObnovenyIdbObrazek?.(
+                  zaznam.note, aktualni.note
+                ) !== true) continue;
+            cekajiciCilenePrivateV2.set(id, {
+              ...zaznam, note: aktualni.note, otisk: aktualni.otisk
+            });
+            otiskProUpload695J = aktualni.otisk;
+            window.LubaNoteStartupDiag?.zapis?.(
+              "V2", `695J TARGET REFRESH AFTER IDB | id=${id}`
+            );
           }
 
+          if (zaznam.secret !== true &&
+              maOdlehcenouIdbZnacku695J(aktualni.note)) {
+            const pauza = odmitnuteIdbImagePauzy695J.get(String(id));
+            if (pauza?.otisk === otiskProUpload695J &&
+                Date.now() < pauza.do) {
+              continue; // jine targety stale mohou pokracovat
+            }
+            const opraveno = typeof opravnaSluzba695J?.obnovPlnouCache === "function"
+              ? await opravnaSluzba695J.obnovPlnouCache(aktualni.note)
+              : false;
+            const znovu = opraveno === true
+              ? nactiSnapshotBeznychPoznamekProCilenyV2()?.get(id)
+              : null;
+            const frontaNyni = cekajiciCilenePrivateV2.get(id);
+            if (znovu?.note && frontaNyni?.otisk === otiskProUpload695J &&
+                opravnaSluzba695J?.jeJenObnovenyIdbObrazek?.(
+                  aktualni.note, znovu.note
+                ) === true &&
+                !maOdlehcenouIdbZnacku695J(znovu.note)) {
+              cekajiciCilenePrivateV2.set(id, {
+                ...frontaNyni, note: znovu.note, otisk: znovu.otisk
+              });
+              otiskProUpload695J = znovu.otisk;
+              aktualni = znovu;
+              odmitnuteIdbImagePauzy695J.delete(String(id));
+              window.LubaNoteStartupDiag?.zapis?.(
+                "V2", `695J IDB TARGET REPAIRED | id=${id}`
+              );
+            } else {
+              // Ponechame dluh, neodesleme odlehcenou kopii a
+              // neblokujeme dalsi nezavisle zaznamy ve fronte.
+              if (frontaNyni?.otisk === otiskProUpload695J) {
+                odmitnuteIdbImagePauzy695J.set(String(id), {
+                  otisk: otiskProUpload695J,
+                  do: Date.now() + OPRAVA_IDB_RETRY_MS_695J
+                });
+                window.LubaNoteStartupDiag?.zapis?.(
+                  "V2", `695J IDB TARGET DEFER | retry=60s | id=${id}`
+                );
+              }
+              continue;
+            }
+          }
+
+          // Posledni kontrola po asynchronnim cteni a IDB zapisu:
+          // mezitim upravenou uzivatelskou poznamku nepokrivame.
+          if (cekajiciCilenePrivateV2.get(id)?.otisk !== otiskProUpload695J ||
+              (zaznam.secret === true
+                ? nactiAktualniSecretPoznamkuProCilenyV2(id)
+                : nactiSnapshotBeznychPoznamekProCilenyV2()?.get(id)
+              )?.otisk !== otiskProUpload695J) continue;
+
           const pauza688U = odmitnuteCileneV2Pauzy688U.get(String(id));
-          if (pauza688U && pauza688U.otisk === zaznam.otisk &&
+          if (pauza688U && pauza688U.otisk === otiskProUpload695J &&
               Date.now() < pauza688U.do) {
             nastavStavSynchronizaceUI("pending");
             return false;
@@ -9494,11 +9571,21 @@ async function synchronizujCilenePrivateZmenyV2() {
             );
 
           if (detail?.ok !== true) {
+            if (detail?.reason === "stripped_idb_image") {
+              odmitnuteIdbImagePauzy695J.set(String(id), {
+                otisk: otiskProUpload695J,
+                do: Date.now() + OPRAVA_IDB_RETRY_MS_695J
+              });
+              window.LubaNoteStartupDiag?.zapis?.(
+                "V2", `695J IDB UPLOAD GUARD | retry=60s | id=${id}`
+              );
+              continue;
+            }
             if (jeServeroveOdmitnutiTargetu688U(detail?.error)) {
               const kod = String(detail.error.code || "rpc_rejected")
                 .replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32);
               odmitnuteCileneV2Pauzy688U.set(String(id), {
-                otisk: zaznam.otisk,
+                otisk: otiskProUpload695J,
                 do: Date.now() + ODMITNUTY_TARGET_PAUZA_MS_688U
               });
               window.LubaNoteStartupDiag?.zapis?.(
@@ -9539,7 +9626,7 @@ async function synchronizujCilenePrivateZmenyV2() {
             cekajiciCilenePrivateV2.get(id);
 
           if (
-            frontaPoZapisu?.otisk === zaznam.otisk
+            frontaPoZapisu?.otisk === otiskProUpload695J
           ) {
             cekajiciCilenePrivateV2.delete(id);
           }
