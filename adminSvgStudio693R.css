@@ -518,6 +518,18 @@
 }
 .lnSvgStudio .lnSvgSmoothAction695V[data-complete="true"] small,
 .lnSvgStudio .lnSvgSmoothAction695V[data-complete="true"] em {color:var(--color-accent,#1bb4bf);}
+.lnSvgStudio .lnSvgJoinAction695X {position:relative;}
+.lnSvgStudio .lnSvgJoinAction695X em[data-join-stage] {
+  position:absolute;right:3px;top:2px;font-size:9px;font-style:normal;
+  line-height:1.1;color:var(--color-text-secondary,#9cb4bf);
+  font-variant-numeric:tabular-nums;pointer-events:none;
+}
+.lnSvgStudio .lnSvgJoinAction695X[data-pending="true"] {
+  border-color:var(--color-accent,#1bb4bf);
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--color-accent,#1bb4bf) 38%, transparent);
+}
+.lnSvgStudio .lnSvgJoinAction695X[data-pending="true"] small,
+.lnSvgStudio .lnSvgJoinAction695X[data-pending="true"] em {color:var(--color-accent,#1bb4bf);}
 .lnSvgStudio .lnSvgFeedback695V[hidden] {display:none!important}
 .lnSvgStudio .lnSvgFeedback695V {
   box-sizing:border-box;position:fixed;z-index:100006;
@@ -535,3 +547,6 @@
   .lnSvgStudio .lnSvgSmoothAction695V em[data-smooth-stage] {font-size:8px;right:2px;top:1px;}
   .lnSvgStudio .lnSvgFeedback695V {top:calc(50px + env(safe-area-inset-top,0px));font-size:12px;}
 }
+
+/* 695X: visible joystick, with disabled arrows until a shape is selected. */
+.lnSvgStudio .lnSvgJoystick695T button:disabled{opacity:.36;cursor:default;}

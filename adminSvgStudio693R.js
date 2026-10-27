@@ -49,6 +49,8 @@
   let activeColor = 'currentColor';
   let cornerFraction695R = .20; // bezpečný poměr zaoblení 0–50 %
   let activeNode695T=0; // only the active node and its neighbours are rendered
+  let joinDraft695X=null; // first endpoint stored for joining another object
+  let joinAction695X=null;
   let joystickReady695T=false;
 
   // 693Z – strictly read-only diagnostic for PAN freeze in Android WebView.
@@ -217,7 +219,7 @@
     document.querySelectorAll('.lnSvgSwatch693S').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.color === activeColor)));
   }
   function updateSelection() {
-    if (selectionLabel) selectionLabel.textContent = selected < 0 ? 'Žádný vybraný tvar' : `Vybraný tvar ${selected + 1} / ${shapes.length} (${shapes[selected]?.tag || '—'})`;
+    if (selectionLabel) selectionLabel.textContent = (selected < 0 ? 'Žádný vybraný tvar' : `Vybraný tvar ${selected + 1} / ${shapes.length} (${shapes[selected]?.tag || '—'})`) + (joinDraft695X ? ' · Spoj 1/2 uložen' : '');
     if(joystickReady695T)updateJoystick695T();
     // 694N: selection-only actions; keep the canvas area clear otherwise.
     const actions = document.getElementById('lnSvgObjectActions694N');
@@ -361,6 +363,151 @@
     for(const h of info.handles){const d=Math.hypot(p.x-h.x,p.y-h.y);if(d<best){best=d;which=h.index;}}
     activeNode695T=which;
   }
+  function clearJoinDraft695X(){joinDraft695X=null;}
+  function isTranslateOnlyAffine695X(t){return !!t && Math.abs((t.s??1)-1)<.000001 && Math.abs(t.angle||0)<.000001 && (t.m||1)===1;}
+  function pathCurrentPoint695X(part,current,start){
+    if(part.cmd==='M'||part.cmd==='L')return {x:part.nums[0],y:part.nums[1]};
+    if(part.cmd==='Q')return {x:part.nums[2],y:part.nums[3]};
+    if(part.cmd==='C')return {x:part.nums[4],y:part.nums[5]};
+    if(part.cmd==='A')return {x:part.nums[5],y:part.nums[6]};
+    if(part.cmd==='Z')return {x:start.x,y:start.y};
+    return current;
+  }
+  function pathIsClosed695X(parsed){return !!parsed?.some?.(part=>part.cmd==='Z');}
+  function worldifyParsed695X(parsed,t){
+    if(!parsed?.length||!t)return null;
+    const hasArc=parsed.some(part=>part.cmd==='A');
+    if(hasArc && !isTranslateOnlyAffine695X(t))return null;
+    return parsed.map(part=>{
+      const out={cmd:part.cmd,nums:[...part.nums]};
+      if(part.cmd==='A'){
+        const end=world694J(t,{x:part.nums[5],y:part.nums[6]});
+        out.nums[5]=precisionCoord695U(end.x);out.nums[6]=precisionCoord695U(end.y);
+        return out;
+      }
+      for(let i=0;i<out.nums.length;i+=2){
+        const w=world694J(t,{x:part.nums[i],y:part.nums[i+1]});
+        out.nums[i]=precisionCoord695U(w.x);out.nums[i+1]=precisionCoord695U(w.y);
+      }
+      return out;
+    });
+  }
+  function shapeToJoinableParsed695X(shape){
+    if(!shape)return null;
+    const t=affine694H(shape);if(!t)return null;
+    if(shape.tag==='path'){
+      const data=pathNodes694I(shape);if(!data||pathIsClosed695X(data.parsed))return null;
+      return worldifyParsed695X(data.parsed,t);
+    }
+    if(shape.tag==='line'){
+      const p=shape.props;
+      return worldifyParsed695X([{cmd:'M',nums:[Number(p.x1),Number(p.y1)]},{cmd:'L',nums:[Number(p.x2),Number(p.y2)]}],t);
+    }
+    if(shape.tag==='polyline'){
+      const text=String(shape.props?.points||'').trim();
+      const values=(text.match(/[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:e[-+]?\d+)?/gi)||[]).map(Number);
+      if(values.length<4||values.length%2)return null;
+      const parsed=[{cmd:'M',nums:[values[0],values[1]]}];
+      for(let i=2;i<values.length;i+=2)parsed.push({cmd:'L',nums:[values[i],values[i+1]]});
+      return worldifyParsed695X(parsed,t);
+    }
+    return null;
+  }
+  function endpointInfo695X(){
+    if(tool.value!=='nodes' || selected<0 || selected>=shapes.length)return null;
+    const shape=shapes[selected],info=shapeNodes695T(shape),t=affine694H(shape);
+    if(!info||!t||!info.handles?.length)return null;
+    const active=info.handles[activeNode695T];
+    if(!active)return null;
+    if(shape.tag==='path'){
+      const data=pathNodes694I(shape);if(!data||pathIsClosed695X(data.parsed))return null;
+      const anchors=info.handles.filter(h=>h.kind==='anchor');
+      if(!anchors.length)return null;
+      const first=anchors[0],last=anchors[anchors.length-1];
+      const endpoint=activeNode695T===info.handles.indexOf(first)?'start':activeNode695T===info.handles.indexOf(last)?'end':null;
+      if(!endpoint)return null;
+      const w=world694J(t,active);
+      return {shapeIndex:selected,endpoint,index:activeNode695T,x:w.x,y:w.y};
+    }
+    if(shape.tag==='line'){
+      const endpoint=active.key==='start'?'start':active.key==='end'?'end':null;
+      if(!endpoint)return null;
+      const w=world694J(t,active);
+      return {shapeIndex:selected,endpoint,index:activeNode695T,x:w.x,y:w.y};
+    }
+    if(shape.tag==='polyline'){
+      const endpoint=activeNode695T===0?'start':activeNode695T===info.handles.length-1?'end':null;
+      if(!endpoint)return null;
+      const w=world694J(t,active);
+      return {shapeIndex:selected,endpoint,index:activeNode695T,x:w.x,y:w.y};
+    }
+    return null;
+  }
+  function setPathEndpoint695X(parsed,which,point){
+    if(!parsed?.length)return false;
+    const x=precisionCoord695U(point.x),y=precisionCoord695U(point.y);
+    if(which==='start'){parsed[0].nums[0]=x;parsed[0].nums[1]=y;return true;}
+    for(let i=parsed.length-1;i>=0;i--){
+      const part=parsed[i];
+      if(part.cmd==='Z')continue;
+      if(part.cmd==='M'||part.cmd==='L'){part.nums[0]=x;part.nums[1]=y;return true;}
+      if(part.cmd==='Q'){part.nums[2]=x;part.nums[3]=y;return true;}
+      if(part.cmd==='C'){part.nums[4]=x;part.nums[5]=y;return true;}
+      if(part.cmd==='A'){part.nums[5]=x;part.nums[6]=y;return true;}
+    }
+    return false;
+  }
+  function pathEndpoints695X(parsed){
+    if(!parsed?.length)return null;
+    const start={x:parsed[0].nums[0],y:parsed[0].nums[1]};
+    let current={...start};
+    for(let i=1;i<parsed.length;i++)current=pathCurrentPoint695X(parsed[i],current,start);
+    return {start,end:current};
+  }
+  function reverseParsed695X(parsed){
+    if(!parsed?.length||parsed[0].cmd!=='M' || pathIsClosed695X(parsed))return null;
+    const start={x:parsed[0].nums[0],y:parsed[0].nums[1]};
+    let current={...start};
+    const segs=[];
+    for(let i=1;i<parsed.length;i++){
+      const part=parsed[i],segStart={...current},segEnd=pathCurrentPoint695X(part,current,start);
+      segs.push({cmd:part.cmd,start:segStart,nums:[...part.nums]});
+      current=segEnd;
+    }
+    const reversed=[{cmd:'M',nums:[precisionCoord695U(current.x),precisionCoord695U(current.y)]}];
+    for(let i=segs.length-1;i>=0;i--){
+      const seg=segs[i];
+      if(seg.cmd==='L')reversed.push({cmd:'L',nums:[precisionCoord695U(seg.start.x),precisionCoord695U(seg.start.y)]});
+      else if(seg.cmd==='Q')reversed.push({cmd:'Q',nums:[precisionCoord695U(seg.nums[0]),precisionCoord695U(seg.nums[1]),precisionCoord695U(seg.start.x),precisionCoord695U(seg.start.y)]});
+      else if(seg.cmd==='C')reversed.push({cmd:'C',nums:[precisionCoord695U(seg.nums[2]),precisionCoord695U(seg.nums[3]),precisionCoord695U(seg.nums[0]),precisionCoord695U(seg.nums[1]),precisionCoord695U(seg.start.x),precisionCoord695U(seg.start.y)]});
+      else if(seg.cmd==='A')reversed.push({cmd:'A',nums:[seg.nums[0],seg.nums[1],seg.nums[2],seg.nums[3],seg.nums[4]?0:1,precisionCoord695U(seg.start.x),precisionCoord695U(seg.start.y)]});
+      else return null;
+    }
+    return reversed;
+  }
+  function joinEndpoints695X(a,b){
+    const shapeA=shapes[a.shapeIndex],shapeB=shapes[b.shapeIndex];
+    const parsedA=shapeToJoinableParsed695X(shapeA),parsedB=shapeToJoinableParsed695X(shapeB);
+    if(!parsedA||!parsedB){announce('Spojit lze zatím jen otevřené cesty, úsečky a lomené čáry bez nepodporované transformace.');return false;}
+    const orientedA=a.endpoint==='end'?deepCopy(parsedA):reverseParsed695X(parsedA);
+    const orientedB=b.endpoint==='start'?deepCopy(parsedB):reverseParsed695X(parsedB);
+    if(!orientedA||!orientedB){announce('Tento typ křivky zatím nelze bezpečně obrátit pro spojení.');return false;}
+    const endsA=pathEndpoints695X(orientedA),endsB=pathEndpoints695X(orientedB);
+    if(!endsA||!endsB){announce('Nepodařilo se určit konce vybraných objektů.');return false;}
+    const gap=Math.hypot(endsA.end.x-endsB.start.x,endsA.end.y-endsB.start.y);
+    if(gap>3.2){announce('Konce jsou od sebe příliš daleko. Nejprve je přibliž v režimu Body.');return false;}
+    const mid={x:(endsA.end.x+endsB.start.x)/2,y:(endsA.end.y+endsB.start.y)/2};
+    setPathEndpoint695X(orientedA,'end',mid);setPathEndpoint695X(orientedB,'start',mid);
+    const merged=deepCopy(shapeA);
+    merged.tag='path';
+    merged.props={...shapeA.props,d:writeNodes694I(orientedA.concat(orientedB.slice(1)))};
+    delete merged.props.points;delete merged.props.x1;delete merged.props.y1;delete merged.props.x2;delete merged.props.y2;delete merged.props.transform;
+    const before=snapshot();
+    const target=Math.min(a.shapeIndex,b.shapeIndex),drop=Math.max(a.shapeIndex,b.shapeIndex);
+    shapes[target]=merged;shapes.splice(drop,1);selected=target;activeNode695T=0;clearJoinDraft695X();record(before);render();
+    announce(gap>.18?'Objekty spojeny. Konce byly jemně srovnány do společného bodu.':'Objekty spojeny do jedné cesty.');
+    return true;
+  }
   // 694S: Preserve reference aspect ratio; never distort bitmap while tracing.
   // 694R: Reference image is a strictly visual, non-exportable canvas layer.
   // It is NEVER inserted into shapes, history, exportSvg(), or PNG renderer.
@@ -452,6 +599,12 @@
         }
       }
     }
+    if(tool.value==='nodes' && joinDraft695X){
+      const ring=svgPart({tag:'circle',props:{cx:fmt(joinDraft695X.x),cy:fmt(joinDraft695X.y),r:fmt(.55/zoom693W),fill:'none',stroke:'#14d7d1','stroke-width':fmt(.16/zoom693W),opacity:'.95'}});
+      ring.style.pointerEvents='none';svg.appendChild(ring);
+      const dot=svgPart({tag:'circle',props:{cx:fmt(joinDraft695X.x),cy:fmt(joinDraft695X.y),r:fmt(.18/zoom693W),fill:'#14d7d1',stroke:'#ffffff','stroke-width':fmt(.10/zoom693W)}});
+      dot.style.pointerEvents='none';svg.appendChild(dot);
+    }
     // 694M: guide at the exact center of the 24x24 drawing plane.
     // Draw last for visibility; pointerEvents none preserves all touch tools.
     if(showCenter694M){
@@ -470,7 +623,7 @@
     if (!sourceIsEdited693T) source.value = exportSvg();
     undoBtn.disabled = history.length === 0;
     if (redoBtn) redoBtn.disabled = future.length === 0;
-    updateSelection(); updatePalette();
+    updateSelection(); updatePalette();updateJoinQuick695X?.();
   }
   function normalized(tag, props = {}) {
     return {tag, props: {fill: 'none',stroke: activeColor,'stroke-width':fmt(Number(stroke.value)),'stroke-linecap':'round','stroke-linejoin':'round',...props}};
@@ -740,63 +893,6 @@
     const d=writeNodes694I(moved);
     if(d===shape.props.d)return {reason:'Křivka už je dostatečně hladká.'};
     return {d};
-  }
-  // 695W: close ONE selected open vector path, not separate strokes.
-  // The SVG Z command joins the end to the start without rasterizing the
-  // curve or altering its control points. Imported relative/compound paths
-  // are intentionally left unchanged, using the existing safe path parser.
-  function closablePath695W(shape){
-    if(shape?.tag!=='path')return null;
-    // The shared node parser normalizes later M commands to L. Detect those
-    // in the raw path first, or a compound import could be joined incorrectly.
-    if((String(shape.props.d||'').match(/M/g)||[]).length!==1)return null;
-    const parsed=pathNodes694I(shape)?.parsed;
-    if(!parsed||parsed.length<2||parsed[0].cmd!=='M'||
-       parsed.some((segment,i)=>
-         (i>0&&segment.cmd==='M')||segment.cmd==='Z'||
-         !['M','L','Q','C','A'].includes(segment.cmd)))return null;
-    const last=parsed[parsed.length-1];
-    const at=last.cmd==='A'?5:last.nums.length-2;
-    if(at<0)return null;
-    const start={x:parsed[0].nums[0],y:parsed[0].nums[1]};
-    const end={x:last.nums[at],y:last.nums[at+1]};
-    const distance=Math.hypot(start.x-end.x,start.y-end.y);
-    if(!Number.isFinite(distance))return null;
-    // A single zero-length segment does not form a closed shape.
-    if(parsed.length===2&&distance<.01)return null;
-    return {parsed,start,end,distance,at};
-  }
-  function closeSelectedPath695W(){
-    const shape=shapes[selected];
-    const info=closablePath695W(shape);
-    if(!info){
-      announce('Vyber jednu otevřenou cestu. Uzavřené nebo nepodporované tvary nelze znovu uzavřít.');
-      return;
-    }
-    // Large accidental gaps can create a diagonal slash across the icon.
-    // Ask the user to adjust the two endpoints first, rather than silently
-    // drawing a long closing segment.
-    if(info.distance>2.5){
-      announce('Konce jsou příliš daleko. Přibliž je nástrojem Body a zkus Uzavřít znovu.');
-      return;
-    }
-    const before=snapshot();
-    const parsed=info.parsed;
-    const last=parsed[parsed.length-1];
-    // Tiny imprecision from freehand drawing: weld the LAST anchor to the
-    // first. Keep all existing controls and intermediate anchors intact.
-    // For an SVG elliptical arc leave its endpoint alone (arc geometry).
-    const welded=info.distance>0&&info.distance<=.4&&last.cmd!=='A';
-    if(welded){
-      last.nums[info.at]=info.start.x;
-      last.nums[info.at+1]=info.start.y;
-    }
-    parsed.push({cmd:'Z',nums:[]});
-    shape.props.d=writeNodes694I(parsed);
-    if(record(before)){
-      render();
-      announce(welded?'Konce spojeny, cesta uzavřena.':'Cesta uzavřena.');
-    }
   }
   // 695V: six intentional levels. Stage is keyed by the exact stored path
   // geometry, so Undo/Redo restores the correct level without extra fields
@@ -1162,7 +1258,7 @@
   document.addEventListener('visibilitychange',()=>{if(document.hidden){touches694H.clear();pinch694H=null;muteTouches694H=false;cancelInterruptedGesture693X();}});
   // Changing tools while a stroke is still marked active must not freeze drawing.
   tool.addEventListener('change',cancelInterruptedGesture693X);
-  tool.addEventListener('change',()=>{selected=-1;render();announce(tool.value==='eraser'?'Guma maže jednotlivé tvary dotykem.':tool.value==='move'?'Klepni na tvar a přesuň ho tažením.':tool.value==='rotate'?'Vyber objekt a otoč ho žlutým úchytem.':tool.value==='nodes'?'Vyber tvar a uprav jeho aktivní bod nebo přepínej body šipkami.':tool.value==='scale'?'Vyber tvar a uprav velikost rohovým úchytem.':tool.value==='bucket'?'Vyber barvu a klepni dovnitř uzavřeného tvaru.':`Nástroj: ${toolBar693W.querySelector('[data-tool="'+tool.value+'"]')?.getAttribute('aria-label')||tool.value} připraven.`);});
+  tool.addEventListener('change',()=>{selected=-1;clearJoinDraft695X();render();announce(tool.value==='eraser'?'Guma maže jednotlivé tvary dotykem.':tool.value==='move'?'Klepni na tvar a přesuň ho tažením.':tool.value==='rotate'?'Vyber objekt a otoč ho žlutým úchytem.':tool.value==='nodes'?'Vyber tvar a uprav jeho aktivní bod nebo přepínej body šipkami.':tool.value==='scale'?'Vyber tvar a uprav velikost rohovým úchytem.':tool.value==='bucket'?'Vyber barvu a klepni dovnitř uzavřeného tvaru.':`Nástroj: ${toolBar693W.querySelector('[data-tool="'+tool.value+'"]')?.getAttribute('aria-label')||tool.value} připraven.`);});
   stroke.addEventListener('input',()=>{$('lnSvgStrokeValue693R').textContent=Number(stroke.value).toLocaleString('cs-CZ');});
   function changeColor(next) {
     const before = snapshot();
@@ -1177,11 +1273,11 @@
   color?.addEventListener('input',()=>changeColor(color.value));
   themeColor?.addEventListener('click',()=>changeColor('currentColor'));
   document.querySelectorAll('.lnSvgSwatch693S').forEach(b=>b.addEventListener('click',()=>changeColor(b.dataset.color)));
-  undoBtn.addEventListener('click',()=>{if(!history.length)return;future.push(snapshot());shapes=history.pop();selected=-1;render();});
+  undoBtn.addEventListener('click',()=>{if(!history.length)return;future.push(snapshot());shapes=history.pop();selected=-1;clearJoinDraft695X();render();});
   undoBtn.addEventListener('click',()=>announce('Poslední změna vrácena.'));
-  redoBtn?.addEventListener('click',()=>{if(!future.length)return;history.push(snapshot());shapes=future.pop();selected=-1;render();});
+  redoBtn?.addEventListener('click',()=>{if(!future.length)return;history.push(snapshot());shapes=future.pop();selected=-1;clearJoinDraft695X();render();});
   redoBtn?.addEventListener('click',()=>announce('Změna znovu provedena.'));
-  $('lnSvgClear693R').addEventListener('click',()=>{if(!shapes.length)return;const before=snapshot();shapes=[];selected=-1;record(before);render();});
+  $('lnSvgClear693R').addEventListener('click',()=>{if(!shapes.length)return;const before=snapshot();shapes=[];selected=-1;clearJoinDraft695X();record(before);render();});
   function center(index = -1) {
     const ids = index>=0?[index]:shapes.map((_,i)=>i);
     if (!ids.length)return announce('Nejdřív nakresli ikonu.');
@@ -1360,7 +1456,7 @@
   importLuba693V.type='button';importLuba693V.textContent='Načíst kód LubaNote';
   importButton693T?.insertAdjacentElement('afterend',importLuba693V);
   importLuba693V.addEventListener('click',()=>{
-    try {const next=parseLuba693V(source.value),before=snapshot();shapes=next;selected=-1;sourceIsEdited693T=false;record(before);render();announce(`Kód LubaNote načten (${next.length} tvarů).`);}
+    try {const next=parseLuba693V(source.value),before=snapshot();shapes=next;selected=-1;clearJoinDraft695X();sourceIsEdited693T=false;record(before);render();announce(`Kód LubaNote načten (${next.length} tvarů).`);}
     catch(e){announce('LubaNote import: '+e.message);}
   });
   $('lnSvgImport693R').addEventListener('click',()=>{
@@ -1410,7 +1506,7 @@
         next.push({tag:el.localName,props});
       }
       if(!next.length)throw Error('Nenalezeny tvary.');
-      const before=snapshot();shapes=next;selected=-1;sourceIsEdited693T=false;record(before);render();announce(`SVG načteno (${next.length} tvarů).`);
+      const before=snapshot();shapes=next;selected=-1;clearJoinDraft695X();sourceIsEdited693T=false;record(before);render();announce(`SVG načteno (${next.length} tvarů).`);
     }catch(e){announce('Import: '+e.message);}
   });
   /* 693U – text-only guide embedded in the admin tool, hidden unless expanded.
@@ -1565,7 +1661,7 @@
   function applyDraft694K(item,id){
     if(!validDraft694K(item))throw new Error('Uložené tvary nejsou podporované.');
     // Never mutate the persisted object while editing.
-    gesture=null;drawing=null;selected=-1;shapes=deepCopy(item.shapes);
+    gesture=null;drawing=null;selected=-1;clearJoinDraft695X();shapes=deepCopy(item.shapes);
     history=[];future=[];sourceIsEdited693T=false;
     activeColor=normalColor(item.activeColor||'currentColor');
     if(Number.isFinite(Number(item.stroke))){stroke.value=String(Math.max(.5,Math.min(4,Number(item.stroke))));
@@ -1618,7 +1714,7 @@
   });
   draftPanel694K.querySelector('[data-new]').addEventListener('click',async()=>{
     if(!await allowReplace694K())return;
-    shapes=[];history=[];future=[];gesture=null;drawing=null;selected=-1;
+    shapes=[];history=[];future=[];gesture=null;drawing=null;selected=-1;clearJoinDraft695X();
     currentId694K=null;dirty694K=false;sourceIsEdited693T=false;
     nameInput694K.value='Nová ikona';state694K.textContent='Nový návrh';
     render();queueRecovery694K(true);message694K('Nová prázdná ikona. Dříve uložené návrhy zůstaly zachovány.');
@@ -2623,21 +2719,30 @@
     smoothAction695V.querySelector('[data-smooth-stage]').textContent=stage+'/'+smoothMax695V;
     smoothAction695V.title=!canSmooth?'Nejprve vyber křivku':isDone?'Vyhlazení dokončeno, můžeš použít Zpět':`Vyhladit křivku (${stage}/${smoothMax695V})`;
   }
-
-  // 695W: one compact action directly after Vyhladit.
-  const closeAction695W=document.createElement('button');
-  closeAction695W.type='button';
-  closeAction695W.className='lnSvgQuickAction694L lnSvgCloseAction695W';
-  closeAction695W.setAttribute('aria-label','Uzavřít cestu');
-  closeAction695W.innerHTML='<span aria-hidden="true">⬡</span><small>Uzavřít</small>';
-  smoothAction695V.insertAdjacentElement('afterend',closeAction695W);
-  closeAction695W.addEventListener('click',closeSelectedPath695W);
-  function updateCloseQuick695W(){
-    const shape=shapes[selected];
-    const allowedMode=['move','nodes','scale','rotate'].includes(tool.value);
-    const canClose=allowedMode&&!!closablePath695W(shape);
-    closeAction695W.disabled=!canClose;
-    closeAction695W.title=canClose?'Spojit první a poslední bod vybrané cesty':'Vyber otevřenou cestu nástrojem Výběr nebo Body';
+  joinAction695X=document.createElement('button');
+  joinAction695X.type='button';joinAction695X.className='lnSvgQuickAction694L lnSvgJoinAction695X';
+  joinAction695X.setAttribute('aria-label','Spojit');
+  joinAction695X.innerHTML='<span aria-hidden="true">⟗</span><small>Spojit</small><em data-join-stage>1/2</em>';
+  smoothAction695V.insertAdjacentElement('afterend',joinAction695X);
+  joinAction695X.addEventListener('click',()=>{
+    if(tool.value!=='nodes'){announce('Pro spojení přepni na Body a vyber koncový bod.');return;}
+    const endpoint=endpointInfo695X();
+    if(!joinDraft695X){
+      if(!endpoint){announce('Nejprve v režimu Body vyber koncový bod otevřené čáry.');return;}
+      joinDraft695X={...endpoint};render();announce('První koncový bod uložen. Teď vyber druhý objekt a jeho koncový bod, pak klepni znovu na Spojit.');return;
+    }
+    if(!endpoint){announce('Teď vyber koncový bod druhého objektu.');return;}
+    if(endpoint.shapeIndex===joinDraft695X.shapeIndex){announce('Pro spojení vyber koncový bod druhého objektu.');return;}
+    joinEndpoints695X(joinDraft695X,endpoint);
+  });
+  function updateJoinQuick695X(){
+    if(!joinAction695X)return;
+    const endpoint=endpointInfo695X();
+    const pending=!!joinDraft695X;
+    joinAction695X.dataset.pending=String(pending);
+    joinAction695X.disabled=tool.value!=='nodes' || (!pending && !endpoint);
+    joinAction695X.querySelector('[data-join-stage]').textContent=pending?'2/2':'1/2';
+    joinAction695X.title=tool.value!=='nodes'?'Přepni na Body':pending?(endpoint?'Dokonči spojení druhým koncovým bodem.':'Vyber druhý koncový bod jiného objektu.'):(endpoint?'Ulož první koncový bod pro spojení.':'Nejprve vyber koncový bod otevřené čáry.');
   }
 
   // 695T: draggable precision joystick. It is a DOM overlay, not an SVG
@@ -2685,14 +2790,20 @@
   let joyManuallyHidden695T=false,joyDrag695T=null;
   function updateJoystick695T(){
     updateSmoothQuick695U();
-    updateCloseQuick695W();
-    const valid=selected>=0&&selected<shapes.length&&['move','nodes','scale','rotate'].includes(tool.value);
+    const supported=['move','nodes','scale','rotate'].includes(tool.value);
+    const valid=supported&&selected>=0&&selected<shapes.length;
     const info=valid&&tool.value==='nodes'?nodePositions694I():null;
     const canNudge=valid&&(tool.value!=='nodes'||!!info);
-    joystick695T.hidden=!canNudge||joyManuallyHidden695T;
-    joyShow695T.hidden=!canNudge||!joyManuallyHidden695T;
-    joyNodes695T.hidden=!info;
-    if(info)joyCount695T.textContent='Bod '+(activeNode695T+1)+' / '+info.handles.length;
+    // 695X: Keep the joystick discoverable even before selecting an object.
+    // Previously both the panel and its restore button vanished on deselection.
+    joystick695T.hidden=!supported||joyManuallyHidden695T;
+    joyShow695T.hidden=!supported||!joyManuallyHidden695T;
+    joyNodes695T.hidden=tool.value!=='nodes';
+    joyCount695T.textContent=info?'Bod '+(activeNode695T+1)+' / '+info.handles.length:'Vyber bod';
+    joystick695T.querySelectorAll('[data-dir],[data-prev],[data-next]').forEach(button=>{
+      button.disabled=!canNudge;
+    });
+    joystick695T.title=canNudge?'Jemný posun vybraného bodu nebo objektu':'Nejprve klepni na objekt na plátně';
   }
   joystick695T.querySelector('[data-hide]').addEventListener('click',()=>{joyManuallyHidden695T=true;updateJoystick695T();});
   joyShow695T.addEventListener('click',()=>{joyManuallyHidden695T=false;updateJoystick695T();});
