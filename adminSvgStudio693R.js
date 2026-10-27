@@ -38,7 +38,13 @@
   // 695U: precision edits may go beyond the 24×24 export viewport.
   // Do not alter the existing drawing/snap clamp or SVG export viewBox.
   const precisionCoord695U = x => Number.isFinite(x) ? Math.round(Math.max(-10000,Math.min(10000,x))*100)/100 : 0;
-  const announce = message => { if (notice) notice.textContent = message; };
+  // 695V: existing Studio status is far below the canvas on phones. Mirror
+  // feedback as a transient LubaNote-themed status; never create a modal.
+  let feedback695V=null;
+  const announce = message => {
+    if (notice) notice.textContent = message;
+    feedback695V?.(message);
+  };
   let shapes = [], history = [], future = [], drawing = null, gesture = null, selected = -1;
   let activeColor = 'currentColor';
   let cornerFraction695R = .20; // bezpečný poměr zaoblení 0–50 %
@@ -735,6 +741,23 @@
     if(d===shape.props.d)return {reason:'Křivka už je dostatečně hladká.'};
     return {d};
   }
+  // 695V: six intentional levels. Stage is keyed by the exact stored path
+  // geometry, so Undo/Redo restores the correct level without extra fields
+  // in saved SVG or exported shapes. Edits reset the limit naturally.
+  const smoothMax695V=6;
+  const smoothLevels695V=new Map(), smoothDone695V=new Set();
+  const smoothKey695V=shape=>selected+'\u0001'+String(shape?.props?.d||'');
+  const smoothStage695V=shape=>smoothLevels695V.get(smoothKey695V(shape))||0;
+  function rememberSmooth695V(shape,stage){
+    const key=smoothKey695V(shape);
+    smoothLevels695V.set(key,stage);
+    // Bound memory even after editing hundreds of paths. Old history remains
+    // correct while entries exist; no state ever leaks into the document.
+    if(smoothLevels695V.size>240){
+      const first=smoothLevels695V.keys().next().value;
+      smoothLevels695V.delete(first);smoothDone695V.delete(first);
+    }
+  }
   const smoothBar693V=document.createElement('div');
   smoothBar693V.className='lnSvgSmooth693V';
   smoothBar693V.innerHTML='<label><input type="checkbox" id="lnSvgAutoSmooth693V" checked> Vyhlazovat volnou čáru</label><button type="button" id="lnSvgSmoothSelected693V">Vyhladit vybraný tah</button>';
@@ -742,10 +765,25 @@
   const autoSmooth693V=$('lnSvgAutoSmooth693V');
   $('lnSvgSmoothSelected693V').textContent='Vyhladit vybranou křivku';
   $('lnSvgSmoothSelected693V').addEventListener('click',()=>{
-    const shape=shapes[selected],result=smoothSelectedPath695U(shape);
-    if(!result.d)return announce(result.reason);
+    const shape=shapes[selected],stage=smoothStage695V(shape);
+    if(!shape || shape.tag!=='path')return announce('Nejprve vyber křivku, kterou chceš vyhladit.');
+    if(stage>=smoothMax695V || smoothDone695V.has(smoothKey695V(shape)))
+      return announce('Vyhlazení dokončeno. Další úpravy můžeš vrátit přes Zpět.');
+    const result=smoothSelectedPath695U(shape);
+    if(!result.d){
+      if(result.reason==='Křivka už je dostatečně hladká.')smoothDone695V.add(smoothKey695V(shape));
+      updateSmoothQuick695U();
+      return announce(result.reason||'Křivka se nezměnila.');
+    }
     const before=snapshot();shape.props.d=result.d;
-    if(record(before)){render();announce('Křivka jemně vyhlazena. Další klik ji vyhladí více; Zpět vrátí jeden krok.');}
+    if(record(before)){
+      const next=stage+1;
+      rememberSmooth695V(shape,next);
+      render();
+      announce(next>=smoothMax695V
+        ? 'Vyhlazení hotovo (6/6). Další úpravu můžeš vrátit přes Zpět.'
+        : `Vyhlazení ${next}/${smoothMax695V}. Dalším klikem bude křivka jemnější.`);
+    }
   });
   // 694J: snap can be switched off for free rotation.
   const rotateControls694J=document.createElement('label');
@@ -1067,7 +1105,7 @@
   document.addEventListener('visibilitychange',()=>{if(document.hidden){touches694H.clear();pinch694H=null;muteTouches694H=false;cancelInterruptedGesture693X();}});
   // Changing tools while a stroke is still marked active must not freeze drawing.
   tool.addEventListener('change',cancelInterruptedGesture693X);
-  tool.addEventListener('change',()=>{selected=-1;render();announce(tool.value==='eraser'?'Guma maže jednotlivé tvary dotykem.':tool.value==='move'?'Klepni na tvar a přesuň ho tažením.':tool.value==='rotate'?'Vyber objekt a otoč ho žlutým úchytem.':tool.value==='nodes'?'Vyber tvar a uprav jeho aktivní bod nebo přepínej body šipkami.':tool.value==='scale'?'Vyber tvar a uprav velikost rohovým úchytem.':tool.value==='bucket'?'Vyber barvu a klepni dovnitř uzavřeného tvaru.':'Nástroj připraven.');});
+  tool.addEventListener('change',()=>{selected=-1;render();announce(tool.value==='eraser'?'Guma maže jednotlivé tvary dotykem.':tool.value==='move'?'Klepni na tvar a přesuň ho tažením.':tool.value==='rotate'?'Vyber objekt a otoč ho žlutým úchytem.':tool.value==='nodes'?'Vyber tvar a uprav jeho aktivní bod nebo přepínej body šipkami.':tool.value==='scale'?'Vyber tvar a uprav velikost rohovým úchytem.':tool.value==='bucket'?'Vyber barvu a klepni dovnitř uzavřeného tvaru.':`Nástroj: ${toolBar693W.querySelector('[data-tool="'+tool.value+'"]')?.getAttribute('aria-label')||tool.value} připraven.`);});
   stroke.addEventListener('input',()=>{$('lnSvgStrokeValue693R').textContent=Number(stroke.value).toLocaleString('cs-CZ');});
   function changeColor(next) {
     const before = snapshot();
@@ -1083,7 +1121,9 @@
   themeColor?.addEventListener('click',()=>changeColor('currentColor'));
   document.querySelectorAll('.lnSvgSwatch693S').forEach(b=>b.addEventListener('click',()=>changeColor(b.dataset.color)));
   undoBtn.addEventListener('click',()=>{if(!history.length)return;future.push(snapshot());shapes=history.pop();selected=-1;render();});
+  undoBtn.addEventListener('click',()=>announce('Poslední změna vrácena.'));
   redoBtn?.addEventListener('click',()=>{if(!future.length)return;history.push(snapshot());shapes=future.pop();selected=-1;render();});
+  redoBtn?.addEventListener('click',()=>announce('Změna znovu provedena.'));
   $('lnSvgClear693R').addEventListener('click',()=>{if(!shapes.length)return;const before=snapshot();shapes=[];selected=-1;record(before);render();});
   function center(index = -1) {
     const ids = index>=0?[index]:shapes.map((_,i)=>i);
@@ -1430,7 +1470,7 @@
     return item.shapes.every(s=>s && allowed.has(s.tag)&&s.props && typeof s.props==='object' &&
       Object.entries(s.props).every(([k,v])=>attrs.has(k)&&['string','number'].includes(typeof v)&&String(v).length<=20000));
   }
-  function message694K(value){draftMessage694K.textContent=value;}
+  function message694K(value){draftMessage694K.textContent=value;feedback695V?.(value);}
   function markSaved694K(){dirty694K=false;state694K.textContent='Uloženo';}
   function onChanged694K(){
     dirty694K=true;state694K.textContent='Neuložené změny';
@@ -1496,12 +1536,20 @@
   async function allowReplace694K(){
     return !(dirty694K && shapes.length>0) || await confirm694W1('Aktuální návrh má neuložené změny. Opravdu ho nahradit?');
   }
-  draftPanel694K.querySelector('[data-save]').addEventListener('click',async()=>{
+  const saveDraft695V=draftPanel694K.querySelector('[data-save]');
+  const quickSave695V=toolBar693W.querySelector('[aria-label="Uložit"]');
+  let savingDraft695V=false;
+  saveDraft695V.addEventListener('click',async()=>{
+    if(savingDraft695V)return;
     if(gesture){message694K('Nejprve dokonči tah na plátně.');return;}
     const name=nameInput694K.value.trim();
     if(!name)return message694K('Napiš název ikony.');
     if(!shapes.length)return message694K('Nejdřív nakresli alespoň jeden tvar.');
     const id=currentId694K||(`svg-${Date.now()}-${Math.random().toString(36).slice(2,8)}`);
+    savingDraft695V=true;
+    saveDraft695V.disabled=true;
+    if(quickSave695V)quickSave695V.disabled=true;
+    message694K('Ukládám návrh…');
     try{
       await enqueueWrite694K(()=>dbOp694K('put',draftData694K(id,name)));
       currentId694K=id;markSaved694K();
@@ -1509,6 +1557,7 @@
       message694K(`„${name}“ uloženo do tohoto zařízení.`);
       queueRecovery694K();
     }catch(e){message694K('Nepodařilo se uložit. Zkopíruj SVG jako zálohu. '+e.message);}
+    finally{savingDraft695V=false;saveDraft695V.disabled=false;if(quickSave695V)quickSave695V.disabled=false;}
   });
   draftPanel694K.querySelector('[data-new]').addEventListener('click',async()=>{
     if(!await allowReplace694K())return;
@@ -2493,16 +2542,29 @@
   new MutationObserver(syncFullscreen695S).observe(modal,{attributes:true,attributeFilter:['hidden']});
   syncFullscreen695S();
 
-  // 695U: expose the already existing smooth action next to selected-object
-  // controls without duplicating its handler or changing the tool grid.
+  // 695V: a SINGLE compact action immediately after Vpřed. Delegate to
+  // the original, proven smoothing click handler. No extra toolbar below canvas.
   const smoothButton695U=$('lnSvgSmoothSelected693V');
-  const smoothRow695U=document.createElement('div');
-  smoothRow695U.className='lnSvgSmoothQuick695U';smoothRow695U.hidden=true;
-  smoothRow695U.appendChild(smoothButton695U);
-  objectActions694N?.insertAdjacentElement('afterend',smoothRow695U);
+  smoothButton695U.hidden=true;
+  const smoothAction695V=document.createElement('button');
+  smoothAction695V.type='button';smoothAction695V.className='lnSvgQuickAction694L lnSvgSmoothAction695V';
+  smoothAction695V.setAttribute('aria-label','Vyhladit');
+  smoothAction695V.innerHTML='<span aria-hidden="true">∿</span><small>Vyhladit</small><em data-smooth-stage>0/6</em>';
+  const adjustGroup695V=toolBar693W.querySelectorAll('.lnSvgToolGroupButtons695R')[1];
+  const redoAction695V=Array.from(adjustGroup695V?.children||[]).find(el=>el.getAttribute('aria-label')==='Vpřed');
+  if(redoAction695V)redoAction695V.insertAdjacentElement('afterend',smoothAction695V);
+  else adjustGroup695V?.appendChild(smoothAction695V);
+  smoothAction695V.addEventListener('click',()=>smoothButton695U.click());
   function updateSmoothQuick695U(){
     const shape=shapes[selected];
-    smoothRow695U.hidden=!(shape?.tag==='path' && ['move','nodes','scale','rotate'].includes(tool.value));
+    const canSmooth=shape?.tag==='path' && ['move','nodes','scale','rotate'].includes(tool.value);
+    const stage=canSmooth?smoothStage695V(shape):0;
+    const isDone=canSmooth&&(stage>=smoothMax695V||smoothDone695V.has(smoothKey695V(shape)));
+    smoothAction695V.disabled=!canSmooth||!!isDone;
+    smoothAction695V.dataset.complete=String(!!isDone);
+    smoothAction695V.querySelector('small').textContent=isDone?'Hotovo':'Vyhladit';
+    smoothAction695V.querySelector('[data-smooth-stage]').textContent=stage+'/'+smoothMax695V;
+    smoothAction695V.title=!canSmooth?'Nejprve vyber křivku':isDone?'Vyhlazení dokončeno, můžeš použít Zpět':`Vyhladit křivku (${stage}/${smoothMax695V})`;
   }
 
   // 695T: draggable precision joystick. It is a DOM overlay, not an SVG
@@ -2612,6 +2674,23 @@
     joystick695T.style.left=Math.max(0,Math.min(maxX,parseFloat(joystick695T.style.left)||0))+'px';
     joystick695T.style.top=Math.max(0,Math.min(maxY,parseFloat(joystick695T.style.top)||0))+'px';
   });
+  // 695V: non-blocking status notification in the EXISTING Studio palette.
+  // It mirrors messages already written in the Studio and Draft panels.
+  const toast695V=document.createElement('div');
+  toast695V.id='lnSvgFeedback695V';toast695V.className='lnSvgFeedback695V';
+  toast695V.hidden=true;toast695V.setAttribute('role','status');
+  toast695V.setAttribute('aria-live','polite');
+  view.appendChild(toast695V);
+  let toastTimer695V=null;
+  feedback695V=message=>{
+    if(!message||view.hidden||modal.hidden)return;
+    toast695V.textContent=String(message);
+    toast695V.dataset.error=String(/selhal|nepodař|nelze|není dostup|nejprve|nejdřív|napiš|chyba/i.test(message));
+    toast695V.hidden=false;
+    if(toastTimer695V!==null)clearTimeout(toastTimer695V);
+    toastTimer695V=setTimeout(()=>{toast695V.hidden=true;toastTimer695V=null;},
+      toast695V.dataset.error==='true'?3600:2500);
+  };
   joystickReady695T=true;
   render();
 })();
