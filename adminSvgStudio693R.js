@@ -2288,5 +2288,41 @@
   // Preserve existing reference slider events, draft autosave, icon export,
   // Undo/Redo, and non-exported canvas guides after reparenting.
 
+  // 695S: Pinch zoom is the sole zoom control; do not show redundant +/-/reset.
+  // Keep the internal zoom output detached so applyView693W remains unchanged.
+  controls693W.remove();
+
+  // Desktop gets the entire admin modal and a genuine canvas workbench:
+  // tool palette on the left, large canvas in the center. On mobile the
+  // original toolbar returns directly above the canvas. Reparenting keeps
+  // existing click handlers, active tool and Undo/Redo state intact.
+  const desktop695S=window.matchMedia('(min-width:900px)');
+  const colors695S=view.querySelector('.lnSvgStudioColor693S');
+  const options695S=view.querySelector('.lnSvgOptions694L');
+  const layout695S=()=>{
+    if(desktop695S.matches){
+      left695R.prepend(toolBar693W);
+      for(const panel of [refPanel694R,colors695S,options695S])if(panel)left695R.appendChild(panel);
+    }else{
+      // On phones the canvas must be directly below the compact tool palette.
+      // The original color/options panels remain available just BELOW canvas.
+      center695R.prepend(toolBar693W);
+      if(refPanel694R)center695R.prepend(refPanel694R);
+      for(const panel of [colors695S,options695S])if(panel)center695R.appendChild(panel);
+    }
+  };
+  layout695S();
+  if(desktop695S.addEventListener)desktop695S.addEventListener('change',layout695S);
+  else desktop695S.addListener?.(layout695S);
+
+  // Explicit state class is more robust than :has() and avoids resizing
+  // any other Admin Dashboard view. Close/back restores normal modal size.
+  const syncFullscreen695S=()=>modal.classList.toggle('lnSvgDesktopFull695S',!modal.hidden&&!view.hidden);
+  open.addEventListener('click',syncFullscreen695S);
+  back.addEventListener('click',syncFullscreen695S);
+  new MutationObserver(syncFullscreen695S).observe(view,{attributes:true,attributeFilter:['hidden']});
+  new MutationObserver(syncFullscreen695S).observe(modal,{attributes:true,attributeFilter:['hidden']});
+  syncFullscreen695S();
+
   render();
 })();

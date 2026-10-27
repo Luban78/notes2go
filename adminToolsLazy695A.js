@@ -6,7 +6,7 @@
   if (window.LubaNoteAdminLazy695A) return;
 
   const assets = {
-    svg: ['adminSvgStudio693R.css?v=695D-clean-svg', 'adminSvgStudio693R.js?v=693S'],
+    svg: ['adminSvgStudio693R.css?v=695S-svg-layout', 'adminSvgStudio693R.js?v=695S-svg-layout'],
     visual: ['visualDebug.css?v=658be-global-rem-font-scale', 'visualDebug.js?v=690Q-dock-verification'],
     hub: ['debugHub.css?v=695C-compact', 'debugHub.js?v=695C-compact']
   };

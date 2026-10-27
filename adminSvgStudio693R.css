@@ -335,3 +335,69 @@
     width:min(100%,calc(100dvh - 420px),860px);
   }
 }
+
+/* 695S – compact phone palette: all tools remain visible, without tall tiles. */
+@media (max-width:899px) {
+  .lnSvgStudio .lnSvgToolGrid694L.lnSvgGrouped695R {gap:5px!important;margin:2px 0 5px!important;}
+  .lnSvgStudio .lnSvgToolGroupTitle695R {font-size:10px;line-height:1.1;margin:0 0 3px 1px;}
+  .lnSvgStudio .lnSvgToolGroupButtons695R {grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;}
+  .lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgToolButton693W,
+  .lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgQuickAction694L {
+    min-height:47px!important;height:47px;padding:2px 1px!important;gap:1px!important;border-radius:8px;
+  }
+  .lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgToolButton693W svg {
+    width:17px!important;height:17px!important;flex-basis:17px!important;
+  }
+  .lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgQuickAction694L>span {font-size:18px;line-height:18px;}
+  .lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgToolButton693W span,
+  .lnSvgStudio .lnSvgToolGroupButtons695R .lnSvgQuickAction694L small {
+    font-size:9px!important;line-height:1.05;overflow-wrap:anywhere;
+  }
+  .lnSvgStudio .lnSvgPanInfo693W {display:none;}
+}
+@media (max-width:340px) {
+  .lnSvgStudio .lnSvgToolGroupButtons695R {grid-template-columns:repeat(4,minmax(0,1fr));}
+}
+/* 695S – real fullscreen desktop, only while the SVG subview is visible. */
+@media (min-width:900px) {
+  .adminDashboardModal.lnSvgDesktopFull695S {
+    inset:0!important;display:flex!important;align-items:stretch!important;
+    justify-content:stretch!important;padding:0!important;
+  }
+  .adminDashboardModal.lnSvgDesktopFull695S > .adminDashboardContent {
+    box-sizing:border-box!important;flex:1 1 100%!important;
+    width:100vw!important;max-width:none!important;min-width:0!important;
+    height:100dvh!important;max-height:none!important;
+    border:0!important;border-radius:0!important;box-shadow:none!important;
+    padding:10px clamp(10px,1.5vw,28px) 12px!important;
+    overflow-y:auto;
+  }
+  .lnSvgStudio .lnSvgWorkspace695R {
+    grid-template-columns:minmax(230px,290px) minmax(340px,1fr) minmax(215px,290px);
+    gap:12px;
+  }
+  .lnSvgStudio .lnSvgWorkspaceLeft695R,
+  .lnSvgStudio .lnSvgWorkspaceRight695R {
+    max-height:calc(100dvh - 105px);overflow-y:auto;
+  }
+  .lnSvgStudio .lnSvgWorkspaceLeft695R>.lnSvgToolGrid694L.lnSvgGrouped695R {
+    display:flex!important;flex-direction:column;margin:0 0 12px!important;
+  }
+  .lnSvgStudio .lnSvgWorkspaceLeft695R .lnSvgToolGroupButtons695R {
+    grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;
+  }
+  .lnSvgStudio .lnSvgWorkspaceLeft695R .lnSvgToolGroupButtons695R .lnSvgToolButton693W,
+  .lnSvgStudio .lnSvgWorkspaceLeft695R .lnSvgToolGroupButtons695R .lnSvgQuickAction694L {
+    min-height:49px!important;height:49px;padding:2px 1px!important;
+  }
+  .lnSvgStudio .lnSvgWorkspaceCenter695R>.lnSvgStudioBoard {
+    box-sizing:border-box;width:min(100%,calc(100dvh - 180px),1000px)!important;
+    max-width:none!important;margin:8px auto;
+  }
+  .lnSvgStudio .lnSvgWorkspaceCenter695R>.lnSvgObjectActions694N {margin-top:8px;}
+}
+@media (min-width:900px) {
+  .lnSvgStudio .lnSvgWorkspaceLeft695R .lnSvgToolGroup695R:nth-child(2) .lnSvgToolGroupButtons695R {
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+}
