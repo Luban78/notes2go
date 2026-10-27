@@ -693,3 +693,363 @@
 
   vykresli();
 })();
+
+
+
+/* 695O – RX/TX/E: pasivni casova osa od startu az po skutecne zmizeni splash.
+ * Pouze diagnostika; nezahajuje sync, necte obsah poznamek a nepridava RPC.
+ * Napojeni na jiz existujici LubaNoteStartupDiag (stejna data jako Debug Hub). */
+(() => {
+  "use strict";
+  if (window.LubaNoteStartTimeline695O) return;
+  const stavovyText = document.getElementById("syncStatusText");
+  const popisek = document.querySelector("#syncTrafficBar .syncTrafficLabel");
+  const diagnostika = window.LubaNoteStartupDiag;
+  if (!stavovyText || !diagnostika?.radky || !diagnostika?.priRadku) return;
+
+  const zaznamy = [];
+  let uiPripraveno = false;
+  let splashPryc = false;
+  let pridanPrirozenyStart = false;
+  let okno = null;
+  let predesleZamereni = null;
+  let rozbaleno = false;
+
+  function rozparsuj(radek) {
+    const m = /^\s*(\d+)\s+ms\s*\|\s*([^|]+?)\s*\|\s*(.*)$/.exec(String(radek));
+    if (!m) return null;
+    return { t: Number(m[1]), typ: m[2].trim(), zprava: m[3].trim(), raw: String(radek) };
+  }
+  function vlozRadek(radek) {
+    if (splashPryc || zaznamy.length >= 520) return;
+    const zaznam = rozparsuj(radek);
+    if (!zaznam) return;
+    zaznamy.push(zaznam);
+    if (zaznam.typ === "EVENT" && zaznam.zprava.includes("UI READY / splash-ready")) {
+      uiPripraveno = true;
+    }
+    if (zaznam.zprava.includes("695O SPLASH REMOVED")) splashPryc = true;
+    if (okno && !okno.hidden && (zaznam.typ === "EVENT" || zaznam.typ === "FAST" ||
+        zaznam.typ === "V2" || zaznam.typ === "STORAGE" || zaznam.typ === "END")) {
+      requestAnimationFrame(vykresli);
+    }
+  }
+  diagnostika.radky().forEach(vlozRadek);
+  diagnostika.priRadku(vlozRadek);
+
+  // Sledujeme skutecne odstraneni splash: UI READY je pripravenost dat,
+  // ale pismo, 2x requestAnimationFrame a CSS transition mohou trvat dale.
+  const splash = document.getElementById("appSplash");
+  if (splash && !splash.classList.contains("appSplashHidden")) {
+    const observerStavu = new MutationObserver(() => {
+      if (splash.classList.contains("appSplashHidden") && !pridanPrirozenyStart) {
+        pridanPrirozenyStart = true;
+        diagnostika.zapis("EVENT", "695O SPLASH HIDE START");
+        observerStavu.disconnect();
+      }
+    });
+    observerStavu.observe(splash, { attributes: true, attributeFilter: ["class"] });
+  }
+  if (splash?.parentNode) {
+    const rodic = splash.parentNode;
+    const observerZmizeni = new MutationObserver(() => {
+      if (splash.isConnected) return;
+      diagnostika.zapis("EVENT", "695O SPLASH REMOVED");
+      observerZmizeni.disconnect();
+    });
+    observerZmizeni.observe(rodic, { childList: true });
+  }
+
+  const css = document.createElement("style");
+  css.id = "lnSyncTimelineStyle695O";
+  css.textContent = `
+    #syncStatusText.lnStartTraceTrigger695O,
+    #syncTrafficBar .syncTrafficLabel.lnStartTraceTrigger695O {
+      cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px;
+      -webkit-tap-highlight-color:transparent;
+    }
+    #syncStatusText.lnStartTraceTrigger695O:focus-visible,
+    #syncTrafficBar .syncTrafficLabel.lnStartTraceTrigger695O:focus-visible {
+      outline:2px solid var(--color-accent);outline-offset:2px;border-radius:4px;
+    }
+    .lnStartTrace695O[hidden] {display:none!important}
+    .lnStartTrace695O { position:fixed;inset:0;z-index:30020;
+      display:flex;align-items:center;justify-content:center;
+      box-sizing:border-box;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));
+      background:rgba(0,0,0,.69);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+      color:var(--color-text);font:14px/1.5 system-ui,-apple-system,sans-serif; }
+    .lnStartTraceBox695O {box-sizing:border-box;width:min(100%,640px);max-height:94dvh;
+      min-height:0;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--color-border);
+      border-radius:18px;background:var(--color-surface);box-shadow:0 18px 55px #0007;}
+    .lnStartTraceHead695O {display:flex;align-items:center;gap:8px;flex:0 0 auto;
+      padding:13px 14px 11px;border-bottom:1px solid var(--color-border);}
+    .lnStartTraceHead695O strong{flex:1;font-size:17px;line-height:1.25}
+    .lnStartTrace695O button {color:var(--color-text);font:inherit;
+      border:1px solid var(--color-border);background:var(--color-background);
+      border-radius:9px;min-height:36px;padding:6px 10px;cursor:pointer;}
+    .lnStartTraceHead695O button {flex:0 0 auto}
+    .lnStartTraceScroll695O {min-height:0;overflow:auto;overscroll-behavior:contain;padding:13px 14px 18px;}
+    .lnStartTraceCards695O{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px;}
+    .lnStartTraceCard695O{border:1px solid var(--color-border);border-radius:12px;padding:10px;min-width:0;}
+    .lnStartTraceCard695O b{display:block;color:var(--color-accent);font-size:23px;font-variant-numeric:tabular-nums}
+    .lnStartTraceCard695O span{display:block;font-size:12px;opacity:.84}
+    .lnStartTrace695O h3{font-size:15px;margin:16px 0 7px;}
+    .lnStartTrace695O p{margin:7px 0;color:var(--color-text);opacity:.87;font-size:12px;line-height:1.5;}
+    .lnStartTraceList695O{display:flex;flex-direction:column;gap:8px;}
+    .lnStartTraceStep695O{display:grid;grid-template-columns:68px minmax(0,1fr);gap:10px;
+      border:1px solid var(--color-border);border-radius:11px;padding:9px 10px;}
+    .lnStartTraceTime695O{font-size:13px;font-weight:750;color:var(--color-accent);font-variant-numeric:tabular-nums;white-space:nowrap;}
+    .lnStartTraceStep695O strong{font-size:13px;display:block}
+    .lnStartTraceStep695O small{font-size:11px;opacity:.76;display:block;margin-top:2px}
+    .lnStartTraceStep695O p{margin:3px 0 0}
+    .lnStartTraceWarn695O{border-left:3px solid var(--color-accent);padding:7px 9px;
+      background:var(--color-background);border-radius:5px}
+    .lnStartTraceExtra695O{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
+    .lnStartTraceExtra695O button{flex:1}
+    .lnStartTraceEvents695O{display:none;flex-direction:column;gap:5px;margin-top:10px}
+    .lnStartTraceEvents695O[data-expanded="true"]{display:flex}
+    .lnStartTraceEvent695O{padding:7px 9px;background:var(--color-background);border-radius:8px;}
+    .lnStartTraceEvent695O code{display:block;overflow-wrap:anywhere;font-size:11px;line-height:1.5;
+      white-space:pre-wrap;color:var(--color-text);}
+    .lnStartTraceEvent695O span{font-size:11px;opacity:.77}
+    .lnStartTraceNote695O{font-size:11px;opacity:.74}
+    @media(max-width:440px){.lnStartTrace695O{padding:7px}.lnStartTraceBox695O{max-height:96dvh}
+      .lnStartTraceHead695O{padding:10px 9px}.lnStartTraceHead695O strong{font-size:15px}
+      .lnStartTraceScroll695O{padding:10px}.lnStartTraceStep695O{grid-template-columns:61px minmax(0,1fr);gap:7px;}}
+  `;
+  document.head.appendChild(css);
+
+  function format(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return "—";
+    return ms < 1000 ? `${Math.round(ms)} ms` :
+      `${(ms / 1000).toLocaleString("cs-CZ", { maximumFractionDigits: 2 })} s`;
+  }
+  function popis(radek) {
+    const s = radek.zprava;
+    if (/APP START/.test(s)) return "Začátek měření při spuštění JavaScriptu. Nejde ještě o hotovou aplikaci.";
+    if (/DOM CONTENT LOADED/.test(s)) return "Prohlížeč dokončil sestavení HTML. Další skripty a data se mohou dál načítat.";
+    if (/WINDOW LOAD/.test(s)) return "Dokončilo se načtení základních webových zdrojů stránky.";
+    if (/REGULAR INDEXEDDB CACHE READY/.test(s)) return "Načtena místní databáze poznámek z IndexedDB, která dovoluje používat aplikaci i bez internetu.";
+    if (/NATIVE NETWORK/.test(s)) return "Android potvrdil stav internetového připojení.";
+    if (/CONTROL \|/.test(s)) return "Server potvrdil provozní režim a aktivní backend.";
+    if (/START SYNC FLOW/.test(s)) return "Začíná úvodní kontrola účtu a synchronizace.";
+    if (/FAST SYNC CHECK/.test(s)) return "Malá kontrola uloženého lokálního stavu a serverového otisku. Při shodě se obsah poznámek nestahuje.";
+    if (/PRIVATE SYNC SKIP/.test(s)) return "Otisky se shodují: obsah poznámek není potřeba načítat ani porovnávat jednotlivě.";
+    if (/REMOTE DELTA APPLIED/.test(s)) return "Byly načteny jen změněné serverové poznámky, ne všechno znovu.";
+    if (/RECONCILE/.test(s)) return "Opravné porovnání serverových a místních revizí; je dražší než Fast Sync.";
+    if (/TAG START CACHE HIT/.test(s)) return "Barvy a štítky jsou dostupné z místní cache; není nutné čekat na jejich stažení.";
+    if (/TAG START CACHE MISS/.test(s)) return "Místní cache štítků chybí, takže může být nutné čekat na server.";
+    if (/ONBOARDING DEFERRED/.test(s)) return "Kontrola uvítací poznámky byla odložena až po zobrazení aplikace.";
+    if (/STORAGE.*OVERFLOW SAVE/.test(`${radek.typ} ${s}`)) return "Plná data byla zapsána do IndexedDB. Jde o lokální zápis, nikoli o odeslání do cloudu.";
+    if (/E2E.*ROOT READY/.test(`${radek.typ} ${s}`)) return "Šifrovací klíč je připraven, obsah se nemá posílat bez ověření ochrany.";
+    if (/UI READY \/ splash-ready/.test(s)) return "Aplikace oznámila, že obsah je připraven a může začít skrývat úvodní obrazovku.";
+    if (/695O SPLASH HIDE START/.test(s)) return "Úvodní obrazovka se začala vizuálně skrývat. Mohou zbývat CSS animace.";
+    if (/695O SPLASH REMOVED/.test(s)) return "Úvodní obrazovka skutečně zmizela z DOM. Aplikace je viditelná.";
+    if (/AUTH user/.test(s)) return "Ověření přihlášeného uživatele vůči serveru.";
+    if (/get_my_access/.test(s)) return "Kontrola oprávnění účtu k používání LubaNote.";
+    if (/get_private_sync_fingerprint/.test(s)) return "Dotaz na malý otisk serverových dat pro rychlé rozhodnutí, zda je potřeba něco synchronizovat.";
+    if (/get_private_bootstrap_manifest/.test(s)) return "Dotaz na serverový seznam metadat poznámek, nikoliv jejich plný obsah.";
+    if (/get_note_changes_since/.test(s)) return "Dotaz na seznam změn od poslední potvrzené serverové události.";
+    if (/get_notes_by_ids_safe/.test(s)) return "Stažení obsahu pouze vybraných změněných poznámek.";
+    if (/REST tags/.test(s)) return "Čtení štítků a barev ze serveru.";
+    if (/CORE V2 IMG/.test(s)) return "Bezpečné ověření nebo obnova obrázků uvnitř poznámky.";
+    if (/SPLASH/.test(s)) return "Událost připravenosti nebo zobrazení aplikace.";
+    if (/^HTTP/.test(s)) return "Síťový požadavek; jeho odezva může běžet souběžně s jinými kroky.";
+    return "Diagnostická událost aplikace. U časového rozboru jde o okamžik zaznamenání, nikoliv vždy o samostatnou práci.";
+  }
+
+  function vyberKlicove(body) {
+    const klicove = [];
+    const pravidla = [
+      ["MARK", /APP START/, "Start aplikace"],
+      ["MARK", /DOM CONTENT LOADED/, "HTML připraveno"],
+      ["STORAGE", /REGULAR INDEXEDDB CACHE READY/, "Místní poznámky načteny"],
+      ["START", /^START SYNC FLOW$/, "Začala kontrola synchronizace"],
+      ["END", /^HTTP #\d+ GET AUTH user \|/, "Uživatel ověřen"],
+      ["END", /^HTTP #\d+ POST RPC lubanote_get_my_access \|/, "Oprávnění účtu ověřeno"],
+      ["START", /^FAST SYNC CHECK$/, "Fast Sync zahájen"],
+      ["END", /^FAST SYNC CHECK \|/, "Fast Sync dokončen"],
+      ["V2", /REMOTE DELTA APPLIED/, "Staženy změněné poznámky"],
+      ["V2", /RECONCILE PLAN/, "Naplánováno opravné porovnání"],
+      ["V2", /RECONCILE COMPLETE/, "Opravné porovnání dokončeno"],
+      ["FAST", /TAG START CACHE (HIT|MISS)/, "Štítky připraveny"],
+      ["EVENT", /UI READY \/ splash-ready/, "Obsah připraven (UI READY)"],
+      ["EVENT", /695O SPLASH HIDE START/, "Splash se skrývá"],
+      ["EVENT", /695O SPLASH REMOVED/, "Splash zmizel"]
+    ];
+    const videne = new Set();
+    for (const [typ, regex, nazev] of pravidla) {
+      const matches = body.filter(r => r.typ === typ && regex.test(r.zprava));
+      for (const row of matches) {
+        // Start/END pokud se opakují, zobrazíme každé opakování.
+        const id = `${row.t}|${typ}|${row.zprava}`;
+        if (videne.has(id)) continue;
+        videne.add(id);
+        klicove.push({...row, nazev});
+      }
+    }
+    return klicove.sort((a,b)=>a.t-b.t);
+  }
+
+  function vytvor(tag, cls, text) {
+    const el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text !== undefined) el.textContent = String(text);
+    return el;
+  }
+
+  function model() {
+    const hotovo = zaznamy.find(z => z.typ === "EVENT" && z.zprava.includes("UI READY / splash-ready"));
+    const odstraneno = zaznamy.find(z => z.zprava.includes("695O SPLASH REMOVED"));
+    const skryvani = zaznamy.find(z => z.zprava.includes("695O SPLASH HIDE START"));
+    const limit = hotovo?.t ?? Number.POSITIVE_INFINITY;
+    const pred = zaznamy.filter(z => z.t <= limit);
+    return { hotovo, odstraneno, skryvani, pred, klicove:vyberKlicove(zaznamy.filter(z => z.t <= (odstraneno?.t ?? limit))) };
+  }
+
+  function vytvorOkno() {
+    if (okno) return;
+    okno = vytvor("div","lnStartTrace695O");
+    okno.id="lnStartupTimeline695O";
+    okno.hidden = true;
+    okno.innerHTML =
+      '<section class="lnStartTraceBox695O" role="dialog" aria-modal="true" aria-labelledby="lnStartTraceTitle695O">' +
+      '<header class="lnStartTraceHead695O"><strong id="lnStartTraceTitle695O">Start aplikace · časový rozbor</strong>' +
+      '<button type="button" data-copy> Kopírovat vše </button><button type="button" data-close aria-label="Zavřít">✕</button></header>' +
+      '<div class="lnStartTraceScroll695O" data-body></div></section>';
+    document.body.appendChild(okno);
+    const zavri=()=>{okno.hidden=true;predesleZamereni?.focus?.();};
+    okno.querySelector("[data-close]").addEventListener("click",zavri);
+    okno.addEventListener("click",e=>{if(e.target===okno)zavri();});
+    document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!okno.hidden)zavri();});
+    okno.querySelector("[data-copy]").addEventListener("click",async e=>{
+      const txt=report();
+      let copied=false;
+      try{await navigator.clipboard.writeText(txt);copied=true;}catch(_){}
+      if(!copied){const t=document.createElement("textarea");t.value=txt;t.style.position="fixed";
+        t.style.opacity="0";document.body.appendChild(t);t.select();
+        try{copied=document.execCommand("copy");}catch(_){}
+        t.remove();
+      }
+      const btn=e.currentTarget;
+      btn.textContent=copied?"Zkopírováno ✓":"Kopírování není dostupné";
+      setTimeout(()=>{btn.textContent="Kopírovat vše";},2200);
+    });
+  }
+
+  function report() {
+    const m=model();
+    const hotovo=m.hotovo ? format(m.hotovo.t) : "stále čeká";
+    const videt=m.odstraneno ? format(m.odstraneno.t) : "nezaznamenáno";
+    return [
+      "LUBANOTE 695O – ÚPLNÝ ČASOVÝ ROZBOR STARTU",
+      `Obsah připraven (UI READY): ${hotovo}`,
+      `Splash odstraněn: ${videt}`,
+      "",
+      "DŮLEŽITÉ MÍLNÍKY",
+      ...m.klicove.map((z,i)=>`${format(z.t)} | ${z.nazev} | od předchozího ${i?format(z.t-m.klicove[i-1].t):"—"} | ${popis(z)}`),
+      "",
+      "VŠECHNY DIAGNOSTICKÉ UDÁLOSTI DO UI READY",
+      ...m.pred.map(z=>`${z.raw}\n  Co to znamená: ${popis(z)}`),
+      "",
+      "Úseky mohou běžet souběžně. Čas mezi milníky není vždy dobou práce jediného kroku."
+    ].join("\n");
+  }
+
+  function vykresli() {
+    if (!okno || okno.hidden) return;
+    const out=okno.querySelector("[data-body]");
+    const m=model();
+    const y=out.scrollTop;
+    const fragment=document.createDocumentFragment();
+
+    const cards=vytvor("div","lnStartTraceCards695O");
+    for(const [label,value] of [
+      ["Obsah připraven (UI READY)",m.hotovo?format(m.hotovo.t):"čeká…"],
+      ["Splash skutečně zmizel",m.odstraneno?format(m.odstraneno.t):m.skryvani?"probíhá…":"čeká…"]
+    ]) {
+      const box=vytvor("div","lnStartTraceCard695O");
+      box.append(vytvor("b","",value),vytvor("span","",label));
+      cards.appendChild(box);
+    }
+    fragment.append(cards,vytvor("p","","Časy jsou od startu diagnostiky (0 ms). Milníky se mohou překrývat se síťovými požadavky. UI READY znamená připravená data; skutečné zmizení splash měříme zvlášť."));
+    fragment.appendChild(vytvor("h3","","Hlavní kroky startu"));
+    const list=vytvor("div","lnStartTraceList695O");
+    m.klicove.forEach((z,i)=>{
+      const item=vytvor("div","lnStartTraceStep695O");
+      const vlevo=vytvor("div","lnStartTraceTime695O",format(z.t));
+      const vpravo=vytvor("div");
+      vpravo.append(
+        vytvor("strong","",z.nazev),
+        vytvor("small","",i?`Od předchozího bodu: ${format(z.t-m.klicove[i-1].t)}`:"Začátek měření"),
+        vytvor("p","",popis(z))
+      );
+      if(z.typ==="END" && z.zprava.includes("FAST SYNC CHECK")){
+        const match=/\|\s*(\d+)\s*ms/.exec(z.zprava);
+        if(match)vpravo.appendChild(vytvor("small","","Skutečně naměřená délka Fast Sync: "+format(Number(match[1]))));
+      }
+      item.append(vlevo,vpravo);list.appendChild(item);
+    });
+    if(!m.klicove.length)list.append(vytvor("p","","Záznam startu zatím není k dispozici."));
+    fragment.appendChild(list);
+
+    const mezery=[];
+    for(let i=1;i<m.klicove.length;i++){
+      const pred=m.klicove[i-1],po=m.klicove[i];
+      if(po.t-pred.t>=600 && (!m.hotovo || pred.t<m.hotovo.t)){
+        mezery.push({a:pred,b:po,ms:po.t-pred.t});
+      }
+    }
+    if(mezery.length){
+      fragment.appendChild(vytvor("h3","","Nejdelší mezery mezi měřenými milníky"));
+      for(const gap of mezery.sort((a,b)=>b.ms-a.ms).slice(0,5)){
+        fragment.appendChild(vytvor("p","lnStartTraceWarn695O",`${format(gap.ms)}: ${gap.a.nazev} → ${gap.b.nazev}. V této době mohou běžet i další souběžné kroky; není to automaticky čas vykonávání jedné funkce.`));
+      }
+    }
+    const count=m.pred.length;
+    fragment.appendChild(vytvor("h3","",`Úplný rozpis do UI READY (${count} událostí)`));
+    fragment.appendChild(vytvor("p","","Každá událost obsahuje přesný okamžik, původní diagnostický řádek a vysvětlení. Rozpis nic znovu nesynchronizuje."));
+    const actions=vytvor("div","lnStartTraceExtra695O");
+    const toggle=vytvor("button","",rozbaleno?"Sbalit všechny události":"Zobrazit všechny události");
+    toggle.type="button";
+    toggle.addEventListener("click",()=>{rozbaleno=!rozbaleno;vykresli();});
+    actions.appendChild(toggle);
+    fragment.appendChild(actions);
+    const detail=vytvor("div","lnStartTraceEvents695O");
+    detail.dataset.expanded=String(rozbaleno);
+    if(rozbaleno){
+      for(const z of m.pred) {
+        const item=vytvor("div","lnStartTraceEvent695O");
+        item.append(vytvor("code","",z.raw),vytvor("span","",popis(z)));
+        detail.appendChild(item);
+      }
+    }
+    fragment.appendChild(detail);
+    fragment.append(vytvor("p","lnStartTraceNote695O","Pasivní diagnostika. Nezobrazuje obsah poznámek, hesla ani šifrovací klíče. Nemění pořadí síťových operací."));
+    out.replaceChildren(fragment);
+    out.scrollTop=y;
+  }
+
+  function otevri() {
+    vytvorOkno();
+    predesleZamereni=document.activeElement;
+    okno.hidden=false;
+    vykresli();
+    okno.querySelector("[data-close]")?.focus?.();
+  }
+  for(const el of [stavovyText,popisek]){
+    if(!el)continue;
+    el.classList.add("lnStartTraceTrigger695O");
+    el.setAttribute("role","button");
+    el.setAttribute("tabindex","0");
+    el.setAttribute("aria-label","Zobrazit časový rozbor startu LubaNote");
+    el.setAttribute("aria-hidden","false");
+    el.addEventListener("click",otevri);
+    el.addEventListener("keydown",e=>{
+      if(e.key==="Enter"||e.key===" "){e.preventDefault();otevri();}
+    });
+  }
+  window.LubaNoteStartTimeline695O = Object.freeze({
+    otevri, model, report, parse: rozparsuj
+  });
+})();
