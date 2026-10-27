@@ -4689,6 +4689,147 @@ window.LubaNoteSharedEditorHost = {
 };
 
 
+/* 695G – BEZPEČNÁ OBNOVA IDB OBRÁZKŮ PRO OTEVŘENÍ CORE V2.
+ * Storage při překročení localStorage kvóty ukládá odlehčenou kopii HTML
+ * s <img src="" data-lubanote-idb-image="1">. Tato reprezentace nikdy
+ * nesmí projít do Core V2 jako skutečný obrázek ani do cloudového zápisu.
+ * Při chybějící lokální plné fotografii se použije jediný READ-ONLY
+ * targeted cloud read. Mění se jen src in-memory kopie pro editor,
+ * a to pouze při shodné DOM struktuře veškerého ostatního obsahu.
+ * Neprovádí se žádný přímý zápis do IndexedDB ani sync upload. */
+function vytvorHtmlSablonu695G(html) {
+  const sablona = document.createElement("template");
+  sablona.innerHTML = String(html || "");
+  return sablona;
+}
+
+function spocitejChybejiciIdbObrazky695G(html) {
+  if (!String(html || "").includes("data-lubanote-idb-image")) return 0;
+  const sablona = vytvorHtmlSablonu695G(html);
+  return Array.from(sablona.content.querySelectorAll("img"))
+    .filter((img) => img.hasAttribute("data-lubanote-idb-image") &&
+      !String(img.getAttribute("src") || "").trim()).length;
+}
+
+function maChybejiciIdbObrazek695G(note) {
+  if (spocitejChybejiciIdbObrazky695G(note?.richContent)) return true;
+  return (Array.isArray(note?.todos) ? note.todos : []).some(
+    (todo) => spocitejChybejiciIdbObrazky695G(todo?.html) > 0
+  );
+}
+
+function doplnIdbHtmlJenPriShode695G(lokalniHtml, cloudHtml) {
+  const local = vytvorHtmlSablonu695G(lokalniHtml);
+  const cloud = vytvorHtmlSablonu695G(cloudHtml);
+  const localImg = Array.from(local.content.querySelectorAll("img"));
+  const cloudImg = Array.from(cloud.content.querySelectorAll("img"));
+  const potreba = localImg.filter((img) =>
+    img.hasAttribute("data-lubanote-idb-image") &&
+    !String(img.getAttribute("src") || "").trim()
+  ).length;
+  if (potreba === 0) return { ok: true, html: String(lokalniHtml || ""), count: 0 };
+  if (localImg.length !== cloudImg.length) return { ok: false, reason: "image-count" };
+
+  // Srovnej úplnou HTML strukturu a text kromě samotných <img>.
+  // Odlišný text, obal, seznam nebo pořadí obrázků => žádná obnova.
+  const kostra = (sablona) => {
+    const kopie = sablona.content.cloneNode(true);
+    Array.from(kopie.querySelectorAll("img")).forEach((img) => {
+      img.replaceWith(document.createElement("img"));
+    });
+    const host = document.createElement("div");
+    host.appendChild(kopie);
+    return host.innerHTML;
+  };
+  if (kostra(local) !== kostra(cloud)) {
+    return { ok: false, reason: "content-diff" };
+  }
+
+  let count = 0;
+  for (let i = 0; i < localImg.length; i += 1) {
+    const img = localImg[i];
+    if (!img.hasAttribute("data-lubanote-idb-image") ||
+      String(img.getAttribute("src") || "").trim()) continue;
+    const src = String(cloudImg[i].getAttribute("src") || "").trim();
+    // Blob URL není přenosné mezi různými originy; data/https mají
+    // konkrétní zdroj, javascript: ani prázdné hodnoty nejsou dovoleny.
+    if (!(/^data:image\/[a-z0-9.+-]+(?:;[a-z0-9=+-]+)*,/i.test(src) || /^https:\/\//i.test(src))) {
+      return { ok: false, reason: "cloud-image-unavailable" };
+    }
+    img.setAttribute("src", src);
+    img.removeAttribute("data-lubanote-idb-image");
+    count += 1;
+  }
+  return { ok: true, html: local.innerHTML, count };
+}
+
+async function pripravIdbObrazkyCoreV2695G(note) {
+  if (!maChybejiciIdbObrazek695G(note)) return note;
+  const diag = (status) => window.LubaNoteStartupDiag?.zapis?.(
+    "CORE V2 IMG RECOVERY 695G", status
+  );
+  // LOCAL/Secret/Shared média se přes private cloud dotaz nikdy nehledají.
+  if (note?.isSecret === true ||
+      window.LubaNoteStorageScope?.jePouzeLokalni?.(note) === true ||
+      note?.storageScope === "local" ||
+      window.LubaNoteSharingNotes?.jeVlastniSdilenaPoznamka?.(note.id) === true) {
+    diag("SKIP non-private-cloud");
+    return note;
+  }
+  if (typeof window.LubaNoteSync?.nactiCloudRegularProIdb695G !== "function") {
+    diag("SKIP cloud-reader-unavailable");
+    return note;
+  }
+  diag("START");
+  try {
+    const remote = await window.LubaNoteSync.nactiCloudRegularProIdb695G(note.id);
+    if (!remote || String(remote.id || "") !== String(note.id || "")) {
+      diag("BLOCK cloud-unavailable");
+      return note;
+    }
+    const rich = doplnIdbHtmlJenPriShode695G(note.richContent, remote.richContent);
+    if (!rich.ok) {
+      diag(`BLOCK rich-${rich.reason}`);
+      return note;
+    }
+    const localTodos = Array.isArray(note.todos) ? note.todos : [];
+    const remoteTodos = Array.isArray(remote.todos) ? remote.todos : [];
+    let count = rich.count;
+    let todos = note.todos;
+    if (localTodos.some((todo) => spocitejChybejiciIdbObrazky695G(todo?.html))) {
+      if (localTodos.length !== remoteTodos.length) {
+        diag("BLOCK todo-count");
+        return note;
+      }
+      todos = [];
+      for (let i = 0; i < localTodos.length; i += 1) {
+        const localTodo = localTodos[i];
+        const remoteTodo = remoteTodos[i];
+        if (localTodo?.id && remoteTodo?.id && String(localTodo.id) !== String(remoteTodo.id)) {
+          diag("BLOCK todo-id");
+          return note;
+        }
+        const vysledek = doplnIdbHtmlJenPriShode695G(localTodo?.html, remoteTodo?.html);
+        if (!vysledek.ok) {
+          diag(`BLOCK todo-${vysledek.reason}`);
+          return note;
+        }
+        count += vysledek.count;
+        todos.push({ ...localTodo, html: vysledek.html });
+      }
+    }
+    if (count === 0) {
+      diag("BLOCK no-images-recovered");
+      return note;
+    }
+    diag(`PASS restored=${count} source=cloud read-only`);
+    return { ...note, richContent: rich.html, todos };
+  } catch (_) {
+    diag("BLOCK read-error");
+    return note;
+  }
+}
+
 async function openTaskEditorById(taskId) {
   const tokenOpenCele = window.LubaNoteStartupDiag?.zacni?.(
     `NOTE OPEN TOTAL | id=${taskId}`
@@ -4874,6 +5015,12 @@ async function openTaskEditorById(taskId) {
     }
   }
   
+  // 695G: Jen pracovní kopie pro editor; nikdy nepiseme obnovenou fotografii
+  // zpět do IndexedDB při pouhém otevření poznámky.
+  if (maChybejiciIdbObrazek695G(currentTaskProEditor)) {
+    currentTaskProEditor = await pripravIdbObrazkyCoreV2695G(currentTaskProEditor);
+  }
+
   const tokenUiPrep = window.LubaNoteStartupDiag?.zacni?.("OPEN UI PREP");
   reminderEnabled = currentTask.reminder === true;
   plannedEnabled =

@@ -2045,6 +2045,24 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
     return true;
   }
 
+  // 695G DATA SAFETY: odlehceny savedTask s prazdnym obrazkem nesmi
+  // nikdy nahradit plnou cloudovou poznamku. Pro opravne otevreni slouzi
+  // oddelena READ-ONLY cesta vyse.
+  const htmlProKontrolu695G = [
+    note?.richContent,
+    ...(Array.isArray(note?.todos) ? note.todos.map((todo) => todo?.html) : [])
+  ];
+  if (htmlProKontrolu695G.some((html) =>
+    typeof html === "string" && html.includes("data-lubanote-idb-image")
+  )) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "STORAGE", "695G BLOCK CLOUD WRITE | stripped-idb-image"
+    );
+    return moznosti?.vratitDetailV2 === true
+      ? { ok: false, wrote: false, reason: "stripped_idb_image" }
+      : false;
+  }
+
   const user = await getCurrentUser();
 
   if (!user || !note?.id) {
@@ -10849,7 +10867,24 @@ async function vyprazdniFrontuProMaintenance() {
   };
 }
 
+/* 695G – targeted cloud READ pro lokální obrázek s prázdným src.
+ * Žádné změny revision, žádný merge, žádný save. */
+async function nactiCloudRegularProIdb695G(noteId) {
+  const id = String(noteId || "").trim();
+  if (!id) return null;
+  try {
+    const rows = await nactiCloudPoznamkyPodleIdV2([id]);
+    if (!Array.isArray(rows)) return null;
+    const row = rows.find((r) => String(r?.id || "") === id);
+    if (!row || row.deleted_at || jeCloudSecretRow(row)) return null;
+    return vytvorCloudRegularNote(row);
+  } catch (_) {
+    return null;
+  }
+}
+
 window.LubaNoteSync = {
+  nactiCloudRegularProIdb695G,
   spustBezpecne: spustStartSyncBezpecne,
   ziskejDeviceId: getDeviceId,
   spustRychle: spustRychlySyncPoznamekBezpecne,
