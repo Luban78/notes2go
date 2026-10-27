@@ -223,10 +223,10 @@
     ],
 
     pripnout: [
-      ["path", { d: "m8.2 3.7 8.1 8.1" }],
-      ["path", { d: "m13.7 4.3 6 6-3.4 1.1-4.9 4.9-1.1 3.4-6-6 3.4-1.1 4.9-4.9 1.1-3.4Z" }],
-      ["path", { d: "m8.6 15.4-5.3 5.3" }]
-    ],
+  ["path", { "fill": "none", "stroke": "currentColor", "stroke-width": "1.85", "stroke-linecap": "round", "stroke-linejoin": "round", "d": "m8.2 3.7 8.1 8.1", "transform": "matrix(0.644753 0 0 0.644753 6.828026 4.471912)" }],
+  ["path", { "fill": "none", "stroke": "currentColor", "stroke-width": "1.85", "stroke-linecap": "round", "stroke-linejoin": "round", "d": "m13.7 4.3 6 6-3.4 1.1-4.9 4.9-1.1 3.4-6-6 3.4-1.1 4.9-4.9 1.1-3.4Z" }],
+  ["path", { "fill": "none", "stroke": "currentColor", "stroke-width": "1.85", "stroke-linecap": "round", "stroke-linejoin": "round", "d": "m8.6 15.4-5.3 5.3", "transform": "translate(-1.35 1.19)" }]
+],
 
     zamek: [
       ["rect", { x: "5.2", y: "10.2", width: "13.6", height: "10", rx: "2.3" }],
