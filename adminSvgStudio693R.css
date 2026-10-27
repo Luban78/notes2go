@@ -468,3 +468,38 @@
 .lnSvgStudio .lnSvgJoyShow695T {position:absolute;z-index:20;right:6px;bottom:6px;
   background:var(--color-surface,#102b3b);color:var(--color-text,#eef9fb);
   border:1px solid var(--color-border,#315d6b);border-radius:9px;padding:7px;font-size:11px;}
+
+/* 695U – joystick outside canvas, but always within visible viewport. */
+.lnSvgStudio .lnSvgJoystick695T {
+  position:fixed!important;z-index:100005!important;
+  right:14px;bottom:calc(18px + env(safe-area-inset-bottom,0px));
+  overflow:visible!important;
+}
+.lnSvgStudio .lnSvgJoyShow695T {
+  position:fixed!important;z-index:100005!important;
+  right:14px;bottom:calc(18px + env(safe-area-inset-bottom,0px));
+}
+.lnSvgStudio .lnSvgJoyStep695T button {min-width:68px!important;min-height:32px!important;}
+.lnSvgStudio .lnSvgStepMenu695U[hidden],.lnSvgStudio .lnSvgSmoothQuick695U[hidden]{display:none!important;}
+.lnSvgStudio .lnSvgStepMenu695U {
+  position:absolute;bottom:calc(100% - 5px);left:0;right:0;z-index:3;
+  display:grid;grid-template-columns:1fr 1fr;gap:5px;
+  padding:7px;border-radius:11px;border:1px solid var(--color-border,#335d70);
+  background:var(--color-surface,#102b3b);box-shadow:0 5px 24px #0009;
+}
+.lnSvgStudio .lnSvgStepMenu695U button {
+  padding:6px 2px;min-height:36px!important;font:inherit;
+  color:var(--color-text,#eaf8fb);background:var(--color-surface,#102b3b);
+  border:1px solid var(--color-border,#335d70);border-radius:8px;
+}
+.lnSvgStudio .lnSvgStepMenu695U button[aria-pressed="true"]{
+  color:var(--color-accent,#1cb6c9);border-color:var(--color-accent,#1cb6c9);
+  box-shadow:inset 0 0 0 1px var(--color-accent,#1cb6c9);
+}
+.lnSvgStudio .lnSvgSmoothQuick695U {display:flex;margin:8px 0;}
+.lnSvgStudio .lnSvgSmoothQuick695U button {
+  width:100%;min-height:38px;padding:7px 10px;
+  border-radius:10px;border:1px solid var(--color-border,#335d70);
+  background:var(--color-surface,#102b3b);color:var(--color-text,#eaf8fb);
+  font:inherit;cursor:pointer;
+}

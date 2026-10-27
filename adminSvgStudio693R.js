@@ -35,6 +35,9 @@
   const deepCopy = data => JSON.parse(JSON.stringify(data));
   const clamp = x => Math.max(0, Math.min(24, Math.round(x * 100) / 100));
   const fmt = x => String(Math.round(x * 100) / 100);
+  // 695U: precision edits may go beyond the 24×24 export viewport.
+  // Do not alter the existing drawing/snap clamp or SVG export viewBox.
+  const precisionCoord695U = x => Number.isFinite(x) ? Math.round(Math.max(-10000,Math.min(10000,x))*100)/100 : 0;
   const announce = message => { if (notice) notice.textContent = message; };
   let shapes = [], history = [], future = [], drawing = null, gesture = null, selected = -1;
   let activeColor = 'currentColor';
@@ -288,7 +291,7 @@
   }
   function editNode695T(shape,handle,local){
     if(!shape||!handle||![local.x,local.y].every(Number.isFinite))return false;
-    const p=shape.props,x=clamp(local.x),y=clamp(local.y),key=handle.key;
+    const p=shape.props,x=precisionCoord695U(local.x),y=precisionCoord695U(local.y),key=handle.key;
     if(shape.tag==='path'){
       const data=pathNodes694I(shape),part=data?.parsed[handle.segment];
       if(!part||!Number.isInteger(handle.coordinate))return false;
@@ -695,19 +698,54 @@
     d+=` Q${fmt(last.x)} ${fmt(last.y)} ${fmt(last.x)} ${fmt(last.y)}`;
     return d;
   }
+  // 695U: repeatable, non-destructive path smoothing. Reuse the existing
+  // absolute path parser (M/L/Q/C); never flatten curves or touch arcs/imports.
+  // Each click is one undoable operation. The two end anchors stay fixed.
+  function smoothSelectedPath695U(shape){
+    if(shape?.tag!=='path')return {reason:'Vyber nejprve ručně kreslenou čáru.'};
+    const parsed=pathNodes694I(shape)?.parsed;
+    if(!parsed||parsed.length<3||parsed.some((seg,i)=>!['M','L','Q','C'].includes(seg.cmd)||(seg.cmd==='M'&&i!==0)))
+      return {reason:'Tuto křivku nelze bezpečně vyhladit. Podporované jsou otevřené cesty M/L/Q/C.'};
+    const endpoint=seg=>seg.cmd==='M'||seg.cmd==='L'?0:seg.cmd==='Q'?2:4;
+    const anchors=parsed.map(seg=>({x:seg.nums[endpoint(seg)],y:seg.nums[endpoint(seg)+1]}));
+    if(anchors.some(p=>![p.x,p.y].every(Number.isFinite)))return {reason:'Neplatné souřadnice křivky.'};
+    const deltas=anchors.map((a,i)=>{
+      if(i===0||i===anchors.length-1)return {x:0,y:0};
+      const prev=anchors[i-1],next=anchors[i+1];
+      return {x:.25*(prev.x+next.x-2*a.x),y:.25*(prev.y+next.y-2*a.y)};
+    });
+    const moved=parsed.map((seg,i)=>({cmd:seg.cmd,nums:[...seg.nums]}));
+    for(let i=1;i<moved.length;i++){
+      const seg=moved[i],prev=anchors[i-1],curr=anchors[i];
+      if(seg.cmd==='Q'){
+        // Control point follows both neighbouring anchors, and gently
+        // relaxes toward their midpoint (preserving the quadratic topology).
+        seg.nums[0]=precisionCoord695U(seg.nums[0]+(deltas[i-1].x+deltas[i].x)/2+.12*((prev.x+curr.x)/2-seg.nums[0]));
+        seg.nums[1]=precisionCoord695U(seg.nums[1]+(deltas[i-1].y+deltas[i].y)/2+.12*((prev.y+curr.y)/2-seg.nums[1]));
+      }else if(seg.cmd==='C'){
+        for(const [j,f,d] of [[0,1/3,deltas[i-1]],[2,2/3,deltas[i]]]){
+          seg.nums[j]=precisionCoord695U(seg.nums[j]+d.x+.12*(prev.x+(curr.x-prev.x)*f-seg.nums[j]));
+          seg.nums[j+1]=precisionCoord695U(seg.nums[j+1]+d.y+.12*(prev.y+(curr.y-prev.y)*f-seg.nums[j+1]));
+        }
+      }
+      const at=endpoint(seg);seg.nums[at]=precisionCoord695U(curr.x+deltas[i].x);
+      seg.nums[at+1]=precisionCoord695U(curr.y+deltas[i].y);
+    }
+    const d=writeNodes694I(moved);
+    if(d===shape.props.d)return {reason:'Křivka už je dostatečně hladká.'};
+    return {d};
+  }
   const smoothBar693V=document.createElement('div');
   smoothBar693V.className='lnSvgSmooth693V';
   smoothBar693V.innerHTML='<label><input type="checkbox" id="lnSvgAutoSmooth693V" checked> Vyhlazovat volnou čáru</label><button type="button" id="lnSvgSmoothSelected693V">Vyhladit vybraný tah</button>';
   view.querySelector('.lnSvgStudioTools')?.insertAdjacentElement('afterend',smoothBar693V);
   const autoSmooth693V=$('lnSvgAutoSmooth693V');
+  $('lnSvgSmoothSelected693V').textContent='Vyhladit vybranou křivku';
   $('lnSvgSmoothSelected693V').addEventListener('click',()=>{
-    if(selected<0 || !shapes[selected] || shapes[selected].tag!=='path') return announce('Vyber volnou čáru nástrojem Přesun.');
-    const path=String(shapes[selected].props.d||'');
-    if (!/^M[-\d.,\s]+(?:L[-\d.,\s]+)+$/i.test(path)) return announce('Vyhlazení vybraného tahu podporuje volnou čáru M/L. Složité SVG křivky neměním.');
-    const nums=(path.match(/-?\d+(?:\.\d+)?/g)||[]).map(Number);
-    const pts=[];for(let i=0;i+1<nums.length;i+=2)pts.push({x:nums[i],y:nums[i+1]});
-    const d=smoothPoints693V(pts);if(!d)return announce('Tah je příliš krátký.');
-    const before=snapshot(); shapes[selected].props.d=d;record(before);render();announce('Vybraný tah vyhlazen (Zpět obnoví původní).');
+    const shape=shapes[selected],result=smoothSelectedPath695U(shape);
+    if(!result.d)return announce(result.reason);
+    const before=snapshot();shape.props.d=result.d;
+    if(record(before)){render();announce('Křivka jemně vyhlazena. Další klik ji vyhladí více; Zpět vrátí jeden krok.');}
   });
   // 694J: snap can be switched off for free rotation.
   const rotateControls694J=document.createElement('label');
@@ -2455,6 +2493,18 @@
   new MutationObserver(syncFullscreen695S).observe(modal,{attributes:true,attributeFilter:['hidden']});
   syncFullscreen695S();
 
+  // 695U: expose the already existing smooth action next to selected-object
+  // controls without duplicating its handler or changing the tool grid.
+  const smoothButton695U=$('lnSvgSmoothSelected693V');
+  const smoothRow695U=document.createElement('div');
+  smoothRow695U.className='lnSvgSmoothQuick695U';smoothRow695U.hidden=true;
+  smoothRow695U.appendChild(smoothButton695U);
+  objectActions694N?.insertAdjacentElement('afterend',smoothRow695U);
+  function updateSmoothQuick695U(){
+    const shape=shapes[selected];
+    smoothRow695U.hidden=!(shape?.tag==='path' && ['move','nodes','scale','rotate'].includes(tool.value));
+  }
+
   // 695T: draggable precision joystick. It is a DOM overlay, not an SVG
   // shape, so it never appears in exported icons, history or image drafts.
   const joystick695T=document.createElement('section');
@@ -2465,17 +2515,41 @@
     <div class="lnSvgJoyHead695T" title="Přetáhni panel za tuto lištu">✥ Jemný posun <button type="button" data-hide title="Skrýt joystick" aria-label="Skrýt joystick">×</button></div>
     <div class="lnSvgJoyNodes695T" data-nodes hidden><button type="button" data-prev aria-label="Předchozí bod">◀</button><span data-count>Bod 1 / 1</span><button type="button" data-next aria-label="Další bod">▶</button></div>
     <div class="lnSvgJoyPad695T"><button type="button" data-dir="up" aria-label="Nahoru">↑</button><button type="button" data-dir="left" aria-label="Doleva">←</button><button type="button" data-dir="right" aria-label="Doprava">→</button><button type="button" data-dir="down" aria-label="Dolů">↓</button></div>
-    <label class="lnSvgJoyStep695T">Krok <select aria-label="Velikost kroku"><option value="0.02">0,02</option><option value="0.05" selected>0,05</option><option value="0.1">0,1</option><option value="0.25">0,25</option><option value="0.5">0,5</option></select></label>`;
+    <div class="lnSvgJoyStep695T"><span>Krok</span><button type="button" class="lnSvgStepTrigger695U" data-step-trigger aria-haspopup="true" aria-expanded="false" aria-label="Velikost kroku">0,05 ▾</button></div>
+    <div class="lnSvgStepMenu695U" data-step-menu hidden role="group" aria-label="Vyber krok jemného posunu">
+      <button type="button" data-step="0.02">0,02</button><button type="button" data-step="0.05" aria-pressed="true">0,05</button>
+      <button type="button" data-step="0.1">0,1</button><button type="button" data-step="0.25">0,25</button><button type="button" data-step="0.5">0,5</button>
+    </div>`;
   const joyHead695T=joystick695T.querySelector('.lnSvgJoyHead695T');
   const joyNodes695T=joystick695T.querySelector('[data-nodes]');
   const joyCount695T=joystick695T.querySelector('[data-count]');
-  const joyStep695T=joystick695T.querySelector('select');
+  const joyStepTrigger695U=joystick695T.querySelector('[data-step-trigger]');
+  const joyStepMenu695U=joystick695T.querySelector('[data-step-menu]');
+  let joyStep695U=.05;
+  const closeStep695U=()=>{joyStepMenu695U.hidden=true;joyStepTrigger695U.setAttribute('aria-expanded','false');};
+  joyStepTrigger695U.addEventListener('click',()=>{
+    const open=joyStepMenu695U.hidden;joyStepMenu695U.hidden=!open;
+    joyStepTrigger695U.setAttribute('aria-expanded',String(open));
+  });
+  joyStepMenu695U.querySelectorAll('[data-step]').forEach(button=>button.addEventListener('click',()=>{
+    joyStep695U=Number(button.dataset.step);
+    joyStepTrigger695U.textContent=button.textContent+' ▾';
+    joyStepMenu695U.querySelectorAll('[data-step]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));
+    closeStep695U();
+  }));
+  document.addEventListener('pointerdown',e=>{
+    if(!joystick695T.contains(e.target))closeStep695U();
+  },true);
+  joystick695T.addEventListener('keydown',e=>{if(e.key==='Escape')closeStep695U();});
   const joyShow695T=document.createElement('button');
   joyShow695T.type='button';joyShow695T.className='lnSvgJoyShow695T';
   joyShow695T.textContent='✥ Jemný posun';joyShow695T.hidden=true;
-  board694K?.append(joystick695T,joyShow695T);
+  // The floating panel belongs to the Studio view, not the drawing board.
+  // It can be dragged over tools, sidebars and other free screen space.
+  view.append(joystick695T,joyShow695T);
   let joyManuallyHidden695T=false,joyDrag695T=null;
   function updateJoystick695T(){
+    updateSmoothQuick695U();
     const valid=selected>=0&&selected<shapes.length&&['move','nodes','scale','rotate'].includes(tool.value);
     const info=valid&&tool.value==='nodes'?nodePositions694I():null;
     const canNudge=valid&&(tool.value!=='nodes'||!!info);
@@ -2508,26 +2582,36 @@
   }
   for(const [name,dx,dy] of [['up',0,-1],['left',-1,0],['right',1,0],['down',0,1]]){
     joystick695T.querySelector('[data-dir="'+name+'"]').addEventListener('click',()=>{
-      const step=Number(joyStep695T.value)||.05;nudge695T(dx*step,dy*step);
+      nudge695T(dx*joyStep695U,dy*joyStep695U);
     });
   }
   joyHead695T.addEventListener('pointerdown',e=>{
     if(e.target.closest('button'))return;
     e.preventDefault();
-    const box=joystick695T.getBoundingClientRect(),parent=board694K.getBoundingClientRect();
-    joyDrag695T={id:e.pointerId,x:e.clientX,y:e.clientY,left:box.left-parent.left,top:box.top-parent.top};
+    closeStep695U();
+    const box=joystick695T.getBoundingClientRect();
+    joyDrag695T={id:e.pointerId,x:e.clientX,y:e.clientY,left:box.left,top:box.top};
     try{joyHead695T.setPointerCapture(e.pointerId);}catch(_){}
   });
   joyHead695T.addEventListener('pointermove',e=>{
     if(!joyDrag695T||e.pointerId!==joyDrag695T.id)return;
     e.preventDefault();const d=joyDrag695T;
-    const maxX=Math.max(0,board694K.clientWidth-joystick695T.offsetWidth);
-    const maxY=Math.max(0,board694K.clientHeight-joystick695T.offsetHeight);
+    const width=window.visualViewport?.width||window.innerWidth;
+    const height=window.visualViewport?.height||window.innerHeight;
+    const maxX=Math.max(0,width-joystick695T.offsetWidth);
+    const maxY=Math.max(0,height-joystick695T.offsetHeight);
     joystick695T.style.left=Math.max(0,Math.min(maxX,d.left+e.clientX-d.x))+'px';
     joystick695T.style.top=Math.max(0,Math.min(maxY,d.top+e.clientY-d.y))+'px';
     joystick695T.style.right='auto';joystick695T.style.bottom='auto';
   });
   for(const name of ['pointerup','pointercancel','lostpointercapture'])joyHead695T.addEventListener(name,()=>{joyDrag695T=null;});
+  window.addEventListener('resize',()=>{
+    if(!joystick695T.style.left)return;
+    const maxX=Math.max(0,(window.visualViewport?.width||window.innerWidth)-joystick695T.offsetWidth);
+    const maxY=Math.max(0,(window.visualViewport?.height||window.innerHeight)-joystick695T.offsetHeight);
+    joystick695T.style.left=Math.max(0,Math.min(maxX,parseFloat(joystick695T.style.left)||0))+'px';
+    joystick695T.style.top=Math.max(0,Math.min(maxY,parseFloat(joystick695T.style.top)||0))+'px';
+  });
   joystickReady695T=true;
   render();
 })();
