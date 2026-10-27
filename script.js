@@ -4994,6 +4994,194 @@ window.LubaNoteImageSyncRepair695J = Object.freeze({
 });
 
 
+/* 695P – Editor recovery pro prazdne IMG src BEZ IDB znacky.
+ * 695G rozpoznava jen specialni lehkou localStorage kopii. Historicke
+ * lokalni/cloudove zaznamy vsak mohou obsahovat prazdne IMG bez teto
+ * znacky (typicky prechod media-E2E). Core V2 je spravne odmita.
+ * Bezpecnost: jen READ-ONLY targeted cloud read, shodna HTML struktura
+ * i IMG atributy mimo src, zadny zapis do cloudu, nikdy zadne mazani IMG.
+ * LOCAL/Secret/Shared note se pres private cloud reader neobnovuji. */
+function spocitejPrazdneNeoznaceneImg695P(html) {
+  if (!/<img\b/i.test(String(html || ""))) return 0;
+  const tpl = vytvorHtmlSablonu695G(html);
+  return [...tpl.content.querySelectorAll("img")].filter(img =>
+    !String(img.getAttribute("src") || "").trim() &&
+    !img.hasAttribute("data-lubanote-idb-image")
+  ).length;
+}
+
+function maPrazdneNeoznaceneImg695P(note) {
+  if (spocitejPrazdneNeoznaceneImg695P(note?.richContent) > 0) return true;
+  return (Array.isArray(note?.todos) ? note.todos : []).some(t =>
+    spocitejPrazdneNeoznaceneImg695P(t?.html) > 0);
+}
+
+function doplnJenNeoznaceneImg695P(lokalniHtml, vzdaleneHtml) {
+  const pocet = spocitejPrazdneNeoznaceneImg695P(lokalniHtml);
+  if (pocet === 0) return {ok:true,count:0,html:String(lokalniHtml || "")};
+  const local = vytvorHtmlSablonu695G(lokalniHtml);
+  const remote = vytvorHtmlSablonu695G(vzdaleneHtml);
+  const a = [...local.content.querySelectorAll("img")];
+  const b = [...remote.content.querySelectorAll("img")];
+  if (a.length !== b.length) return {ok:false,reason:"image-count"};
+  let restored = 0;
+  for (let i=0;i<a.length;i++) {
+    const original = a[i], other = b[i];
+    const src = String(original.getAttribute("src") || "").trim();
+    const remoteSrc = String(other.getAttribute("src") || "").trim();
+    if (!src && !original.hasAttribute("data-lubanote-idb-image")) {
+      if (!(/^(?:data:image\/[a-z0-9.+-]+(?:;[a-z0-9=+-]+)*,|https:\/\/)/i.test(remoteSrc))) {
+        return {ok:false,reason:"source-unavailable"};
+      }
+      original.setAttribute("src", remoteSrc);
+      restored++;
+    }
+  }
+  // Po doplneni musi byt VSECHEN ostatni HTML obsah vcetne puvodnich
+  // IMG atributu shodny. Jiny text, ToDo, pozice obrazku nebo atribut
+  // znamena odmítnuti obnovy. Jinym IMG ani atributum nesmime sahat.
+  if (local.innerHTML !== remote.innerHTML || restored !== pocet) {
+    return {ok:false,reason:"content-mismatch"};
+  }
+  return {ok:true,count:restored,html:local.innerHTML};
+}
+
+function overJenObnovenyImg695P(puvodni,obnovena) {
+  if (!puvodni?.id || String(puvodni.id)!==String(obnovena?.id) ||
+      !maPrazdneNeoznaceneImg695P(puvodni) ||
+      maPrazdneNeoznaceneImg695P(obnovena)) return false;
+  const rich = doplnJenNeoznaceneImg695P(puvodni.richContent,obnovena.richContent);
+  if (!rich.ok || rich.html !== String(obnovena.richContent || "")) return false;
+  const a = Array.isArray(puvodni.todos) ? puvodni.todos : [];
+  const b = Array.isArray(obnovena.todos) ? obnovena.todos : [];
+  if (a.length!==b.length) return false;
+  for(let i=0;i<a.length;i++) {
+    const r=doplnJenNeoznaceneImg695P(a[i]?.html,b[i]?.html);
+    if (!r.ok || r.html !== String(b[i]?.html||"")) return false;
+  }
+  const metadata=(n)=>({
+    ...n,richContent:"[695P-safe-html]",
+    todos:(Array.isArray(n.todos)?n.todos:[]).map(t=>({...t,html:"[695P-safe-html]"}))
+  });
+  return JSON.stringify(metadata(puvodni))===JSON.stringify(metadata(obnovena));
+}
+
+async function ulozBezpecneDoplneneImg695P(puvodni,obnovena) {
+  const diag = s=>window.LubaNoteStartupDiag?.zapis?.("CORE V2 IMG 695P CACHE",s);
+  const store=window.LubaNoteRegularNotesStore;
+  if (!store?.jeOverflowRezim?.() || store?.chybiPlnaCacheProSync?.()===true ||
+      typeof store?.cekejNaUlozeni!=="function" ||
+      typeof nactiBeznePoznamkyZUloziste!=="function" ||
+      typeof ulozBeznePoznamkyPrimo!=="function" ||
+      !overJenObnovenyImg695P(puvodni,obnovena)) return false;
+  try {
+    await store.cekejNaUlozeni();
+    const notes=nactiBeznePoznamkyZUloziste();
+    const i=Array.isArray(notes)?notes.findIndex(n=>String(n?.id)===String(puvodni.id)):-1;
+    if (i<0 || JSON.stringify(notes[i])!==JSON.stringify(puvodni)) {
+      diag("SKIP current-note-changed");return false;
+    }
+    const kopi=notes.slice();
+    kopi[i]={...notes[i],richContent:obnovena.richContent,todos:obnovena.todos};
+    if (await ulozBeznePoznamkyPrimo(kopi)!==true) {
+      diag("FAIL storage-write");return false;
+    }
+    const check=nactiBeznePoznamkyZUloziste().find(n=>String(n?.id)===String(puvodni.id));
+    const ok=JSON.stringify(check)===JSON.stringify(kopi[i]);
+    diag(ok?"PASS saved locally (no cloud write)":"FAIL verify");
+    return ok;
+  }catch(_){diag("FAIL storage-error");return false;}
+}
+
+async function pripravNeoznaceneObrazkyCoreV2695P(note) {
+  if (!maPrazdneNeoznaceneImg695P(note)) return note;
+  const diag = s=>window.LubaNoteStartupDiag?.zapis?.("CORE V2 IMG 695P",s);
+  const maVault=window.LubaNoteMediaCrypto?.maSifrovanaMedia?.(note)===true;
+  const maMediaRef=[note?.richContent,...(Array.isArray(note?.todos)?note.todos.map(t=>t?.html):[])]
+    .some(s=>String(s||"").includes("data-lubanote-media-ref"));
+  // Media E2E: klicem desifrujeme JEN prilozeny lokalni trezor, nikoli
+  // neznamy obrazek. Pred dekodovanim nic nezapisujeme.
+  if (maVault && maMediaRef) {
+    const media=window.LubaNoteMediaCrypto;
+    try {
+      if (media.jeKlicDostupny?.()!==true) await media.pripravMediaKlicZeZarizeni?.();
+      if (media.jeKlicDostupny?.()!==true) {
+        diag("DEFER media-key-locked");return note;
+      }
+      const result=await media.desifrujPoznamkuZCloudu(note);
+      if (String(result?.id)===String(note?.id) &&
+          !maPrazdneNeoznaceneImg695P(result) &&
+          !maChybejiciIdbObrazek695G(result)) {
+        diag("PASS local-media-vault (read-only editor)");
+        return result;
+      }
+    }catch(_){diag("DEFER local-media-vault-invalid");}
+    return note;
+  }
+  if (maMediaRef) {
+    diag("DEFER encrypted-media-vault-unavailable");return note;
+  }
+  const pouzeLocal = window.LubaNoteStorageScope?.jePouzeLokalni?.(note)===true ||
+    note?.storageScope==="local";
+  if (note?.isSecret===true || pouzeLocal ||
+      window.LubaNoteSharingNotes?.jeVlastniSdilenaPoznamka?.(note?.id)===true) {
+    diag(`DEFER no-private-cloud scope=${pouzeLocal?"local":note?.isSecret?"secret":"shared"}`);
+    return note;
+  }
+  if (typeof window.LubaNoteSync?.nactiCloudRegularProIdb695G!=="function") {
+    diag("DEFER cloud-reader-missing");return note;
+  }
+  diag("START cloud-read-only");
+  try {
+    let remote=await window.LubaNoteSync.nactiCloudRegularProIdb695G(note.id);
+    if (!remote || String(remote.id)!==String(note.id)) {
+      diag("DEFER cloud-note-unavailable");return note;
+    }
+    const media=window.LubaNoteMediaCrypto;
+    if (media?.maSifrovanaMedia?.(remote)===true) {
+      if (media.jeKlicDostupny?.()!==true) await media.pripravMediaKlicZeZarizeni?.();
+      if (media.jeKlicDostupny?.()!==true) {diag("DEFER media-key-locked");return note;}
+      remote=await media.desifrujPoznamkuZCloudu(remote);
+    }
+    const rich=doplnJenNeoznaceneImg695P(note.richContent,remote.richContent);
+    if (!rich.ok) {diag(`DEFER rich-${rich.reason}`);return note;}
+    const origTodos=Array.isArray(note.todos)?note.todos:[];
+    const remoteTodos=Array.isArray(remote.todos)?remote.todos:[];
+    let count=rich.count,todos=note.todos;
+    if (origTodos.some(t=>spocitejPrazdneNeoznaceneImg695P(t?.html))) {
+      if (origTodos.length!==remoteTodos.length) {diag("DEFER todo-count");return note;}
+      todos=[];
+      for (let i=0;i<origTodos.length;i++) {
+        if (origTodos[i]?.id && String(origTodos[i].id)!==String(remoteTodos[i]?.id)) {
+          diag("DEFER todo-id");return note;
+        }
+        const changed=doplnJenNeoznaceneImg695P(origTodos[i]?.html,remoteTodos[i]?.html);
+        if (!changed.ok) {diag(`DEFER todo-${changed.reason}`);return note;}
+        todos.push({...origTodos[i],html:changed.html});count+=changed.count;
+      }
+    }
+    if (!count) {diag("DEFER no-recoverable-images");return note;}
+    const repaired={...note,richContent:rich.html,todos};
+    if (!overJenObnovenyImg695P(note,repaired)) {
+      diag("DEFER safety-comparison");return note;
+    }
+    diag(`PASS restored=${count} (read-only cloud)`);
+    await ulozBezpecneDoplneneImg695P(note,repaired);
+    // Asynchronni cloud read mohl prebehnout novejsi lokalni zapis.
+    // Nikdy neotevirat zastaraly editorovy snapshot pres cerstvou editaci.
+    const aktualni = typeof nactiBeznePoznamkyZUloziste === "function"
+      ? nactiBeznePoznamkyZUloziste()?.find(n => String(n?.id)===String(note.id))
+      : null;
+    if (aktualni && JSON.stringify(aktualni)!==JSON.stringify(note) &&
+        JSON.stringify(aktualni)!==JSON.stringify(repaired)) {
+      diag("DEFER concurrent-note-change");
+      return aktualni;
+    }
+    return repaired;
+  }catch(_){diag("DEFER read-error");return note;}
+}
+
+
 async function openTaskEditorById(taskId) {
   const tokenOpenCele = window.LubaNoteStartupDiag?.zacni?.(
     `NOTE OPEN TOTAL | id=${taskId}`
@@ -5183,6 +5371,11 @@ async function openTaskEditorById(taskId) {
   // lokální plné IndexedDB cache, pokud se poznámka nezměnila.
   if (maChybejiciIdbObrazek695G(currentTaskProEditor)) {
     currentTaskProEditor = await pripravIdbObrazkyCoreV2695G(currentTaskProEditor);
+  }
+  // 695P: druhy bezpecny recovery pripad – obrazek bez src, ale bez
+  // markeru odlehcene IndexedDB kopie. Ostatni cesty 695G/695H nemenime.
+  if (maPrazdneNeoznaceneImg695P(currentTaskProEditor)) {
+    currentTaskProEditor = await pripravNeoznaceneObrazkyCoreV2695P(currentTaskProEditor);
   }
 
   const tokenUiPrep = window.LubaNoteStartupDiag?.zacni?.("OPEN UI PREP");
