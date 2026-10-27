@@ -583,3 +583,38 @@
   font:inherit;font-weight:650;cursor:pointer;
 }
 .lnSvgStudio .lnSvgDraftRow696A button:disabled {opacity:.5;cursor:default;}
+
+/* 696B: PC-only zoom and explicitly navigable tool column. */
+@media (min-width:900px){
+  .lnSvgStudio .lnSvgWorkspaceLeft695R{
+    box-sizing:border-box;height:calc(100dvh - 104px)!important;
+    max-height:calc(100dvh - 104px)!important;min-height:0!important;
+    overflow-y:scroll!important;overflow-x:hidden!important;
+    overscroll-behavior-y:contain;scrollbar-width:auto;scrollbar-color:var(--color-accent,#17b9c8) transparent;
+  }
+  .lnSvgStudio .lnSvgWorkspaceLeft695R:focus-visible{outline:2px solid var(--color-accent,#17b9c8);outline-offset:-2px}
+  .lnSvgStudio .lnSvgPaletteNav696B{
+    position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:5px;
+    background:var(--color-background,#091d2b);padding:5px 0 7px;margin:0 0 5px;
+    border-bottom:1px solid var(--color-border,#335b6a);
+  }
+  .lnSvgStudio .lnSvgPaletteNav696B span{flex:1;min-width:0;font-size:11px;font-weight:650;}
+  .lnSvgStudio .lnSvgPaletteNav696B button{
+    color:var(--color-text);background:var(--color-surface);border:1px solid var(--color-border);
+    border-radius:8px;padding:4px 6px;min-height:31px;font-size:11px;cursor:pointer;
+  }
+  .lnSvgStudio .lnSvgDesktopZoom696B{
+    display:flex;align-items:center;justify-content:center;gap:8px;margin:8px auto 1px;
+  }
+  .lnSvgStudio .lnSvgDesktopZoom696B button{
+    min-width:42px;min-height:36px;border-radius:10px;padding:6px 11px;
+    background:var(--color-surface);color:var(--color-text);border:1px solid var(--color-border);
+    cursor:pointer;font:inherit;
+  }
+  .lnSvgStudio .lnSvgDesktopZoom696B output{min-width:59px;text-align:center;font-size:13px;font-variant-numeric:tabular-nums}
+  .lnSvgStudio .lnSvgZoomHint696B{display:block;text-align:center;font-size:11px;color:var(--color-text-secondary);margin-bottom:5px;}
+  .lnSvgStudio .lnSvgObjectActions694N [data-layer="to-path"]{border-color:var(--color-accent,#18b9c8)}
+}
+@media(max-width:899px){
+  .lnSvgStudio .lnSvgDesktopZoom696B,.lnSvgStudio .lnSvgZoomHint696B,.lnSvgStudio .lnSvgPaletteNav696B{display:none!important}
+}

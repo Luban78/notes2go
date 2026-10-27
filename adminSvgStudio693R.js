@@ -229,6 +229,7 @@
       actions.hidden = !valid;
       actions.querySelector('[data-layer="front"]').disabled = !valid || selected === shapes.length - 1;
       actions.querySelector('[data-layer="back"]').disabled = !valid || selected === 0;
+      actions.querySelector('[data-layer="to-path"]').disabled = !valid || !['line','circle','ellipse','rect'].includes(shapes[selected]?.tag);
     }
   }
   // 695T: safe node editor. Only actual SVG geometry is modified; never
@@ -763,6 +764,37 @@
     svg.setAttribute('viewBox',`${panX693W} ${panY693W} ${extent} ${extent}`);
     if(zoomText693W)zoomText693W.textContent=`${Math.round(zoom693W*100)} %`;
   }
+  // 696B: All desktop zoom gestures keep the world point UNDER the cursor.
+  function zoomAround696B(next, clientX, clientY){
+    const rect=svg.getBoundingClientRect();
+    if(!rect.width||!rect.height)return;
+    const oldExtent=24/zoom693W;
+    const u=limit693W((clientX-rect.left)/rect.width,0,1);
+    const v=limit693W((clientY-rect.top)/rect.height,0,1);
+    const worldX=panX693W+u*oldExtent, worldY=panY693W+v*oldExtent;
+    zoom693W=limit693W(next,1,8);
+    const extent=24/zoom693W;
+    panX693W=worldX-u*extent;panY693W=worldY-v*extent;
+    applyView693W();
+  }
+  let zoomCursor696B=null;
+  function zoomDesktop696B(factor){
+    const r=svg.getBoundingClientRect();
+    const p=zoomCursor696B&&zoomCursor696B.x>=r.left&&zoomCursor696B.x<=r.right&&zoomCursor696B.y>=r.top&&zoomCursor696B.y<=r.bottom
+      ?zoomCursor696B:{x:r.left+r.width/2,y:r.top+r.height/2};
+    zoomAround696B(zoom693W*factor,p.x,p.y);
+  }
+  // Mouse wheel zoom is desktop-only and Ctrl-modified, leaving normal scroll
+  // and Android's existing two-finger pinch entirely unchanged.
+  svg.addEventListener('pointermove',e=>{
+    if(e.pointerType==='mouse')zoomCursor696B={x:e.clientX,y:e.clientY};
+  },{passive:true});
+  svg.addEventListener('wheel',e=>{
+    if(!e.ctrlKey||!window.matchMedia('(min-width:900px)').matches||view.hidden)return;
+    e.preventDefault();
+    const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?svg.clientHeight:1);
+    zoomAround696B(zoom693W*Math.exp(-delta*.002),e.clientX,e.clientY);
+  },{passive:false});
   function zoomTo693W(next){
     const oldSize=24/zoom693W, centerX=panX693W+oldSize/2,centerY=panY693W+oldSize/2;
     zoom693W=limit693W(next,1,8);
@@ -1116,8 +1148,8 @@
   const controls693W=document.createElement('div');controls693W.className='lnSvgZoomBar693W';
   controls693W.innerHTML='<button type="button" data-zoom="out" aria-label="Oddálit">−</button><output>100 %</output><button type="button" data-zoom="in" aria-label="Přiblížit">+</button><button type="button" data-zoom="reset">Celá ikona</button>';
   const zoomText693W=controls693W.querySelector('output');
-  controls693W.querySelector('[data-zoom="out"]').addEventListener('click',()=>zoomTo693W(zoom693W/1.5));
-  controls693W.querySelector('[data-zoom="in"]').addEventListener('click',()=>zoomTo693W(zoom693W*1.5));
+  controls693W.querySelector('[data-zoom="out"]').addEventListener('click',()=>zoomDesktop696B(1/1.5));
+  controls693W.querySelector('[data-zoom="in"]').addEventListener('click',()=>zoomDesktop696B(1.5));
   controls693W.querySelector('[data-zoom="reset"]').addEventListener('click',()=>{zoom693W=1;panX693W=0;panY693W=0;applyView693W();announce('Zobrazeno celé plátno. Aktivní nástroj zůstává beze změny.');});
   const toolRow693W=tool.closest('.lnSvgStudioTools');
   if(toolRow693W){toolRow693W.insertAdjacentElement('beforebegin',toolBar693W);toolRow693W.insertAdjacentElement('afterend',controls693W);}
@@ -2082,14 +2114,75 @@
   objectActions694N.id='lnSvgObjectActions694N';
   objectActions694N.className='lnSvgObjectActions694N';
   objectActions694N.hidden=true;
-  objectActions694N.innerHTML='<button type="button" data-layer="duplicate">⧉ Duplikovat</button><button type="button" data-layer="mirror-x">↔ Zrc. kopie</button><button type="button" data-layer="mirror-y">↕ Zrc. kopie</button><button type="button" data-layer="front">↑ Dopředu</button><button type="button" data-layer="back">↓ Dozadu</button>';
+  objectActions694N.innerHTML='<button type="button" data-layer="duplicate">⧉ Duplikovat</button><button type="button" data-layer="mirror-x">↔ Zrc. kopie</button><button type="button" data-layer="mirror-y">↕ Zrc. kopie</button><button type="button" data-layer="front">↑ Dopředu</button><button type="button" data-layer="back">↓ Dozadu</button><button type="button" data-layer="to-path">◉ Více bodů</button>';
   const canvasBoard694N=svg.closest('.lnSvgStudioBoard');
   canvasBoard694N?.insertAdjacentElement('beforebegin',objectActions694N);
+  // 696B: Explicit, undoable conversion. Primitives keep their old exact
+  // geometry until the user asks for independently editable path nodes.
+  // We preserve styling and transform; no implicit flattening on selection.
+  function toPath696B(shape){
+    if(!shape||!['line','circle','ellipse','rect'].includes(shape.tag)||!affine694H(shape))return null;
+    const p=shape.props, n=k=>Number(p[k]);
+    let d='';
+    const num=v=>fmt(v);
+    if(shape.tag==='line'){
+      const x1=n('x1'),y1=n('y1'),x2=n('x2'),y2=n('y2');
+      if(![x1,y1,x2,y2].every(Number.isFinite))return null;
+      d=`M${num(x1)} ${num(y1)}L${num((x1+x2)/2)} ${num((y1+y2)/2)}L${num(x2)} ${num(y2)}`;
+    }else if(shape.tag==='circle'||shape.tag==='ellipse'){
+      const cx=n('cx'),cy=n('cy'),rx=shape.tag==='circle'?n('r'):n('rx'),ry=shape.tag==='circle'?n('r'):n('ry');
+      if(![cx,cy,rx,ry].every(Number.isFinite)||rx<=0||ry<=0)return null;
+      const segments=8, step=Math.PI*2/segments, k=4/3*Math.tan(step/4);
+      d=`M${num(cx+rx)} ${num(cy)}`;
+      for(let i=0;i<segments;i++){
+        const a=i*step,b=(i+1)*step;
+        const ax=cx+rx*Math.cos(a),ay=cy+ry*Math.sin(a);
+        const bx=cx+rx*Math.cos(b),by=cy+ry*Math.sin(b);
+        d+=`C${num(ax-k*rx*Math.sin(a))} ${num(ay+k*ry*Math.cos(a))} `+
+           `${num(bx+k*rx*Math.sin(b))} ${num(by-k*ry*Math.cos(b))} ${num(bx)} ${num(by)}`;
+      }
+      d+='Z';
+    }else{
+      const x=n('x'),y=n('y'),w=n('width'),h=n('height');
+      if(![x,y,w,h].every(Number.isFinite)||w<=0||h<=0)return null;
+      const rx=Math.min(Math.max(0,n('rx')||0),w/2),ry=Math.min(Math.max(0,n('ry')||rx),h/2);
+      if(rx>0&&ry>0){
+        // Rounded corners: 4 cubic quarter arcs, straight-edge endpoints.
+        const k=4/3*Math.tan(Math.PI/8);
+        d=`M${num(x+rx)} ${num(y)}L${num(x+w-rx)} ${num(y)}`+
+          `C${num(x+w-rx+k*rx)} ${num(y)} ${num(x+w)} ${num(y+ry-k*ry)} ${num(x+w)} ${num(y+ry)}`+
+          `L${num(x+w)} ${num(y+h-ry)}`+
+          `C${num(x+w)} ${num(y+h-ry+k*ry)} ${num(x+w-rx+k*rx)} ${num(y+h)} ${num(x+w-rx)} ${num(y+h)}`+
+          `L${num(x+rx)} ${num(y+h)}`+
+          `C${num(x+rx-k*rx)} ${num(y+h)} ${num(x)} ${num(y+h-ry+k*ry)} ${num(x)} ${num(y+h-ry)}`+
+          `L${num(x)} ${num(y+ry)}`+
+          `C${num(x)} ${num(y+ry-k*ry)} ${num(x+rx-k*rx)} ${num(y)} ${num(x+rx)} ${num(y)}Z`;
+      }else{
+        d=`M${num(x)} ${num(y)}L${num(x+w/2)} ${num(y)}L${num(x+w)} ${num(y)}`+
+          `L${num(x+w)} ${num(y+h/2)}L${num(x+w)} ${num(y+h)}`+
+          `L${num(x+w/2)} ${num(y+h)}L${num(x)} ${num(y+h)}`+
+          `L${num(x)} ${num(y+h/2)}Z`;
+      }
+    }
+    const props={...p,d};
+    for(const key of ['cx','cy','r','rx','ry','x','y','width','height','x1','y1','x2','y2'])delete props[key];
+    return {tag:'path',props};
+  }
   objectActions694N.addEventListener('click',e=>{
     const button=e.target.closest('button[data-layer]');
     if(!button||button.disabled||selected<0||selected>=shapes.length)return;
     const action=button.dataset.layer;
     const before=snapshot();
+    if(action==='to-path'){
+      const converted=toPath696B(shapes[selected]);
+      if(!converted){announce('Tento tvar není možné bezpečně převést na body.');return;}
+      const convertedIndex=selected;
+      shapes[convertedIndex]=converted;activeNode695T=0;
+      // Tool-change deliberately clears selection; restore it only afterwards.
+      tool.value='nodes';tool.dispatchEvent(new Event('change',{bubbles:true}));
+      selected=convertedIndex;record(before);render();
+      announce('Tvar převeden na upravitelné body. Zpět vrátí původní tvar.');return;
+    }
     if(action==='duplicate'){
       const clone=deepCopy(shapes[selected]);
       const t=affine694H(clone);
@@ -2985,9 +3078,14 @@
   // Preserve existing reference slider events, draft autosave, icon export,
   // Undo/Redo, and non-exported canvas guides after reparenting.
 
-  // 695S: Pinch zoom is the sole zoom control; do not show redundant +/-/reset.
-  // Keep the internal zoom output detached so applyView693W remains unchanged.
-  controls693W.remove();
+  // 696B: PC has a dedicated zoom bar; keep mobile's compact pinch-only UI.
+  controls693W.classList.add('lnSvgDesktopZoom696B');
+  controls693W.title='Najeď kurzorem na detail plátna, Ctrl + kolečko přibližuje k tomuto místu.';
+  center695R.insertBefore(controls693W, board694L);
+  const wheelHint696B=document.createElement('small');
+  wheelHint696B.className='lnSvgZoomHint696B';
+  wheelHint696B.textContent='Ctrl + kolečko myši: přiblížit pod kurzorem · + / −: podle poslední polohy kurzoru';
+  controls693W.insertAdjacentElement('afterend',wheelHint696B);
 
   // Desktop gets the entire admin modal and a genuine canvas workbench:
   // tool palette on the left, large canvas in the center. On mobile the
@@ -3009,6 +3107,18 @@
     }
   };
   layout695S();
+  // 696B: direct scroll access even on desktops where a nested modal captures
+  // mouse-wheel scrolling; the left palette always has a bounded scroll area.
+  const paletteNav696B=document.createElement('div');
+  paletteNav696B.className='lnSvgPaletteNav696B';
+  paletteNav696B.innerHTML='<span>Nástroje a nastavení</span><button type="button" data-palette="top">↑ Nahoru</button><button type="button" data-palette="bottom">↓ Dolů</button>';
+  left695R.prepend(paletteNav696B);
+  paletteNav696B.addEventListener('click',event=>{
+    const b=event.target.closest('button[data-palette]');if(!b)return;
+    left695R.scrollTo({top:b.dataset.palette==='top'?0:left695R.scrollHeight,behavior:'smooth'});
+  });
+  left695R.tabIndex=0;
+  left695R.setAttribute('aria-label','Nástroje SVG Studia – posuvný panel');
   if(desktop695S.addEventListener)desktop695S.addEventListener('change',layout695S);
   else desktop695S.addListener?.(layout695S);
 
