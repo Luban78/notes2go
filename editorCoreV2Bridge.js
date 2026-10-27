@@ -1760,6 +1760,26 @@
         : "neznámý obsah";
       zobrazToast(`Core V2 odmítl obsah bez změny dat (${prvky}).`, true);
       window.LubaNoteStartupDiag?.zapis?.("CORE V2 IMPORT BLOCK", prvky);
+      // 695E: Pouze read-only diagnostika. Nezapisuje HTML, URL, ID ani obsah poznámky.
+      if (prvky.includes("obrázek bez zdroje")) {
+        try {
+          const doc = new DOMParser().parseFromString(String(richContent || ""), "text/html");
+          const images = Array.from(doc.querySelectorAll("img"));
+          const missing = images.filter((img) => !String(img.getAttribute("src") || "").trim());
+          const info = missing.slice(0, 8).map((img) => {
+            const parent = img.parentElement;
+            const names = Array.from(img.attributes).map((a) => a.name).sort().join("+") || "none";
+            const parentNames = parent ? Array.from(parent.attributes).map((a) => a.name).sort().join("+") || "none" : "none";
+            return `tag=${parent?.tagName?.toLowerCase() || "none"},attrs=${names},parentAttrs=${parentNames},src=${img.hasAttribute("src") ? "empty" : "absent"}`;
+          });
+          window.LubaNoteStartupDiag?.zapis?.(
+            "CORE V2 IMAGE SOURCE AUDIT 695E",
+            `images=${images.length} missing=${missing.length} examples=[${info.join(" | ")}]`
+          );
+        } catch (err) {
+          window.LubaNoteStartupDiag?.zapis?.("CORE V2 IMAGE SOURCE AUDIT 695E", "audit-unavailable");
+        }
+      }
       return false;
     }
 
