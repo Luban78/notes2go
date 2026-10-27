@@ -5338,16 +5338,37 @@ async function spustExistingClientReconcileV2(
             window.LubaNoteStartupDiag?.zapis?.(
               "V2", `695K RECONCILE IDB REPAIRED | id=${id}`
             );
-            // IDB obnova muze zmenit lokalni generaci: stary
-            // manifest/plan uz neplati, vyzadat nove porovnani.
-            oznacUnresolved(id, "idb-repaired-recheck");
-            break;
+            // 695L: obnova 695H zapisuje jen overeny obrazek primo
+            // do IDB, bez zmeny uzivatelske revize/generace. 695K
+            // zde vytvoril unresolved a ukoncil reconcile bez dalsiho
+            // restartu. Po kontrole nezmeneneho user snapshotu lze
+            // pokracovat bezpecnou existujici save_note_safe cestou.
+            if (!existingReconcileLokalniStavBezeZmeny(
+              generacePriStartu, revizePriStartu
+            )) {
+              window.LubaNoteStartupDiag?.zapis?.(
+                "V2", `695L RECONCILE DEFER | local-changed-after-image-repair id=${id}`
+              );
+              return false;
+            }
+            const znovuPredUploadem695L = najdiAktualniWinnerProExistingReconcile(id);
+            if (!znovuPredUploadem695L?.note ||
+                JSON.stringify(znovuPredUploadem695L.note) !==
+                  JSON.stringify(winnerPo695K.note) ||
+                maOdlehcenouIdbZnacku695J(znovuPredUploadem695L.note)) {
+              oznacUnresolved(id, "idb-repaired-snapshot-changed");
+              break;
+            }
+            window.LubaNoteStartupDiag?.zapis?.(
+              "V2", `695L RECONCILE IMG UPLOAD READY | id=${id}`
+            );
+          } else {
+            window.LubaNoteStartupDiag?.zapis?.(
+              "V2", `695K RECONCILE IDB DEFER | id=${id}`
+            );
+            oznacUnresolved(id, "idb-image-unresolved");
+            continue;
           }
-          window.LubaNoteStartupDiag?.zapis?.(
-            "V2", `695K RECONCILE IDB DEFER | id=${id}`
-          );
-          oznacUnresolved(id, "idb-image-unresolved");
-          continue;
         }
         const ok = await uploadExistingReconcileWinnerV2(id);
         if (ok !== true) {
