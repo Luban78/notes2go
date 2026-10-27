@@ -211,9 +211,55 @@
   function exportSvg() {
     return `<svg xmlns="${NS}" viewBox="0 0 24 24">${shapes.filter(s => s && allowed.has(s.tag)).map(s => svgPart(s).outerHTML).join('')}</svg>`;
   }
-  function exportForLuba() {
-    return '[\n' + shapes.map(s => `  [${JSON.stringify(s.tag)}, ${JSON.stringify(s.props)}]`).join(',\n') + '\n]';
+  // 696C: Efficient LubaNote icon export. This modifies ONLY the clipboard
+  // representation; SVG Studio geometry, history and saved drafts stay intact.
+  // LubaIcons.js supplies these presentation attributes on its parent <svg>.
+  const lubaDefaults696C = Object.freeze({
+    fill:'none',stroke:'currentColor','stroke-width':'1.85',
+    'stroke-linecap':'round','stroke-linejoin':'round'
+  });
+  function exportForLuba696C() {
+    const source=shapes.filter(s=>s&&allowed.has(s.tag));
+    const output=[];
+    let merged=0;
+    const opaqueStroke696C=col=>/^(?:currentColor|#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?|[a-zA-Z]{1,20})$/.test(String(col||''));
+    function canJoin696C(s) {
+      if(s.tag!=='path'||!s.props||typeof s.props.d!=='string')return false;
+      const p=s.props;
+      // Relative initial moveto would shift after joining separate paths.
+      // Filled, translucent or transformed parts might change compositing.
+      if(!/^\s*M(?=[\s+\-\d.])/.test(p.d)||p.transform||p.opacity!=null||p.fill!=='none')return false;
+      return opaqueStroke696C(p.stroke||'currentColor') && p.stroke!=='none';
+    }
+    let previous=null;
+    for(const shape of source){
+      // Copy attributes: never modify the original drawing or undo history.
+      const props={...shape.props};
+      const style={...props};delete style.d;
+      const sig=JSON.stringify(style); // exact ordered attributes (never reorder layers)
+      const allowedMerge=canJoin696C(shape);
+      if(allowedMerge && previous && previous.mergeable && previous.signature===sig && previous.props.d.length+props.d.length<48000){
+        previous.props.d += ' '+props.d.trim();
+        merged++;
+        continue;
+      }
+      const item={tag:shape.tag,props,signature:sig,mergeable:allowedMerge};
+      output.push(item);previous=item;
+    }
+    // Remove only values inherited IDENTICALLY from lubaIcons.js parent SVG.
+    // Attributes like colors, opacity and line widths that differ are retained.
+    const rows=output.map(s=>{
+      const p={};
+      for(const [key,val] of Object.entries(s.props)){
+        if(Object.prototype.hasOwnProperty.call(lubaDefaults696C,key) && String(val)===lubaDefaults696C[key])continue;
+        p[key]=val;
+      }
+      return `  [${JSON.stringify(s.tag)}, ${JSON.stringify(p)}]`;
+    });
+    const text='[\n'+rows.join(',\n')+'\n]';
+    return {text,original:source.length,optimized:output.length,merged};
   }
+  function exportForLuba() {return exportForLuba696C().text;}
   function updatePalette() {
     if (color) color.value = activeColor === 'currentColor' ? '#333333' : activeColor;
     themeColor?.setAttribute('aria-pressed', String(activeColor === 'currentColor'));
@@ -1493,7 +1539,11 @@
     return ok;
   };
   $('lnSvgCopy693R').addEventListener('click',()=>copy(exportSvg()));
-  $('lnSvgCopyLuba693R').addEventListener('click',()=>copy(exportForLuba()));
+  $('lnSvgCopyLuba693R').addEventListener('click',async()=>{
+    const result=exportForLuba696C();
+    const copied=await copy(result.text);
+    if(copied)announce(`Kód pro LubaNote zkopírován. SVG prvků: ${result.original} → ${result.optimized} (spojeno ${result.merged} tahů). Editovatelný návrh nezměněn.`);
+  });
   $('lnSvgCopySource693R').addEventListener('click',()=>copy(source.value));
 
   // An explicit paste control works where the custom WebView selection menu
