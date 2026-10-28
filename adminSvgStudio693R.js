@@ -1905,7 +1905,7 @@
       <input data-draft-name type="text" maxlength="70" placeholder="Název ikony" aria-label="Název SVG návrhu" value="Nová ikona">
       <button type="button" data-save>Uložit</button><button type="button" data-new>Nový</button>
     </div>
-    <div class="lnSvgDraftRow694K">
+    <div class="lnSvgDraftRow694K lnSvgDraftOpenRow696EA">
       <select data-drafts aria-label="Uložené ikony"><option value="">Žádné uložené ikony</option></select>
       <button type="button" data-open>Otevřít</button><button type="button" data-delete>Odstranit</button>
     </div>
@@ -3379,6 +3379,7 @@
     <div class="lnSvgOptBody696D">
       <label class="lnSvgOptSlider696D"><span>Úspora kódu <output data-level>0 % – bez úpravy</output></span>
         <input type="range" min="0" max="100" step="5" value="0" aria-label="Míra zjednodušení SVG křivek"></label>
+      <div class="lnSvgOptPreviewControls696EA"><button type="button" data-preview-size>🔍 Zvětšit náhled</button><span>Obě verze používají stejný pohled. Při 100 % se mohou jevit stejně.</span></div>
       <div class="lnSvgOptCompare696D">
         <div><strong>Originál</strong><div class="lnSvgOptView696D" data-original></div></div>
         <div><strong>Optimalizováno</strong><div class="lnSvgOptView696D" data-optimized></div></div>
@@ -3395,6 +3396,12 @@
   const stat696D=optimizePanel696D.querySelector('[data-stat]');
   const originalView696D=optimizePanel696D.querySelector('[data-original]');
   const optimView696D=optimizePanel696D.querySelector('[data-optimized]');
+  const previewSizeButton696EA=optimizePanel696D.querySelector('[data-preview-size]');
+  previewSizeButton696EA.addEventListener('click',()=>{
+    const enlarged=optimizePanel696D.classList.toggle('lnSvgOptEnlarged696EA');
+    previewSizeButton696EA.textContent=enlarged?'↙ Zmenšit náhled':'🔍 Zvětšit náhled';
+    previewSizeButton696EA.setAttribute('aria-pressed',String(enlarged));
+  });
   let pendingPreview696D=false,lastPreviewKey696D='';
   function miniSvg696D(target,parts){
     const mini=document.createElementNS(NS,'svg');

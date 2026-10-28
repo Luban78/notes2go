@@ -655,3 +655,19 @@
 .lnSvgStudio .lnSvgWidthActions696E button[data-width-apply]:not(:disabled){border-color:var(--color-accent,#21bac2)}
 .lnSvgStudio .lnSvgWidthActions696E button:disabled{opacity:.42;cursor:default}
 .lnSvgStudio .lnSvgWidthBody696E>small{font-size:11px;line-height:1.45;color:var(--color-text-secondary)}
+
+/* 696EA: phone-safe draft controls; never clip Open/Delete outside viewport. */
+.lnSvgStudio .lnSvgDraftOpenRow696EA{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:stretch;gap:6px;width:100%;box-sizing:border-box}
+.lnSvgStudio .lnSvgDraftOpenRow696EA select{min-width:0;width:100%;max-width:100%;height:39px}
+.lnSvgStudio .lnSvgDraftOpenRow696EA button{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+@media(max-width:650px){
+ .lnSvgStudio .lnSvgDraftOpenRow696EA{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+ .lnSvgStudio .lnSvgDraftOpenRow696EA select{grid-column:1/-1}
+ .lnSvgStudio .lnSvgDraftOpenRow696EA button{width:100%;font-size:13px}
+}
+/* 696EA: larger side-by-side previews for visually checking optimization. */
+.lnSvgStudio .lnSvgOptPreviewControls696EA{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between}
+.lnSvgStudio .lnSvgOptPreviewControls696EA button{font:inherit;font-size:12px;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);border-radius:8px;min-height:36px;padding:6px 10px}
+.lnSvgStudio .lnSvgOptPreviewControls696EA span{flex:1 1 160px;font-size:10px;line-height:1.35;color:var(--color-text-secondary)}
+.lnSvgStudio .lnSvgOptEnlarged696EA .lnSvgOptCompare696D{grid-template-columns:1fr}
+.lnSvgStudio .lnSvgOptEnlarged696EA .lnSvgOptView696D{width:100%;max-height:none;aspect-ratio:1;max-width:480px;margin:0 auto}
