@@ -5698,6 +5698,13 @@ function renderTasks() {
   pinnedCards.hidden = true;
   
   const loadedTasks = loadTask();
+  // 696Q: jedna paleta CSS pro všechny karty stejné barvy,
+  // připravená před vkládáním DOM. Žádná práce s SVG pro každou kartu.
+  if (typeof lubaPripravKontrastIkonKaret696Q === "function") {
+    lubaPripravKontrastIkonKaret696Q(
+      Array.isArray(syncedTags) ? syncedTags.map(stitek => stitek?.color || "system") : []
+    );
+  }
   const zakladniSmerPoradi =
     window.LubaNoteCardOrder
       ?.ziskejZakladniSmer?.(loadedTasks) ||
@@ -5951,12 +5958,10 @@ function renderTasks() {
       loadedDateText
     );
 
-    // 696P: až TEĎ jsou stavové ikony uvnitř karty. V 696O se
-    // kontrast nastavoval před vložením nadpisu do loadedCard,
-    // querySelectorAll tedy vracel [] a ikonky zůstaly světlé.
-    // Nastavení ještě před vložením karty do seznamu zabrání bliknutí.
-    if (typeof aplikujKontrastIkonKarty696O === "function") {
-      aplikujKontrastIkonKarty696O(loadedCard, barvaHlavnihoStitku);
+    // 696Q: jednou na odpojené kartě nastavit společné CSS proměnné.
+    // Žádné čtení layoutu a žádné procházení jednotlivých SVG ikon.
+    if(typeof aplikujKontrastIkonKarty696O==="function") {
+      aplikujKontrastIkonKarty696O(loadedCard,barvaHlavnihoStitku);
     }
 
     loadedTags.classList.add("taskTags");
