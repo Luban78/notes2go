@@ -5861,6 +5861,12 @@ function renderTasks() {
       }
     });
     
+    // 696O: barvy malých stavových ikon podle skutečné barvy karty;
+    // stejný kontrastní základ jako nadpis a štítky (683AB).
+    if (typeof aplikujKontrastIkonKarty696O === "function") {
+      aplikujKontrastIkonKarty696O(loadedCard, barvaHlavnihoStitku);
+    }
+
     loadedHeading.append(
       loadedHeadingIcons,
       document.createTextNode(

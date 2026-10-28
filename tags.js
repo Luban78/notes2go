@@ -4801,6 +4801,113 @@ function barvaTextuStitku683AB(pozadi) {
   return jas > 0.179 ? "#000000" : "#ffffff";
 }
 
+/* 696O – KONTRAST STAVOVÝCH IKON KARET (V1)
+ * Barva nadpisu již používá WCAG kontrast k barvě karty (683AB).
+ * Ikony dosud používaly barvy motivu, které na vlastních světlých
+ * kartách mizely. Neodbarvovat je plošně na černou/bílou: zachovat
+ * rozlišení žluté hvězdy/zvonku, připínáčku a ostatních stavů.
+ * Nejmenší potřebná změna odstínu směrem k černé nebo bílé nastaví
+ * kontrast >= 4,5 : 1 (malá 16px ikona, tenký připínáček 5,5).
+ * Výchozí barvy jsou stejné
+ * jako u dosavadních CSS pravidel; upravují se jen podle podkladu.
+ */
+function lubaKanalyBarvy696O(barva) {
+  const hodnota = String(barva || "").trim();
+  const hex = /^#([0-9a-fA-F]{6})$/.exec(hodnota);
+  if (hex) return [0, 2, 4].map(i => parseInt(hex[1].slice(i, i + 2), 16));
+  const kratka = /^#([0-9a-fA-F]{3})$/.exec(hodnota);
+  if (kratka) return [...kratka[1]].map(c => parseInt(c + c, 16));
+  const rgb = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(?:1(?:\.0+)?|0?\.\d+))?\s*\)$/i.exec(hodnota);
+  if (rgb) {
+    const v = [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+    return v.every(n => n <= 255) ? v : null;
+  }
+  return null;
+}
+function lubaLuminance696O(rgb) {
+  const lin = rgb.map(c => {
+    const x = c / 255;
+    return x <= .04045 ? x / 12.92 : Math.pow((x + .055) / 1.055, 2.4);
+  });
+  return .2126 * lin[0] + .7152 * lin[1] + .0722 * lin[2];
+}
+function lubaKontrast696O(a, b) {
+  const aa = lubaLuminance696O(a), bb = lubaLuminance696O(b);
+  return (Math.max(aa, bb) + .05) / (Math.min(aa, bb) + .05);
+}
+function lubaHex696O(rgb) {
+  return '#' + rgb.map(n => Math.round(n).toString(16).padStart(2, '0')).join('');
+}
+function lubaMix696O(a, b, podilA) {
+  const v1 = lubaKanalyBarvy696O(a), v2 = lubaKanalyBarvy696O(b);
+  if (!v1 || !v2) return a;
+  return lubaHex696O(v1.map((n, i) => n * podilA + v2[i] * (1 - podilA)));
+}
+function lubaBarvaKontrastniIkony696O(vychozi, podklad, minKontrast = 4.5) {
+  const barva = lubaKanalyBarvy696O(vychozi);
+  const pozadi = lubaKanalyBarvy696O(podklad);
+  if (!barva || !pozadi) return vychozi;
+  if (lubaKontrast696O(barva, pozadi) >= minKontrast) return lubaHex696O(barva);
+
+  // Stejná světlá/tmavá logika, kterou již používá text štítku.
+  // Minimální přimíchání černé/bílé zachová barevný charakter ikony.
+  const smer = lubaLuminance696O(pozadi) > .179 ? 0 : 255;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 15; i++) {
+    const mid = (lo + hi) / 2;
+    const upravena = barva.map(c => c * (1 - mid) + smer * mid);
+    if (lubaKontrast696O(upravena, pozadi) >= minKontrast) hi = mid;
+    else lo = mid;
+  }
+  // Zaokrouhlení kanálů může kontrast nepatrně snížit.
+  const podil = Math.min(1, hi + .012);
+  return lubaHex696O(barva.map(c => c * (1 - podil) + smer * podil));
+}
+const lubaCacheIkon696O = new Map();
+function aplikujKontrastIkonKarty696O(karta, barvaKarty = "system") {
+  if (!karta) return;
+  const koren = document.body || document.documentElement;
+  const styl = getComputedStyle(koren);
+  const pozadi = podkladStitku683AB(barvaKarty) ||
+    styl.getPropertyValue('--color-surface').trim() || '#ffffff';
+  if (!lubaKanalyBarvy696O(pozadi)) return;
+
+  const akcentText = styl.getPropertyValue('--color-accent-text').trim();
+  const akcent = styl.getPropertyValue('--color-accent').trim();
+  const vedlejsi = styl.getPropertyValue('--color-text-secondary').trim();
+  const bezpecnyAkcent = lubaKanalyBarvy696O(akcentText) ? akcentText : '#4c7f99';
+  const bezpecnyDoplnek = lubaKanalyBarvy696O(vedlejsi) ? vedlejsi : '#6e8896';
+  const bezpecnyAkcentBg = lubaKanalyBarvy696O(akcent) ? akcent : '#2c96ad';
+  const klic = [pozadi, bezpecnyAkcent, bezpecnyDoplnek, bezpecnyAkcentBg].join('|');
+  let barvy = lubaCacheIkon696O.get(klic);
+  if (!barvy) {
+    const vychozi = {
+    taskCardIconPin: lubaMix696O(bezpecnyAkcent, '#ff537b', .68),
+    taskCardIconFavorite: '#ddb12b',
+    taskCardIconSharing: bezpecnyAkcent,
+    taskCardIconSecret: bezpecnyAkcent,
+    taskCardIconArea: lubaMix696O(bezpecnyDoplnek, bezpecnyAkcentBg, .76),
+    taskCardIconReminder: '#dca72d',
+    taskCardIconRepeat: bezpecnyAkcent
+    };
+    barvy = {};
+    for (const [trida, puvodni] of Object.entries(vychozi)) {
+      barvy[trida] = lubaBarvaKontrastniIkony696O(
+        puvodni, pozadi, trida === 'taskCardIconPin' ? 5.5 : 4.5);
+    }
+    // Rozpočítat jen jednou pro stejnou kombinaci barvy karty a motivu.
+    if (lubaCacheIkon696O.size > 160) lubaCacheIkon696O.clear();
+    lubaCacheIkon696O.set(klic, barvy);
+  }
+  for (const ikona of karta.querySelectorAll('.taskCardIcon')) {
+    const trida = Object.keys(barvy).find(jmeno => ikona.classList.contains(jmeno));
+    if (!trida) continue;
+    // Jen konkrétní stavové ikony. Globální paleta a definice SVG
+    // zůstanou beze změny; currentColor se správně podědí i do SVG.
+    ikona.style.color = barvy[trida];
+  }
+}
+
 function aplikujKontrastStitku683AB(prvek, barva, karta = false) {
   if (!prvek) return;
   const pozadi = podkladStitku683AB(barva);
@@ -4821,6 +4928,7 @@ function aplikujKontrastStitku683AB(prvek, barva, karta = false) {
     prvek.style.setProperty("--luba-tag-chip-tint-683AD",
       barvaTextu === "#ffffff" ? "#000000" : "#ffffff");
     prvek.dataset.lubaTagContrast = "card";
+    aplikujKontrastIkonKarty696O(prvek, barva);
   } else {
     prvek.style.setProperty("color", barvaTextu, "important");
   }
@@ -4831,6 +4939,9 @@ function obnovKontrastStitkuPoTematu683AB() {
     .forEach((prvek) => aplikujKontrastStitku683AB(prvek, prvek.dataset.tagColor));
   document.querySelectorAll(".taskCard[data-barva-karty]")
     .forEach((prvek) => aplikujKontrastStitku683AB(prvek, prvek.dataset.barvaKarty, true));
+  // 696O: I karty bez štítku mají své povrchové barvy podle motivu.
+  document.querySelectorAll(".taskCard")
+    .forEach(prvek => aplikujKontrastIkonKarty696O(prvek, prvek.dataset.barvaKarty || "system"));
   document.querySelectorAll(".manageTagCustomColorButton[data-luba-preview-color683ae]")
     .forEach((prvek) => aplikujNahledVlastnihoTlacitka683AE(prvek, prvek.dataset.lubaPreviewColor683ae));
   // Tlačítka vytváření jsou navázána na motiv, bez natvrdo fialové barvy.
