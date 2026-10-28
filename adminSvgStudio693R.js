@@ -53,6 +53,30 @@
   let joinAction695X=null;
   let softCount695Z=1; // affected ANCHORS including the central one: 1/3/5/9/15
   let joystickReady695T=false;
+  // 696E: visual-only bulk stroke-width preview; never mutate stored geometry
+  // before the user explicitly confirms. Applies a shared ratio so individual
+  // stroke-width differences are preserved, with one Undo snapshot on Apply.
+  let widthScale696E=1;
+  let widthScope696E='all';
+  let refreshWidthPanel696E=()=>{};
+  const baseWidth696E=shape=>{
+    if(!shape||!allowed.has(shape.tag)||shape.props?.stroke==='none')return null;
+    const n=Number(shape.props?.['stroke-width']??1.85);
+    return Number.isFinite(n)&&n>0&&n<=100? n:null;
+  };
+  const widthTargets696E=()=>shapes.map((shape,i)=>({shape,i,width:baseWidth696E(shape)}))
+    .filter(entry=>entry.width!==null && (widthScope696E==='all'||entry.i===selected));
+  const widthNumber696E=n=>String(Number(n.toFixed(3)));
+  function widthPreviewShapes696E(){
+    if(widthScale696E===1)return shapes;
+    const targetIndices=new Set(widthTargets696E().map(item=>item.i));
+    if(!targetIndices.size)return shapes;
+    return shapes.map((shape,i)=>{
+      if(!targetIndices.has(i))return shape;
+      const original=baseWidth696E(shape);
+      return {...shape,props:{...shape.props,'stroke-width':widthNumber696E(original*widthScale696E)}};
+    });
+  }
 
   // 693Z – strictly read-only diagnostic for PAN freeze in Android WebView.
   // Event listeners only observe; they never preventDefault or change drawing.
@@ -858,7 +882,8 @@
       guide.style.pointerEvents='none';guide.setAttribute('data-snap-guide-694U','');
       svg.appendChild(guide);
     }
-    const visible = [...shapes.filter(s => s && allowed.has(s.tag)), ...(drawing && allowed.has(drawing.tag) ? [drawing] : [])];
+    const shownWidth696E=widthPreviewShapes696E();
+    const visible = [...shownWidth696E.filter(s => s && allowed.has(s.tag)), ...(drawing && allowed.has(drawing.tag) ? [drawing] : [])];
     for (const s of visible) {
       const el = svgPart(s); el.style.pointerEvents = 'none'; svg.appendChild(el);
     }
@@ -919,12 +944,12 @@
     }
     for (const p of [preview, previewLarge]) {
       if (!p) continue;
-      p.replaceChildren(...shapes.map(svgPart));
+      p.replaceChildren(...shownWidth696E.map(svgPart));
     }
     if (!sourceIsEdited693T) source.value = exportSvg();
     undoBtn.disabled = history.length === 0;
     if (redoBtn) redoBtn.disabled = future.length === 0;
-    updateSelection(); updatePalette();updateJoinQuick695X?.();
+    updateSelection(); updatePalette();updateJoinQuick695X?.();refreshWidthPanel696E();
   }
   function normalized(tag, props = {}) {
     return {tag, props: {fill: 'none',stroke: activeColor,'stroke-width':fmt(Number(stroke.value)),'stroke-linecap':'round','stroke-linejoin':'round',...props}};
@@ -3255,6 +3280,96 @@
   for(const x of [refPanel694R, view.querySelector('.lnSvgStudioColor693S'), view.querySelector('.lnSvgOptions694L')]) if(x)left695R.appendChild(x);
   for(const x of [toolBar693W,controls693W,board694L,selectionLabel,objectActions694N]) if(x)center695R.appendChild(x);
   for(const x of [draftPanel694K,view.querySelector('.lnSvgStudioPreviewArea693S'),view.querySelector('#lnSvgMore694L'),notice]) if(x)right695R.appendChild(x);
+  // 696E: The controls are placed BELOW the canvas so changing them cannot
+  // shift the board under a finger. Only a preview is drawn until Apply.
+  const widthPanel696E=document.createElement('details');
+  widthPanel696E.className='lnSvgWidthPanel696E';
+  widthPanel696E.open=true;
+  widthPanel696E.innerHTML=`<summary>↔ Tloušťka čar <small>živý náhled</small></summary>
+    <div class="lnSvgWidthBody696E">
+      <label class="lnSvgWidthScope696E">Upravit
+        <select data-width-scope aria-label="Rozsah změny tloušťky čar">
+          <option value="all">Všechny tvary</option>
+          <option value="selected">Jen vybraný tvar</option>
+        </select></label>
+      <label class="lnSvgWidthRange696E"><span>Síla tahu <output data-width-factor>100 % (1×)</output></span>
+        <input data-width-slider type="range" min="40" max="400" step="5" value="100" aria-label="Hromadná změna tloušťky v procentech"></label>
+      <div class="lnSvgWidthInfo696E" data-width-info role="status">Otevři ikonu a pohni posuvníkem.</div>
+      <div class="lnSvgWidthActions696E">
+        <button type="button" data-width-apply disabled>✓ Použít tloušťku</button>
+        <button type="button" data-width-reset disabled>↶ Zrušit náhled</button>
+      </div>
+      <small>100 % = původní tloušťka. Při změně zachováme poměry mezi tahy. Nemění výchozí nastavení pro nové tahy, barvy, výplně ani uložený návrh, dokud nepotvrdíš Použít.</small>
+    </div>`;
+  center695R.appendChild(widthPanel696E);
+  const widthSlider696E=widthPanel696E.querySelector('[data-width-slider]');
+  const widthFactor696E=widthPanel696E.querySelector('[data-width-factor]');
+  const widthInfo696E=widthPanel696E.querySelector('[data-width-info]');
+  const widthScopeInput696E=widthPanel696E.querySelector('[data-width-scope]');
+  const widthSelectedOpt696E=widthScopeInput696E.querySelector('option[value="selected"]');
+  const widthApply696E=widthPanel696E.querySelector('[data-width-apply]');
+  const widthReset696E=widthPanel696E.querySelector('[data-width-reset]');
+  const czWidth696E=n=>Number(n.toFixed(3)).toLocaleString('cs-CZ',{maximumFractionDigits:3});
+  refreshWidthPanel696E=()=>{
+    if(!widthPanel696E.isConnected)return;
+    const hasSelected=selected>=0&&selected<shapes.length&&baseWidth696E(shapes[selected])!==null;
+    widthSelectedOpt696E.disabled=!hasSelected;
+    const targets=widthTargets696E();
+    widthFactor696E.textContent=`${Math.round(widthScale696E*100)} % (${czWidth696E(widthScale696E)}×)`;
+    widthReset696E.disabled=widthScale696E===1;
+    const changed=targets.some(({width})=>widthNumber696E(width*widthScale696E)!==widthNumber696E(width));
+    widthApply696E.disabled=!changed;
+    if(widthScope696E==='selected'&&!hasSelected){
+      widthInfo696E.textContent='Vyber tvar nástrojem Výběr, potom změň tloušťku.';
+    }else if(!targets.length){
+      widthInfo696E.textContent='Žádné viditelné čáry k úpravě.';
+    }else{
+      const widths=targets.map(x=>x.width),min=Math.min(...widths),max=Math.max(...widths);
+      const range=(factor)=>{
+        const lo=czWidth696E(min*factor),hi=czWidth696E(max*factor);
+        return lo===hi?lo:`${lo}–${hi}`;
+      };
+      widthInfo696E.textContent=`${targets.length} ${targets.length===1?'tvar':targets.length<=4?'tvary':'tvarů'} · ${range(1)} → ${range(widthScale696E)} SVG jednotek${widthScale696E===1?' · beze změny':' · pouze náhled'}`;
+    }
+  };
+  let widthFrame696E=0;
+  const queueWidthView696E=()=>{
+    if(widthFrame696E)return;
+    widthFrame696E=requestAnimationFrame(()=>{widthFrame696E=0;render();});
+  };
+  widthScopeInput696E.addEventListener('change',()=>{
+    widthScope696E=widthScopeInput696E.value==='selected'?'selected':'all';
+    queueWidthView696E();refreshWidthPanel696E();
+  });
+  widthSlider696E.addEventListener('input',()=>{
+    widthScale696E=Number(widthSlider696E.value)/100;
+    refreshWidthPanel696E();queueWidthView696E();
+  });
+  const resetWidth696E=()=>{
+    widthScale696E=1;widthSlider696E.value='100';
+    refreshWidthPanel696E();queueWidthView696E();
+  };
+  widthReset696E.addEventListener('click',()=>{resetWidth696E();announce('Náhled tloušťky zrušen. Kresba se nezměnila.');});
+  widthApply696E.addEventListener('click',()=>{
+    const items=widthTargets696E();
+    if(widthScale696E===1||!items.length){refreshWidthPanel696E();return;}
+    const before=snapshot();let count=0;
+    for(const {shape,width} of items){
+      const changedWidth=widthNumber696E(width*widthScale696E);
+      if(changedWidth===widthNumber696E(width))continue;
+      shape.props['stroke-width']=changedWidth;count++;
+    }
+    // Reset preview before normal history-backed rendering. One click = one Undo.
+    widthScale696E=1;widthSlider696E.value='100';
+    if(count && record(before)){
+      render();announce(`Tloušťka změněna u ${count} ${count===1?'tvaru':'tvarů'}. Zpět vrátí celou úpravu.`);
+    }else{render();announce('Tloušťka se nezměnila.');}
+  });
+  widthPanel696E.addEventListener('toggle',()=>{
+    if(!widthPanel696E.open && widthScale696E!==1)resetWidth696E();
+  });
+  refreshWidthPanel696E();
+
   // 696D: visible live comparison, independent from the edit canvas and draft storage.
   // The slider only changes exported text, never shapes or saved plans.
   const optimizePanel696D=document.createElement('details');
@@ -3341,12 +3456,18 @@
     if(desktop695S.matches){
       left695R.prepend(toolBar693W);
       for(const panel of [refPanel694R,colors695S,options695S])if(panel)left695R.appendChild(panel);
+      // 696E: desktop's width slider stays BESIDE the canvas, not below the fold.
+      const beforeWidth696E=right695R.querySelector('.lnSvgStudioPreviewArea693S');
+      if(beforeWidth696E)right695R.insertBefore(widthPanel696E,beforeWidth696E);
+      else right695R.appendChild(widthPanel696E);
     }else{
       // On phones the canvas must be directly below the compact tool palette.
       // The original color/options panels remain available just BELOW canvas.
       center695R.prepend(toolBar693W);
       if(refPanel694R)center695R.prepend(refPanel694R);
       for(const panel of [colors695S,options695S])if(panel)center695R.appendChild(panel);
+      // Phone: keep the existing palette under the board; width slider follows it.
+      center695R.appendChild(widthPanel696E);
     }
   };
   layout695S();
