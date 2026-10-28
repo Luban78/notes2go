@@ -131,14 +131,94 @@
     const rad=((Number(deg)||0)%360)*Math.PI/180;
     return {x:Math.cos(rad),y:Math.sin(rad)};
   };
-  const volumeTargets696G=(sourceShapes=widthPreviewShapes696E())=>sourceShapes.map((shape,i)=>({shape,i,width:baseWidth696E(shape)}))
-    .filter(entry=>entry.width!==null && (volumeScope696G==='all'||entry.i===selected));
-  // 696J: Filled objects already have a front face; 696G is for exposed
-  // strokes only. A filled circle must NOT gain an artificial inner ring.
+  // 696M: Filled objects may have stroke="none". That must NOT disable the
+  // soft edge: unlike 696G's original design this works from FILL geometry.
+  const hasFill696M=shape=>!!shape&&allowed.has(shape.tag)&&shape.tag!=='line'&&shape.props?.fill!=null&&shape.props.fill!=='none'&&shape.props.fill!=='';
+  const volumeTargets696G=(sourceShapes=widthPreviewShapes696E())=>sourceShapes.map((shape,i)=>({shape,i,width:baseWidth696E(shape),filled:hasFill696M(shape)}))
+    .filter(entry=>(entry.filled||entry.width!==null) && (volumeScope696G==='all'||entry.i===selected));
+
+  // 696M: Sample the ACTUAL contour of a filled SVG shape, then draw only
+  // two short, INSIDE edge sections facing/away from the common light. No
+  // full-width stroke ring, no duplicate face, no dependency on outline width.
+  // Cache geometry across render/preview/export; never touch editable shapes.
+  const edgeGeometryCache696M=new Map();
+  function contour696M(shape){
+    if(!hasFill696M(shape))return null;
+    const fields=['d','cx','cy','r','rx','ry','x','y','width','height','points'];
+    const key=shape.tag+'|'+fields.map(k=>shape.props?.[k]??'').join('|');
+    if(edgeGeometryCache696M.has(key))return edgeGeometryCache696M.get(key);
+    let points=null;
+    const mount=document.createElementNS(NS,'svg');
+    mount.setAttribute('style','position:fixed;left:-10000px;top:0;width:24px;height:24px;opacity:0;pointer-events:none;overflow:visible');
+    try{
+      const elt=svgPart(shape);
+      // The transform is reapplied to generated edge paths. Sample LOCAL coords.
+      elt.removeAttribute('transform');
+      mount.appendChild(elt);
+      document.body.appendChild(mount);
+      if(typeof elt.getTotalLength!=='function')return null;
+      const length=elt.getTotalLength();
+      if(!Number.isFinite(length)||length<.1||length>100000)return null;
+      const count=Math.max(48,Math.min(112,Math.ceil(length*3)));
+      points=[];
+      for(let i=0;i<=count;i++){
+        const p=elt.getPointAtLength(length*i/count);
+        if(!Number.isFinite(p.x)||!Number.isFinite(p.y)){points=null;break;}
+        points.push({x:p.x,y:p.y});
+      }
+    }catch(_){points=null;}finally{mount.remove();}
+    // Do not cache unsupported contours; they may be valid after an edit.
+    if(points?.length){
+      if(edgeGeometryCache696M.size>110)edgeGeometryCache696M.clear();
+      edgeGeometryCache696M.set(key,points);
+    }
+    return points;
+  }
+  function filledEdge696M(shape,lightAngle,strength){
+    const points=contour696M(shape);
+    if(!points||points.length<4)return [shape];
+    const light=volumeVector696G(lightAngle),p=shape.props;
+    const minX=Math.min(...points.map(q=>q.x)),maxX=Math.max(...points.map(q=>q.x));
+    const minY=Math.min(...points.map(q=>q.y)),maxY=Math.max(...points.map(q=>q.y));
+    const center={x:(minX+maxX)/2,y:(minY+maxY)/2};
+    const span=Math.max(.01,Math.min(maxX-minX,maxY-minY));
+    const inset=Math.min(span*.045,.11+.08*strength);
+    const pointData=points.map(q=>{
+      const nx=q.x-center.x,ny=q.y-center.y,len=Math.hypot(nx,ny)||1;
+      return {x:q.x-nx/len*inset,y:q.y-ny/len*inset, facing:(nx*light.x+ny*light.y)/len};
+    });
+    const paths=[];
+    for(const [type,threshold] of [['highlight',.22],['shadow',-.35]]){
+      const coords=[];
+      let drawing=false;
+      for(let i=1;i<pointData.length;i++){
+        const a=pointData[i-1],b=pointData[i];
+        const good=type==='highlight'?a.facing>threshold&&b.facing>threshold:a.facing<threshold&&b.facing<threshold;
+        const gap=Math.hypot(b.x-a.x,b.y-a.y);
+        if(good && gap<span*.28){
+          if(!drawing)coords.push(`M ${widthNumber696E(a.x)} ${widthNumber696E(a.y)}`);
+          coords.push(`L ${widthNumber696E(b.x)} ${widthNumber696E(b.y)}`);
+          drawing=true;
+        }else drawing=false;
+      }
+      if(!coords.length)continue;
+      paths.push({tag:'path',props:{
+        d:coords.join(' '),fill:'none',stroke:type==='highlight'?'#ffffff':'#10131d',
+        'stroke-width':widthNumber696E(Math.min(span*.06,.085+.06*strength)),
+        'stroke-linecap':'round','stroke-linejoin':'round',
+        opacity:volumeOpacity696G(p.opacity,type==='highlight'?.23+.29*strength:.06+.13*strength),
+        ...(p.transform?{transform:p.transform}:{})
+      }});
+    }
+    return [shape,...paths];
+  }
   function volumeDecorated696G(shape,lightAngle=volumeAngle696G){
-    const p=shape?.props||{};
+    const p=shape?.props||{},filled=hasFill696M(shape);
     const width=baseWidth696E(shape),strength=Math.max(0,Math.min(1,volumeStrength696G/100));
-    if(width===null||strength<=0||p.stroke==='none'||(p.fill!=null&&p.fill!=='none'))return [shape];
+    if(strength<=0)return [shape];
+    if(filled)return filledEdge696M(shape,lightAngle,strength);
+    if(width===null||p.stroke==='none')return [shape];
+    // Preserve 696G's subtle tubular shading for genuinely OPEN strokes.
     const light=volumeVector696G(lightAngle);
     const shift=Math.min(.28,Math.max(.035,width*(.045+.055*strength)));
     const shadow={tag:shape.tag,props:{...p,fill:'none',stroke:'#101018',opacity:volumeOpacity696G(p.opacity,.10+.13*strength),'stroke-width':widthNumber696E(width*.96),transform:volumeTransform696G(p.transform,-light.x*shift,-light.y*shift)}};
@@ -3617,14 +3697,14 @@
       <label class="lnSvgVolumeScope696G">Upravit
         <select data-volume-scope aria-label="Rozsah plastického efektu">
           <option value="selected">Jen vybraný tvar</option>
-          <option value="all">Všechny viditelné čáry</option>
+          <option value="all">Všechny viditelné tvary</option>
         </select></label>
       <div class="lnSvgVolumeRow696G"><span>Směr světla</span><output data-volume-angle-label></output></div>
       <label class="lnSvgVolumeRange696G"><input data-volume-angle type="range" min="0" max="360" step="5" value="315" aria-label="Směr světla"></label>
       <div class="lnSvgVolumeRow696G"><span>Síla objemu</span><output data-volume-strength-label></output></div>
       <label class="lnSvgVolumeRange696G"><input data-volume-strength type="range" min="0" max="100" step="5" value="60" aria-label="Síla plastického efektu"></label>
-      <div class="lnSvgVolumeInfo696G" data-volume-info role="status">Vyber obrys a zapni náhled.</div>
-      <small>Určeno pro obrysy bez výplně. U vyplněných tvarů se vnitřní prstenec nevytváří; jejich plochu osvětluje Prostorové stínování. Kresba se tímto panelem trvale nemění – kopírování i export ale použijí přesně to, co vidíš na plátně.</small>
+      <div class="lnSvgVolumeInfo696G" data-volume-info role="status">Vyber tvar nebo čáru a zapni náhled.</div>
+      <small>U vyplněných tvarů jemně osvětluje přímo hranu výplně i s vypnutým obrysem. U otevřených čar zachovává původní plastický tah. Žádný další celokruhový prstenec. Náhled nic nemění v uložené geometrii; kopírování a export použijí tento vzhled.</small>
     </div>`;
   center695R.appendChild(volumePanel696G);
   const volumeEnabledInput696G=volumePanel696G.querySelector('[data-volume-enabled]');
@@ -3642,19 +3722,20 @@
     volumeStrengthInput696G.value=String(volumeStrength696G);
     volumeAngleLabel696G.textContent=volumeDirectionLabel696G(volumeAngle696G);
     volumeStrengthLabel696G.textContent=`${volumeStrength696G} %`;
-    const hasSelected=selected>=0&&selected<shapes.length&&baseWidth696E(shapes[selected])!==null;
+    const hasSelected=selected>=0&&selected<shapes.length&&
+      (hasFill696M(shapes[selected])||baseWidth696E(shapes[selected])!==null);
     volumeScopeInput696G.querySelector('option[value="selected"]').disabled=!hasSelected;
     const targets=volumeTargets696G();
     if(!volumeEnabled696G){
-      volumeInfo696G.textContent='Náhled je vypnutý. Zapni jej a Studio hned ukáže plastický obrys.';
+      volumeInfo696G.textContent='Náhled je vypnutý. Zapni jej a uvidíš jemný odlesk.';
     }else if(volumeScope696G==='selected'&&!hasSelected){
-      volumeInfo696G.textContent='Vyber obrys nástrojem Výběr. Efekt funguje na tvarech se stroke čárou.';
+      volumeInfo696G.textContent='Vyber tvar nástrojem Výběr. Obrys u vyplněného tvaru není potřeba.';
     }else if(!targets.length){
-      volumeInfo696G.textContent='Nebyly nalezeny žádné viditelné čáry se stroke tahem.';
+      volumeInfo696G.textContent='Žádný vhodný tvar. Nakresli vyplněný tvar nebo otevřenou čáru.';
     }else{
-      const widths=targets.map(x=>x.width),min=Math.min(...widths),max=Math.max(...widths);
-      const range=min===max?czWidth696E(min):`${czWidth696E(min)}–${czWidth696E(max)}`;
-      volumeInfo696G.textContent=targets.every(x=>x.shape.props?.fill&&x.shape.props.fill!=='none')?'Vyplněné tvary: bez umělého prstence. Pro světlo na ploše použij Prostorové stínování.':`${targets.length} ${targets.length===1?'tvar':targets.length<=4?'tvary':'tvarů'} · tloušťka ${range} SVG jednotek · export i Kopírovat pro LubaNote převezmou tento plastický náhled.`;
+      const filledCount=targets.filter(x=>x.filled).length;
+      const strokeCount=targets.length-filledCount;
+      volumeInfo696G.textContent=`${filledCount} vyplněných tvarů (jemná hrana bez obrysu) · ${strokeCount} samostatných čar (plastický tah). Export přebírá živý náhled.`;
     }
   };
   const queueVolumeRender696G=()=>requestAnimationFrame(()=>render());
@@ -3986,10 +4067,10 @@
         position:fixed!important;
         top:var(--ln-pin-top-696L)!important;
         left:var(--ln-pin-left-696L)!important;
-        width:var(--ln-pin-size-696L)!important;
-        height:var(--ln-pin-size-696L)!important;
+        width:var(--ln-pin-width-696M)!important;
+        height:var(--ln-pin-height-696M)!important;
         max-width:none!important;max-height:none!important;
-        margin:0!important;aspect-ratio:1!important;
+        margin:0!important;aspect-ratio:auto!important;
         z-index:1100!important;
         border-color:#71bfc5;
         box-shadow:0 10px 25px #000b,0 0 0 1px #1a6266;
@@ -4019,25 +4100,29 @@
     width:window.visualViewport?.width||window.innerWidth,
     height:window.visualViewport?.height||window.innerHeight
   });
-  const pinSize696L=(width,height)=>Math.max(120,Math.min(300,width-20,height*.38));
+  // 696M: preserve the ACTUAL board dimensions recorded at the moment of
+  // long-press. No arbitrary 300px/38vh downscaling. On tiny viewports the
+  // pinned board may cover some controls; they still scroll behind it.
+  let pinWidth696M=0,pinHeight696M=0;
   function positionPin696L(){
     if(!isPinned696L)return;
     const {width,height}=pinViewport696L();
-    const size=pinSize696L(width,height);
-    // Leave a useful band for sliders below the pinned drawing.
-    const controlsReserve=Math.min(310,Math.max(190,height*.35));
-    const maxTop=Math.max(12,height-size-controlsReserve);
-    const top=Math.min(Math.max(12,pinTop696L),maxTop);
-    const left=Math.max(5,Math.min(width-size-5,pinCenterX696L-size/2));
+    const boardWidth=pinWidth696M,boardHeight=pinHeight696M;
+    // If pinned near the bottom, lift the unchanged-size board just enough
+    // to keep a scrollable band of settings underneath it.
+    const reserve=Math.min(190,Math.max(80,height*.24));
+    const top=Math.max(4,Math.min(pinTop696L,Math.max(4,height-boardHeight-reserve)));
+    const left=Math.max(4,Math.min(pinCenterX696L-boardWidth/2,Math.max(4,width-boardWidth-4)));
     board694L.style.setProperty('--ln-pin-top-696L',top+'px');
     board694L.style.setProperty('--ln-pin-left-696L',left+'px');
-    board694L.style.setProperty('--ln-pin-size-696L',size+'px');
+    board694L.style.setProperty('--ln-pin-width-696M',boardWidth+'px');
+    board694L.style.setProperty('--ln-pin-height-696M',boardHeight+'px');
   }
   function unpin696L(message=true){
     if(!isPinned696L)return;
     isPinned696L=false;
     board694L.classList.remove('lnSvgPinnedCanvas696L');
-    for(const name of ['--ln-pin-top-696L','--ln-pin-left-696L','--ln-pin-size-696L'])board694L.style.removeProperty(name);
+    for(const name of ['--ln-pin-top-696L','--ln-pin-left-696L','--ln-pin-size-696L','--ln-pin-width-696M','--ln-pin-height-696M'])board694L.style.removeProperty(name);
     pinPlaceholder696L.hidden=true;
     pinButton696L.dataset.active='false';
     pinButton696L.setAttribute('aria-pressed','false');
@@ -4058,6 +4143,8 @@
     pinPlaceholder696L.hidden=false;
     pinTop696L=rect.top;
     pinCenterX696L=rect.left+rect.width/2;
+    pinWidth696M=rect.width;
+    pinHeight696M=rect.height;
     isPinned696L=true;
     board694L.classList.add('lnSvgPinnedCanvas696L');
     positionPin696L();
