@@ -4902,9 +4902,9 @@ function aplikujKontrastIkonKarty696O(karta, barvaKarty = "system") {
   for (const ikona of karta.querySelectorAll('.taskCardIcon')) {
     const trida = Object.keys(barvy).find(jmeno => ikona.classList.contains(jmeno));
     if (!trida) continue;
-    // Jen konkrétní stavové ikony. Globální paleta a definice SVG
-    // zůstanou beze změny; currentColor se správně podědí i do SVG.
-    ikona.style.color = barvy[trida];
+    // 696P: neprovádět zbytečné zápisy do stylu při každém renderu.
+    // Ikony zdědí currentColor, takže knihovnu lubaIcons.js neměníme.
+    if (ikona.style.color !== barvy[trida]) ikona.style.color = barvy[trida];
   }
 }
 
@@ -4939,9 +4939,10 @@ function obnovKontrastStitkuPoTematu683AB() {
     .forEach((prvek) => aplikujKontrastStitku683AB(prvek, prvek.dataset.tagColor));
   document.querySelectorAll(".taskCard[data-barva-karty]")
     .forEach((prvek) => aplikujKontrastStitku683AB(prvek, prvek.dataset.barvaKarty, true));
-  // 696O: I karty bez štítku mají své povrchové barvy podle motivu.
-  document.querySelectorAll(".taskCard")
-    .forEach(prvek => aplikujKontrastIkonKarty696O(prvek, prvek.dataset.barvaKarty || "system"));
+  // 696P: barevné karty se přepočítaly už v aplikujKontrastStitku.
+  // Druhý průchod po všech kartách navíc byl zbytečný a mohl zdržovat.
+  document.querySelectorAll(".taskCard:not([data-barva-karty])")
+    .forEach(prvek => aplikujKontrastIkonKarty696O(prvek, "system"));
   document.querySelectorAll(".manageTagCustomColorButton[data-luba-preview-color683ae]")
     .forEach((prvek) => aplikujNahledVlastnihoTlacitka683AE(prvek, prvek.dataset.lubaPreviewColor683ae));
   // Tlačítka vytváření jsou navázána na motiv, bez natvrdo fialové barvy.

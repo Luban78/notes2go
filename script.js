@@ -5861,12 +5861,6 @@ function renderTasks() {
       }
     });
     
-    // 696O: barvy malých stavových ikon podle skutečné barvy karty;
-    // stejný kontrastní základ jako nadpis a štítky (683AB).
-    if (typeof aplikujKontrastIkonKarty696O === "function") {
-      aplikujKontrastIkonKarty696O(loadedCard, barvaHlavnihoStitku);
-    }
-
     loadedHeading.append(
       loadedHeadingIcons,
       document.createTextNode(
@@ -5956,7 +5950,15 @@ function renderTasks() {
       loadedNoteText,
       loadedDateText
     );
-    
+
+    // 696P: až TEĎ jsou stavové ikony uvnitř karty. V 696O se
+    // kontrast nastavoval před vložením nadpisu do loadedCard,
+    // querySelectorAll tedy vracel [] a ikonky zůstaly světlé.
+    // Nastavení ještě před vložením karty do seznamu zabrání bliknutí.
+    if (typeof aplikujKontrastIkonKarty696O === "function") {
+      aplikujKontrastIkonKarty696O(loadedCard, barvaHlavnihoStitku);
+    }
+
     loadedTags.classList.add("taskTags");
     
     const taskTags = loadedTask.tags || [];
