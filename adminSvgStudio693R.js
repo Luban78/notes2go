@@ -3947,6 +3947,177 @@
   new MutationObserver(syncFullscreen695S).observe(modal,{attributes:true,attributeFilter:['hidden']});
   syncFullscreen695S();
 
+  // 696L – Long-press the small pin in the upper-left corner of the actual
+  // drawing board to keep the LIVE drawing visible while scrolling controls.
+  // Do not clone or reparent SVG: drawing, gestures, zoom and export share
+  // the original element. The spacer prevents scroll jumps while fixed.
+  const pinStyle696L=document.createElement('style');
+  pinStyle696L.id='lnSvgPinStyle696L';
+  pinStyle696L.textContent=`
+    .lnSvgStudio .lnSvgStudioBoard .lnSvgPin696L{
+      position:absolute;top:7px;left:7px;z-index:7;display:flex;
+      width:35px;height:35px;align-items:center;justify-content:center;
+      border:1px solid #62c9c9a0;border-radius:50%;padding:0;
+      background:#112c35d9;color:#c7fafa;box-shadow:0 2px 9px #0008;
+      cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .lnSvgStudio .lnSvgStudioBoard .lnSvgPin696L .lnSvgPinDot696L{
+      width:10px;height:10px;border-radius:50%;background:#5ecbcb;
+      box-shadow:0 0 0 3px #1b5669,0 0 8px #4bcaca;
+      pointer-events:none;
+    }
+    .lnSvgStudio .lnSvgStudioBoard .lnSvgPin696L[data-active="true"]{
+      border-color:#ffc35b;background:#49351a;color:#ffda83;
+    }
+    .lnSvgStudio .lnSvgStudioBoard .lnSvgPin696L[data-active="true"] .lnSvgPinDot696L{
+      background:#ffcb64;box-shadow:0 0 0 3px #95672c,0 0 9px #ffc35b;
+    }
+    .lnSvgStudio .lnSvgStudioBoard .lnSvgPin696L:focus-visible{
+      outline:2px solid #faca64;outline-offset:2px;
+    }
+    .lnSvgStudio .lnSvgPinPlaceholder696L[hidden]{display:none!important;}
+    .lnSvgStudio .lnSvgPinPlaceholder696L{
+      display:block;max-width:100%;box-sizing:border-box;margin:8px auto;
+      background:transparent;border:0;pointer-events:none;
+    }
+    @media(max-width:899px){
+      .lnSvgStudio .lnSvgWorkspaceCenter695R>.lnSvgStudioBoard.lnSvgPinnedCanvas696L{
+        position:fixed!important;
+        top:var(--ln-pin-top-696L)!important;
+        left:var(--ln-pin-left-696L)!important;
+        width:var(--ln-pin-size-696L)!important;
+        height:var(--ln-pin-size-696L)!important;
+        max-width:none!important;max-height:none!important;
+        margin:0!important;aspect-ratio:1!important;
+        z-index:1100!important;
+        border-color:#71bfc5;
+        box-shadow:0 10px 25px #000b,0 0 0 1px #1a6266;
+      }
+    }
+  `;
+  document.head.appendChild(pinStyle696L);
+  const pinButton696L=document.createElement('button');
+  pinButton696L.type='button';
+  pinButton696L.className='lnSvgPin696L';
+  pinButton696L.innerHTML='<span class="lnSvgPinDot696L" aria-hidden="true"></span>';
+  pinButton696L.setAttribute('aria-label','Podrž 0,5 sekundy pro připnutí plátna');
+  pinButton696L.setAttribute('aria-pressed','false');
+  pinButton696L.title='Podrž bod 0,5 s pro připnutí plátna';
+  board694L.appendChild(pinButton696L);
+  const pinPlaceholder696L=document.createElement('div');
+  pinPlaceholder696L.className='lnSvgPinPlaceholder696L';
+  pinPlaceholder696L.setAttribute('aria-hidden','true');
+  pinPlaceholder696L.hidden=true;
+  board694L.insertAdjacentElement('beforebegin',pinPlaceholder696L);
+  let isPinned696L=false;
+  let hold696L=null;
+  let pinTop696L=0;
+  let pinCenterX696L=0;
+  const isMobile696L=()=>window.matchMedia('(max-width:899px)').matches;
+  const pinViewport696L=()=>({
+    width:window.visualViewport?.width||window.innerWidth,
+    height:window.visualViewport?.height||window.innerHeight
+  });
+  const pinSize696L=(width,height)=>Math.max(120,Math.min(300,width-20,height*.38));
+  function positionPin696L(){
+    if(!isPinned696L)return;
+    const {width,height}=pinViewport696L();
+    const size=pinSize696L(width,height);
+    // Leave a useful band for sliders below the pinned drawing.
+    const controlsReserve=Math.min(310,Math.max(190,height*.35));
+    const maxTop=Math.max(12,height-size-controlsReserve);
+    const top=Math.min(Math.max(12,pinTop696L),maxTop);
+    const left=Math.max(5,Math.min(width-size-5,pinCenterX696L-size/2));
+    board694L.style.setProperty('--ln-pin-top-696L',top+'px');
+    board694L.style.setProperty('--ln-pin-left-696L',left+'px');
+    board694L.style.setProperty('--ln-pin-size-696L',size+'px');
+  }
+  function unpin696L(message=true){
+    if(!isPinned696L)return;
+    isPinned696L=false;
+    board694L.classList.remove('lnSvgPinnedCanvas696L');
+    for(const name of ['--ln-pin-top-696L','--ln-pin-left-696L','--ln-pin-size-696L'])board694L.style.removeProperty(name);
+    pinPlaceholder696L.hidden=true;
+    pinButton696L.dataset.active='false';
+    pinButton696L.setAttribute('aria-pressed','false');
+    pinButton696L.setAttribute('aria-label','Podrž 0,5 sekundy pro připnutí plátna');
+    pinButton696L.title='Podrž bod 0,5 s pro připnutí plátna';
+    if(message)announce('Plátno odepnuté. Znovu se posouvá s nastavením.');
+  }
+  function togglePin696L(){
+    if(isPinned696L){unpin696L();return;}
+    if(!isMobile696L()){
+      announce('Připnutí plátna je určené pro mobil. Na PC máš plátno a nastavení vedle sebe.');
+      return;
+    }
+    const rect=board694L.getBoundingClientRect();
+    if(rect.width<30||!Number.isFinite(rect.top))return;
+    pinPlaceholder696L.style.width=rect.width+'px';
+    pinPlaceholder696L.style.height=rect.height+'px';
+    pinPlaceholder696L.hidden=false;
+    pinTop696L=rect.top;
+    pinCenterX696L=rect.left+rect.width/2;
+    isPinned696L=true;
+    board694L.classList.add('lnSvgPinnedCanvas696L');
+    positionPin696L();
+    pinButton696L.dataset.active='true';
+    pinButton696L.setAttribute('aria-pressed','true');
+    pinButton696L.setAttribute('aria-label','Podrž 0,5 sekundy pro odepnutí plátna');
+    pinButton696L.title='Připnuto. Podrž znovu pro odepnutí.';
+    announce('Plátno připnuto 📌 Posouvej nastavení, kresba zůstane viditelná. Podrž bod pro odepnutí.');
+  }
+  function cancelHold696L(){
+    if(!hold696L)return;
+    clearTimeout(hold696L.timer);
+    hold696L=null;
+  }
+  pinButton696L.addEventListener('pointerdown',e=>{
+    if(e.button!==undefined&&e.button!==0)return;
+    e.preventDefault();e.stopPropagation();
+    cancelHold696L();
+    hold696L={id:e.pointerId,x:e.clientX,y:e.clientY,triggered:false,timer:null};
+    const h=hold696L;
+    h.timer=setTimeout(()=>{
+      if(hold696L!==h)return;
+      h.triggered=true;
+      togglePin696L();
+      try{navigator.vibrate?.(24);}catch(_){}
+    },480);
+    try{pinButton696L.setPointerCapture(e.pointerId);}catch(_){}
+  });
+  pinButton696L.addEventListener('pointermove',e=>{
+    if(!hold696L||e.pointerId!==hold696L.id)return;
+    if(Math.hypot(e.clientX-hold696L.x,e.clientY-hold696L.y)>13)cancelHold696L();
+  });
+  pinButton696L.addEventListener('pointerup',e=>{
+    if(!hold696L||e.pointerId!==hold696L.id)return;
+    const wasLong=hold696L.triggered;
+    cancelHold696L();
+    if(!wasLong)announce('Podrž malý bod v rohu mřížky asi půl sekundy.');
+  });
+  pinButton696L.addEventListener('pointercancel',cancelHold696L);
+  pinButton696L.addEventListener('lostpointercapture',cancelHold696L);
+  pinButton696L.addEventListener('contextmenu',e=>{e.preventDefault();e.stopPropagation();});
+  pinButton696L.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();});
+  pinButton696L.addEventListener('keydown',e=>{
+    if(e.key==='Enter'||e.key===' '){e.preventDefault();togglePin696L();}
+  });
+  const onPinResize696L=()=>{
+    if(isPinned696L&&!isMobile696L()){unpin696L(false);return;}
+    positionPin696L();
+  };
+  window.addEventListener('resize',onPinResize696L);
+  window.visualViewport?.addEventListener('resize',onPinResize696L);
+  window.addEventListener('keydown',e=>{if(e.key==='Escape'&&isPinned696L)unpin696L(false);});
+  back.addEventListener('click',()=>unpin696L(false));
+  new MutationObserver(()=>{
+    if((view.hidden||modal.hidden)&&isPinned696L)unpin696L(false);
+  }).observe(view,{attributes:true,attributeFilter:['hidden']});
+  new MutationObserver(()=>{
+    if((view.hidden||modal.hidden)&&isPinned696L)unpin696L(false);
+  }).observe(modal,{attributes:true,attributeFilter:['hidden']});
+
   // 695V: a SINGLE compact action immediately after Vpřed. Delegate to
   // the original, proven smoothing click handler. No extra toolbar below canvas.
   const smoothButton695U=$('lnSvgSmoothSelected693V');
