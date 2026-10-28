@@ -3479,6 +3479,11 @@
           <option value="selected">Jen vybraný tvar</option>
         </select></label>
       <div class="lnSvgWidthScaleRow696EB">
+        <span>Obrys</span>
+        <button type="button" data-outline-off>◯ Vypnout obrys</button>
+        <button type="button" data-outline-on>◉ Zapnout obrys</button>
+      </div>
+      <div class="lnSvgWidthScaleRow696EB">
         <span>Síla tahu</span>
         <output data-width-factor>100 % (1×)</output>
         <button type="button" data-width-apply disabled>✓ Použít</button>
@@ -3497,6 +3502,46 @@
   const widthInfo696E=widthPanel696E.querySelector('[data-width-info]');
   const widthScopeInput696E=widthPanel696E.querySelector('[data-width-scope]');
   const widthSelectedOpt696E=widthScopeInput696E.querySelector('option[value="selected"]');
+  const outlineOff696K=widthPanel696E.querySelector('[data-outline-off]');
+  const outlineOn696K=widthPanel696E.querySelector('[data-outline-on]');
+  // 696K: outline is a real per-shape SVG stroke property, undoable and exportable.
+  // Only filled shapes can lose the stroke; an unfilled path must remain visible.
+  const outlineScope696K=()=>shapes.map((shape,i)=>({shape,i})).filter(({shape,i})=>
+    shape&&allowed.has(shape.tag)&&(widthScope696E==='all'||i===selected));
+  const outlineFilled696K=shape=>shape?.props?.fill!=null&&shape.props.fill!=='none'&&shape.props.fill!=='';
+  const outlineActive696K=shape=>shape?.props?.stroke!=='none';
+  const updateOutlineButtons696K=()=>{
+    const targets=outlineScope696K();
+    outlineOff696K.disabled=!targets.some(({shape})=>outlineFilled696K(shape)&&outlineActive696K(shape));
+    outlineOn696K.disabled=!targets.some(({shape})=>!outlineActive696K(shape));
+    outlineOff696K.title='Skryje obrys pouze u vyplněných tvarů. Samotné čáry ponechá viditelné.';
+    outlineOn696K.title='Vrátí obrys podle původní barvy tahu, pokud je uložená.';
+  };
+  const changeOutline696K=enabled=>{
+    const targets=outlineScope696K();
+    if(widthScope696E==='selected'&&!targets.length){announce('Nejdřív vyber tvar.');return;}
+    const before=snapshot();let count=0,skipped=0;
+    for(const {shape} of targets){
+      const props=shape.props||(shape.props={});
+      if(enabled){
+        if(outlineActive696K(shape))continue;
+        props.stroke=props['data-outline-prev-696k']||activeColor||'currentColor';
+        if(props.stroke==='none')props.stroke='currentColor';
+        delete props['data-outline-prev-696k'];
+        count++;
+      }else{
+        if(!outlineActive696K(shape))continue;
+        if(!outlineFilled696K(shape)){skipped++;continue;}
+        props['data-outline-prev-696k']=props.stroke||'currentColor';
+        props.stroke='none';count++;
+      }
+    }
+    if(count){record(before);render();announce(`${enabled?'Obrys zapnut':'Obrys vypnut'} u ${count} ${count===1?'tvaru':'tvarů'}. Zpět změnu vrátí.${skipped?' Samotné čáry zůstaly viditelné.':''}`);}
+    else announce(skipped?'Samotné čáry bez výplně nelze skrýt – zmizely by celé.':'Žádný vhodný tvar ke změně.');
+    updateOutlineButtons696K();
+  };
+  outlineOff696K.addEventListener('click',()=>changeOutline696K(false));
+  outlineOn696K.addEventListener('click',()=>changeOutline696K(true));
   const widthApply696E=widthPanel696E.querySelector('[data-width-apply]');
   const widthReset696E=widthPanel696E.querySelector('[data-width-reset]');
   const czWidth696E=n=>Number(n.toFixed(3)).toLocaleString('cs-CZ',{maximumFractionDigits:3});
@@ -3505,6 +3550,7 @@
     const hasSelected=selected>=0&&selected<shapes.length&&baseWidth696E(shapes[selected])!==null;
     widthSelectedOpt696E.disabled=!hasSelected;
     const targets=widthTargets696E();
+    updateOutlineButtons696K();
     widthFactor696E.textContent=`${Math.round(widthScale696E*100)} % (${czWidth696E(widthScale696E)}×)`;
     widthReset696E.disabled=widthScale696E===1;
     const changed=targets.some(({width})=>widthNumber696E(width*widthScale696E)!==widthNumber696E(width));
