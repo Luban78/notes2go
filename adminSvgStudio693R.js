@@ -31,7 +31,7 @@
   const notice = $('lnSvgMessage693R'), undoBtn = $('lnSvgUndo693R'), redoBtn = $('lnSvgRedo693S');
   const selectionLabel = $('lnSvgSelection693S');
   const allowed = new Set(['path', 'circle', 'rect', 'line', 'ellipse', 'polyline', 'polygon']);
-  const attrs = new Set(['d','cx','cy','r','rx','ry','x','y','x1','x2','y1','y2','width','height','points','stroke-width','stroke-linecap','stroke-linejoin','fill','stroke','transform','opacity']);
+  const attrs = new Set(['d','cx','cy','r','rx','ry','x','y','x1','x2','y1','y2','width','height','points','stroke-width','stroke-linecap','stroke-linejoin','fill','stroke','transform','opacity','data-luba-shade']);
   const deepCopy = data => JSON.parse(JSON.stringify(data));
   const clamp = x => Math.max(0, Math.min(24, Math.round(x * 100) / 100));
   const fmt = x => String(Math.round(x * 100) / 100);
@@ -141,6 +141,32 @@
   let sourceIsEdited693T = false;
   source.addEventListener('input', () => { sourceIsEdited693T = true; });
 
+  // Shader helper is loaded by the icon library before the lazy SVG Studio.
+  function appendWithShade696F(root,element,props){
+    const helper=window.LubaSvgShade696F;
+    if(helper?.append)helper.append(root,element,props);
+    else root.appendChild(element);
+  }
+  let shadePreviewActive696F=false;
+  let shadeScope696F='selected';
+  let shadeAngle696F=225,shadePower696F=60,shadeDepth696F=55;
+  let refreshShadePanel696F=()=>{};
+  const shadeSetting696F=()=>`${shadeAngle696F},${shadePower696F},${shadeDepth696F}`;
+  const shadeTargetIndices696F=()=>shapes.map((shape,index)=>({shape,index})).filter(({shape,index})=>
+    allowed.has(shape.tag)&&(shadeScope696F==='all'||index===selected) &&
+    (shape.props?.fill!=='none'||shape.props?.stroke!=='none')).map(x=>x.index);
+  function shadePreviewShapes696F(parts){
+    if(!shadePreviewActive696F)return parts;
+    const targets=new Set(shadeTargetIndices696F());
+    if(!targets.size)return parts;
+    return parts.map((shape,index)=>{
+      if(!targets.has(index))return shape;
+      const props={...shape.props};
+      if(shadePower696F>0)props['data-luba-shade']=shadeSetting696F();
+      else delete props['data-luba-shade'];
+      return {...shape,props};
+    });
+  }
   const svgPart = o => {
     const el = document.createElementNS(NS, o.tag);
     for (const [name, value] of Object.entries(o.props)) el.setAttribute(name, String(value));
@@ -233,7 +259,11 @@
   function offset(shape) {const t=affine694H(shape);return t?{x:t.x,y:t.y}:{x:0,y:0};}
   function setOffset(shape,x,y) {const t=affine694H(shape);if(t)assignAffine694H(shape,{...t,x,y});}
   function exportSvg() {
-    return `<svg xmlns="${NS}" viewBox="0 0 24 24">${shapes.filter(s => s && allowed.has(s.tag)).map(s => svgPart(s).outerHTML).join('')}</svg>`;
+    const root=document.createElementNS(NS,'svg');
+    root.setAttribute('xmlns',NS);root.setAttribute('viewBox','0 0 24 24');
+    const visible=shadePreviewShapes696F(widthPreviewShapes696E());
+    for(const item of visible){if(item&&allowed.has(item.tag))appendWithShade696F(root,svgPart(item),item.props);}
+    return root.outerHTML;
   }
   // 696C: Efficient LubaNote icon export. This modifies ONLY the clipboard
   // representation; SVG Studio geometry, history and saved drafts stay intact.
@@ -245,7 +275,7 @@
   function exportForLuba696C() {
     // 696EB: Clipboard export must match the live visible stroke-width preview.
     // widthPreviewShapes696E returns safe clones; stored drafts are not modified.
-    const source=widthPreviewShapes696E().filter(s=>s&&allowed.has(s.tag));
+    const source=shadePreviewShapes696F(widthPreviewShapes696E()).filter(s=>s&&allowed.has(s.tag));
     const output=[];
     let merged=0;
     const opaqueStroke696C=col=>/^(?:currentColor|#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?|[a-zA-Z]{1,20})$/.test(String(col||''));
@@ -254,7 +284,7 @@
       const p=s.props;
       // Relative initial moveto would shift after joining separate paths.
       // Filled, translucent or transformed parts might change compositing.
-      if(!/^\s*M(?=[\s+\-\d.])/.test(p.d)||p.transform||p.opacity!=null||p.fill!=='none')return false;
+      if(!/^\s*M(?=[\s+\-\d.])/.test(p.d)||p.transform||p.opacity!=null||p.fill!=='none'||p['data-luba-shade'])return false;
       return opaqueStroke696C(p.stroke||'currentColor') && p.stroke!=='none';
     }
     let previous=null;
@@ -884,10 +914,10 @@
       guide.style.pointerEvents='none';guide.setAttribute('data-snap-guide-694U','');
       svg.appendChild(guide);
     }
-    const shownWidth696E=widthPreviewShapes696E();
+    const shownWidth696E=shadePreviewShapes696F(widthPreviewShapes696E());
     const visible = [...shownWidth696E.filter(s => s && allowed.has(s.tag)), ...(drawing && allowed.has(drawing.tag) ? [drawing] : [])];
     for (const s of visible) {
-      const el = svgPart(s); el.style.pointerEvents = 'none'; svg.appendChild(el);
+      const el = svgPart(s); el.style.pointerEvents = 'none'; appendWithShade696F(svg,el,s.props);
     }
     if (selected >= 0 && shapes[selected] && ['move','eraser','scale','rotate'].includes(tool.value)) {
       const b=shapeBounds694H(shapes[selected]);
@@ -946,12 +976,13 @@
     }
     for (const p of [preview, previewLarge]) {
       if (!p) continue;
-      p.replaceChildren(...shownWidth696E.map(svgPart));
+      p.replaceChildren();
+      for(const item of shownWidth696E)appendWithShade696F(p,svgPart(item),item.props);
     }
     if (!sourceIsEdited693T) source.value = exportSvg();
     undoBtn.disabled = history.length === 0;
     if (redoBtn) redoBtn.disabled = future.length === 0;
-    updateSelection(); updatePalette();updateJoinQuick695X?.();refreshWidthPanel696E();
+    updateSelection(); updatePalette();updateJoinQuick695X?.();refreshWidthPanel696E();refreshShadePanel696F();
   }
   function normalized(tag, props = {}) {
     return {tag, props: {fill: 'none',stroke: activeColor,'stroke-width':fmt(Number(stroke.value)),'stroke-linecap':'round','stroke-linejoin':'round',...props}};
@@ -1815,6 +1846,7 @@
         if(!attrs.has(k)||!['string','number'].includes(typeof v))throw Error('Nepodporovaný atribut: '+k);
         const val=String(v); if(val.length>10000||/url\s*\(|javascript:|[<>]/i.test(val))throw Error('Nepovolená hodnota.');
         if(k==='transform' && (!affine694H({props:{transform:val}}) || val.length>150))throw Error('Podporuji pouze translate nebo matici Rotace/Velikost.');
+        if(k==='data-luba-shade'&&!window.LubaSvgShade696F?.parse(val))throw Error('Neplatné nastavení stínování.');
         if(['fill','stroke'].includes(k)&&!/^(?:none|currentColor|#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,20})$/.test(val))throw Error('Neplatná barva.');
         props[k]=val;
       }
@@ -1837,15 +1869,21 @@
       if(doc.querySelector('parsererror'))throw Error('Neplatné SVG.');
       const root=doc.documentElement;
       if(root.localName!=='svg'||root.namespaceURI!==NS)throw Error('Vlož celé SVG.');
-      if(root.children.length>100)throw Error('Nejvýše 100 tvarů.');
+      if(root.children.length>300)throw Error('SVG je příliš rozsáhlé.');
       const next=[];
       for(const el of root.children){
+        // Export 696F includes reproducible gradient definitions and overlay
+        // clones. They are visual-only and reconstructed from base metadata.
+        if(el.localName==='defs'&&el.getAttribute('data-luba-shade-defs')==='696F')continue;
+        if(el.getAttribute('data-luba-shade-overlay')==='696F')continue;
+        if(next.length>=100)throw Error('Nejvýše 100 tvarů.');
         if(!allowed.has(el.localName)||el.namespaceURI!==NS||el.children.length)throw Error('Nepodporovaný tvar nebo skupina: '+el.localName);
         const props={};
         for(const at of el.attributes){
           if(!attrs.has(at.name)||at.namespaceURI)throw Error('Nepodporovaný atribut: '+at.name);
           if(/url\s*\(|javascript:|[<>]/i.test(at.value))throw Error('Nepovolená hodnota.');
           if(at.name==='transform' && (!affine694H({props:{transform:at.value}}) || at.value.length>150))throw Error('Podporuji pouze translate nebo matici Rotace/Velikost.');
+          if(at.name==='data-luba-shade'&&!window.LubaSvgShade696F?.parse(at.value))throw Error('Neplatné stínování SVG.');
           if(['stroke','fill'].includes(at.name) && !/^(?:none|currentColor|#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,20})$/.test(at.value))throw Error('Nepodporovaná barva.');
           props[at.name]=at.value;
         }
@@ -1891,6 +1929,7 @@
       <p><strong>3. Jak silné čáry?</strong> Začni kolem 1,8–2,0. Pro jemné detaily 1,5, pro výraznější tvary přibližně 2,2. Příliš tenké čáry se při náhledu 24 × 24 ztrácejí.</p>
       <p><strong>4. Jak fungují nástroje?</strong> Volná čára kreslí tahem a volba „Vyhlazovat volnou čáru“ zjemní stopu při dokončení. Pro starší tah M/L ho vyber nástrojem Přesun a použij „Vyhladit vybraný tah“. Úsečka od začátku do konce; kruh od středu tažením k okraji; obdélník po úhlopříčce. Přesunem uchopíš celý tvar. Guma odstraní celý dotčený tvar, ne jen jeho část.</p>
       <p><strong>5. Barvy a výplň.</strong> „Barva motivu“ se přizpůsobí dennímu/nočnímu režimu LubaNote. „Vyplnit kruh/obdélník“ ovlivní nově kreslené tvary. Nástroj Výplň (kyblíček) vyplní vnitřek již hotového uzavřeného objektu zvolenou barvou, obrys ponechá. Středové čáry jsou jen pomocné, neexportují se. Barvu již nakresleného tvaru lze změnit po výběru pomocí Přesun.</p>
+      <p><strong>3D stínování 696F.</strong> Nástrojem Přesun označ tvar. V panelu Prostorové stínování nastav směr světla, sílu a hloubku. Živý náhled se promítá i do exportu pro LubaNote. Použít změnu uloží do rozpracované kresby, Zpět ji vrátí. Pro výrazný plastický vzhled vyplň uzavřený tvar, například elipsu.</p>
       <p><strong>6. Velikost a kontrola.</strong> Použij „Centrovat vše“ a pak zkontroluj zejména malý náhled 24 × 24. Pokud není ikona rozeznatelná bez zvětšení, zjednoduš ji nebo zesil tah.</p>
       <p><strong>7. Import a export.</strong> Vlož jednoduché SVG do pole a klepni na „Načíst SVG“. Pro definice z lubaIcons.js použij „Načíst kód LubaNote“; pro celé SVG „Načíst SVG“. Import podporuje základní tvary, nikoli složité skupiny a efekty. „Kopírovat SVG“ uloží celé SVG do schránky; „Kopírovat pro LubaNote“ připraví definice pro lubaIcons.js. Rozpracovaný návrh můžeš uložit do místního úložiště zařízení pomocí Moje SVG návrhy. Před odinstalací aplikace jej zálohuj i exportem SVG.</p>
       <p><strong>Tip pro připínáček:</strong> Hlavní hlavičku nakresli do horní poloviny, hrot směrem ke spodnímu okraji. Před složitostí dej přednost jednoduchému obrysu.</p>
@@ -1997,7 +2036,8 @@
   function validDraft694K(item){
     if(!item||!Array.isArray(item.shapes)||item.shapes.length>800)return false;
     return item.shapes.every(s=>s && allowed.has(s.tag)&&s.props && typeof s.props==='object' &&
-      Object.entries(s.props).every(([k,v])=>attrs.has(k)&&['string','number'].includes(typeof v)&&String(v).length<=20000));
+      Object.entries(s.props).every(([k,v])=>attrs.has(k)&&['string','number'].includes(typeof v)&&String(v).length<=20000&&
+        (k!=='data-luba-shade'||!!window.LubaSvgShade696F?.parse(String(v)))));
   }
   function message694K(value){draftMessage694K.textContent=value;feedback695V?.(value);}
   function markSaved694K(){dirty694K=false;state694K.textContent='Uloženo';}
@@ -3376,6 +3416,99 @@
   });
   refreshWidthPanel696E();
 
+  // 696F: Object relief shading with instant preview, one-step Undo and safe
+  // LubaNote export. No extra freehand geometry is added to saved drafts.
+  const shadePanel696F=document.createElement('details');
+  shadePanel696F.className='lnSvgShadePanel696F';
+  shadePanel696F.open=true;
+  shadePanel696F.innerHTML=`<summary>☀ Prostorové stínování <small>světlo + plastický objem</small></summary>
+    <div class="lnSvgShadeBody696F">
+      <label class="lnSvgShadeScope696F">Upravit <select data-shade-scope aria-label="Na které tvary se použije stínování">
+        <option value="selected">Jen vybraný tvar</option><option value="all">Všechny viditelné tvary</option>
+      </select></label>
+      <label class="lnSvgShadeSlider696F">Směr světla <output data-shade-angle>225° · zleva shora</output>
+        <input type="range" data-shade-angle-input min="0" max="360" step="15" value="225" aria-label="Směr světla"></label>
+      <label class="lnSvgShadeSlider696F">Síla světla a stínu <output data-shade-power>60 %</output>
+        <input type="range" data-shade-power-input min="0" max="100" step="5" value="60" aria-label="Síla stínování"></label>
+      <label class="lnSvgShadeSlider696F">Hloubka efektu <output data-shade-depth>55 %</output>
+        <input type="range" data-shade-depth-input min="0" max="100" step="5" value="55" aria-label="Hloubka stínování"></label>
+      <div class="lnSvgShadeInfo696F" data-shade-info role="status">Vyber tvar nástrojem Přesun a pohni posuvníkem.</div>
+      <div class="lnSvgShadeActions696F">
+        <button type="button" data-shade-apply disabled>✓ Použít stínování</button>
+        <button type="button" data-shade-cancel disabled>↶ Zrušit náhled</button>
+        <button type="button" data-shade-remove disabled>✕ Odstranit stínování</button>
+      </div>
+      <small>Stínování vytváří jemný světlý a tmavý přechod uvnitř výplně nebo podél čáry. Není to vržený stín. Náhled a export se aktualizují ihned. Uložení návrhu se mění až po Použít.</small>
+    </div>`;
+  center695R.appendChild(shadePanel696F);
+  const shadeScopeControl696F=shadePanel696F.querySelector('[data-shade-scope]');
+  const shadeAngleControl696F=shadePanel696F.querySelector('[data-shade-angle-input]');
+  const shadePowerControl696F=shadePanel696F.querySelector('[data-shade-power-input]');
+  const shadeDepthControl696F=shadePanel696F.querySelector('[data-shade-depth-input]');
+  const shadeApply696F=shadePanel696F.querySelector('[data-shade-apply]');
+  const shadeCancel696F=shadePanel696F.querySelector('[data-shade-cancel]');
+  const shadeRemove696F=shadePanel696F.querySelector('[data-shade-remove]');
+  const shadeInfo696F=shadePanel696F.querySelector('[data-shade-info]');
+  function shadeUpdateLabels696F(){
+    const angles={0:'zprava',90:'zdola',180:'zleva',225:'zleva shora',270:'shora',315:'zprava shora',360:'zprava'};
+    shadePanel696F.querySelector('[data-shade-angle]').textContent=`${shadeAngle696F}°${angles[shadeAngle696F]?' · '+angles[shadeAngle696F]:''}`;
+    shadePanel696F.querySelector('[data-shade-power]').textContent=`${shadePower696F} %`;
+    shadePanel696F.querySelector('[data-shade-depth]').textContent=`${shadeDepth696F} %`;
+  }
+  refreshShadePanel696F=()=>{
+    if(!shadePanel696F.isConnected)return;
+    const targets=shadeTargetIndices696F();
+    const affected=targets.filter(i=>!!window.LubaSvgShade696F?.parse(String(shapes[i]?.props?.['data-luba-shade']||'')));
+    shadeApply696F.disabled=!shadePreviewActive696F||!targets.length;
+    shadeCancel696F.disabled=!shadePreviewActive696F;
+    shadeRemove696F.disabled=!affected.length;
+    shadeInfo696F.textContent=!targets.length
+      ?(shadeScope696F==='selected'?'Vyber objekt nástrojem Přesun.':'Nemáš žádný tvar s viditelnou čárou nebo výplní.')
+      :`${targets.length} ${targets.length===1?'tvar':'tvarů'} · ${affected.length} již stínováno${shadePreviewActive696F?' · ŽIVÝ NÁHLED: pro trvalou změnu klikni Použít.':''}`;
+  };
+  const shadeChange696F=()=>{
+    shadePreviewActive696F=true;
+    shadeAngle696F=Number(shadeAngleControl696F.value);
+    shadePower696F=Number(shadePowerControl696F.value);
+    shadeDepth696F=Number(shadeDepthControl696F.value);
+    shadeUpdateLabels696F();render();
+  };
+  for(const input of [shadeAngleControl696F,shadePowerControl696F,shadeDepthControl696F])input.addEventListener('input',shadeChange696F);
+  shadeScopeControl696F.addEventListener('change',()=>{
+    shadeScope696F=shadeScopeControl696F.value==='all'?'all':'selected';
+    shadePreviewActive696F=true;render();
+  });
+  shadeApply696F.addEventListener('click',()=>{
+    const targets=shadeTargetIndices696F();
+    if(!shadePreviewActive696F||!targets.length){refreshShadePanel696F();return;}
+    const before=snapshot(),value=shadeSetting696F();
+    for(const i of targets){
+      if(shadePower696F===0)delete shapes[i].props['data-luba-shade'];
+      else shapes[i].props['data-luba-shade']=value;
+    }
+    shadePreviewActive696F=false;
+    if(record(before))announce(`Stínování u ${targets.length} ${targets.length===1?'tvaru':'tvarů'} potvrzeno. Zpět vrátí celou úpravu.`);
+    else announce('Stínování beze změny.');
+    render();
+  });
+  shadeCancel696F.addEventListener('click',()=>{
+    shadePreviewActive696F=false;render();announce('Živý náhled stínování zrušen.');
+  });
+  shadeRemove696F.addEventListener('click',()=>{
+    const before=snapshot();let count=0;
+    for(const i of shadeTargetIndices696F()){
+      if(shapes[i].props['data-luba-shade']){delete shapes[i].props['data-luba-shade'];count++;}
+    }
+    shadePreviewActive696F=false;
+    if(count&&record(before))announce(`Stínování odstraněno z ${count} ${count===1?'tvaru':'tvarů'}.`);
+    else announce('Žádné stínování k odstranění.');
+    render();
+  });
+  shadePanel696F.addEventListener('toggle',()=>{
+    if(!shadePanel696F.open&&shadePreviewActive696F){shadePreviewActive696F=false;render();}
+  });
+  shadeUpdateLabels696F();refreshShadePanel696F();
+
   // 696D: visible live comparison, independent from the edit canvas and draft storage.
   // The slider only changes exported text, never shapes or saved plans.
   const optimizePanel696D=document.createElement('details');
@@ -3417,7 +3550,7 @@
     mini.setAttribute('fill','none');mini.setAttribute('stroke','currentColor');
     mini.setAttribute('stroke-width','1.85');
     mini.setAttribute('stroke-linecap','round');mini.setAttribute('stroke-linejoin','round');
-    for(const part of parts){if(part&&allowed.has(part.tag))mini.appendChild(svgPart(part));}
+    for(const part of parts){if(part&&allowed.has(part.tag))appendWithShade696F(mini,svgPart(part),part.props);}
     target.replaceChildren(mini);
   }
   function updatePreview696D(){
@@ -3425,11 +3558,11 @@
     if(!optimizePanel696D.open||view.hidden)return;
     // 696EB: A width preview changes only rendered clones, so it must be
     // part of the cache key; otherwise the optimization preview looks stale.
-    const key=optimizationLevel696D+':'+widthScale696E+':'+widthScope696E+':'+selected+':'+JSON.stringify(shapes);
+    const key=optimizationLevel696D+':'+widthScale696E+':'+widthScope696E+':'+selected+':'+shadePreviewActive696F+':'+shadeScope696F+':'+shadeSetting696F()+':'+JSON.stringify(shapes);
     if(key===lastPreviewKey696D)return;
     lastPreviewKey696D=key;
     try{
-      const shownShapes=widthPreviewShapes696E();
+      const shownShapes=shadePreviewShapes696F(widthPreviewShapes696E());
       const pendingWidth=widthScale696E!==1&&shownShapes!==shapes;
       previewWidthNote696EB.hidden=!pendingWidth;
       const result=optimizedExport696D();

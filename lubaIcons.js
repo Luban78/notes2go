@@ -470,6 +470,63 @@
     });
   }
 
+  // 696F: Compact, non-destructive relief shading for SVG Studio and LubaNote icons.
+  // data-luba-shade="angle,intensity,depth" stays on the base shape. Gradient
+  // definitions and overlay geometry are derived at render time, never stored.
+  let shadeCounter696F=0;
+  function shadeSettings696F(raw){
+    if(typeof raw!=='string'||!/^\d{1,3},\d{1,3},\d{1,3}$/.test(raw))return null;
+    const [angle,intensity,depth]=raw.split(',').map(Number);
+    return angle<=360&&intensity<=100&&depth<=100?{angle,intensity,depth}:null;
+  }
+  function appendShaded696F(root,element,attributes={}){
+    root.appendChild(element);
+    const setting=shadeSettings696F(String(attributes['data-luba-shade']||''));
+    if(!setting||setting.intensity===0)return;
+    const fill=String(attributes.fill??root.getAttribute('fill')??'none');
+    const stroke=String(attributes.stroke??root.getAttribute('stroke')??'currentColor');
+    if(fill==='none'&&stroke==='none')return;
+    const ns='http://www.w3.org/2000/svg';
+    const elementOf=(name,attributes={})=>{
+      const node=root.ownerDocument.createElementNS(ns,name);
+      for(const [key,value] of Object.entries(attributes))node.setAttribute(key,String(value));
+      return node;
+    };
+    const radians=setting.angle*Math.PI/180;
+    const vx=Math.cos(radians)*50,vy=Math.sin(radians)*50;
+    const percent=n=>`${Math.round(n*1000)/1000}%`;
+    const defs=elementOf('defs',{'data-luba-shade-defs':'696F'});
+    const id='lnShade696F_'+(++shadeCounter696F);
+    const gradient=elementOf('linearGradient',{
+      id,x1:percent(50+vx),y1:percent(50+vy),
+      x2:percent(50-vx),y2:percent(50-vy)
+    });
+    const power=setting.intensity/100,spread=10+setting.depth*.25;
+    const stops=[
+      [0,'#ffffff',power*.75],
+      [spread,'#ffffff',power*.20],
+      [50,'#ffffff',0],
+      [50,'#000000',0],
+      [100-spread,'#000000',power*.23],
+      [100,'#000000',power*.78]
+    ];
+    for(const [offset,c,opacity] of stops)gradient.append(elementOf('stop',{
+      offset:percent(offset),'stop-color':c,'stop-opacity':Number(opacity.toFixed(3))
+    }));
+    defs.append(gradient);
+    const overlay=element.cloneNode(false);
+    overlay.removeAttribute('data-luba-shade');
+    overlay.setAttribute('data-luba-shade-overlay','696F');
+    overlay.setAttribute('pointer-events','none');
+    if(fill!=='none'){
+      overlay.setAttribute('fill',`url(#${id})`);overlay.setAttribute('stroke','none');
+    }else{
+      overlay.setAttribute('fill','none');overlay.setAttribute('stroke',`url(#${id})`);
+    }
+    root.append(defs,overlay);
+  }
+  window.LubaSvgShade696F={append:appendShaded696F,parse:shadeSettings696F};
+
   function vytvorSvgIkonu(nazev, tridy = []) {
     const definice = definiceIkon[nazev];
 
@@ -495,7 +552,7 @@
     definice.forEach(([typ, atributy]) => {
       const cast = document.createElementNS(SVG_NS, typ);
       nastavAtributy(cast, atributy);
-      svg.append(cast);
+      appendShaded696F(svg,cast,atributy);
     });
 
     return svg;

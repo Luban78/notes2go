@@ -679,3 +679,20 @@
 .lnSvgStudio .lnSvgWidthScaleRow696EB button:disabled{opacity:.45;border-color:var(--color-border)}
 .lnSvgStudio .lnSvgOptLiveNote696EB{display:block;color:var(--color-text);border:1px solid var(--color-border);border-radius:8px;padding:8px;font-size:11px;line-height:1.45}
 .lnSvgStudio .lnSvgOptLiveNote696EB[hidden]{display:none!important}
+
+/* 696F: live 3D relief lighting. Edit controls never cover the canvas. */
+.lnSvgStudio .lnSvgShadePanel696F{box-sizing:border-box;min-width:0;width:100%;max-width:650px;margin:9px auto;border:1px solid var(--color-border);border-radius:12px;background:var(--color-surface);color:var(--color-text);overflow:hidden}
+.lnSvgStudio .lnSvgShadePanel696F>summary{cursor:pointer;font-weight:650;padding:11px 13px;min-height:25px;-webkit-tap-highlight-color:transparent}
+.lnSvgStudio .lnSvgShadePanel696F>summary small{font-size:11px;color:var(--color-text-secondary);font-weight:400;margin-left:6px}
+.lnSvgStudio .lnSvgShadeBody696F{display:grid;gap:11px;min-width:0;padding:12px;border-top:1px solid var(--color-border)}
+.lnSvgStudio .lnSvgShadeScope696F{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px}
+.lnSvgStudio .lnSvgShadeScope696F select{min-width:0;width:min(70%,220px);box-sizing:border-box;min-height:38px;font:inherit}
+.lnSvgStudio .lnSvgShadeSlider696F{display:grid;gap:6px;min-width:0;font-size:12px}
+.lnSvgStudio .lnSvgShadeSlider696F output{font-weight:700;color:var(--color-accent,var(--color-text));font-variant-numeric:tabular-nums;margin-left:8px}
+.lnSvgStudio .lnSvgShadeSlider696F input{display:block;width:100%;min-width:0;box-sizing:border-box;height:28px;accent-color:var(--color-accent,#20b6be);touch-action:pan-y}
+.lnSvgStudio .lnSvgShadeInfo696F{font-size:12px;line-height:1.45;color:var(--color-text-secondary);overflow-wrap:anywhere}
+.lnSvgStudio .lnSvgShadeActions696F{display:flex;flex-wrap:wrap;gap:7px}
+.lnSvgStudio .lnSvgShadeActions696F button{flex:1 1 135px;min-height:41px;font:inherit;font-size:12px;font-weight:650;padding:8px 10px;color:var(--color-text);background:var(--color-surface);border:1px solid var(--color-border);border-radius:10px}
+.lnSvgStudio .lnSvgShadeActions696F button[data-shade-apply]:not(:disabled){border-color:var(--color-accent,#20b6be)}
+.lnSvgStudio .lnSvgShadeActions696F button:disabled{opacity:.43}
+.lnSvgStudio .lnSvgShadeBody696F>small{font-size:11px;line-height:1.45;color:var(--color-text-secondary)}
