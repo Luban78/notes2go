@@ -133,17 +133,24 @@
   };
   const volumeTargets696G=(sourceShapes=widthPreviewShapes696E())=>sourceShapes.map((shape,i)=>({shape,i,width:baseWidth696E(shape)}))
     .filter(entry=>entry.width!==null && (volumeScope696G==='all'||entry.i===selected));
-  function volumeDecorated696G(shape){
+  // 696J: Filled objects already have a front face; 696G is for exposed
+  // strokes only. A filled circle must NOT gain an artificial inner ring.
+  function volumeDecorated696G(shape,lightAngle=volumeAngle696G){
+    const p=shape?.props||{};
     const width=baseWidth696E(shape),strength=Math.max(0,Math.min(1,volumeStrength696G/100));
-    if(width===null||strength<=0||shape?.props?.stroke==='none')return [shape];
-    const light=volumeVector696G(volumeAngle696G);
-    const shift=Math.min(.65,Math.max(.06,width*(.14+.18*strength)));
-    const shadowWidth=width*(1.08+.28*strength);
-    const highlightWidth=Math.max(width*.26,width*(.48-.12*strength));
-    const shadow={tag:shape.tag,props:{...shape.props,fill:'none',stroke:'#000',opacity:volumeOpacity696G(shape.props?.opacity,.16+.28*strength),'stroke-width':widthNumber696E(shadowWidth),transform:volumeTransform696G(shape.props?.transform,-light.x*shift,-light.y*shift)}};
-    const base={...shape,props:{...shape.props}};
-    const highlight={tag:shape.tag,props:{...shape.props,fill:'none',stroke:'#fff',opacity:volumeOpacity696G(shape.props?.opacity,.18+.32*strength),'stroke-width':widthNumber696E(highlightWidth),transform:volumeTransform696G(shape.props?.transform,light.x*shift*.85,light.y*shift*.85)}};
-    return [shadow,base,highlight];
+    if(width===null||strength<=0||p.stroke==='none'||(p.fill!=null&&p.fill!=='none'))return [shape];
+    const light=volumeVector696G(lightAngle);
+    const shift=Math.min(.28,Math.max(.035,width*(.045+.055*strength)));
+    const shadow={tag:shape.tag,props:{...p,fill:'none',stroke:'#101018',opacity:volumeOpacity696G(p.opacity,.10+.13*strength),'stroke-width':widthNumber696E(width*.96),transform:volumeTransform696G(p.transform,-light.x*shift,-light.y*shift)}};
+    const highlight={tag:shape.tag,props:{...p,fill:'none',stroke:'#fff',opacity:volumeOpacity696G(p.opacity,.13+.17*strength),'stroke-width':widthNumber696E(width*.33),transform:volumeTransform696G(p.transform,light.x*shift,light.y*shift)}};
+    return [shadow,shape,highlight];
+  }
+  function combinedLightAngle696J(shape){
+    // Follow the visible shading preview, or the saved 696F direction.
+    if(shadePreviewActive696F)return shadeAngle696F;
+    const value=String(shape?.props?.['data-luba-shade']||'');
+    const n=Number(value.split(',')[0]);
+    return value&&Number.isFinite(n)?n:volumeAngle696G;
   }
   function extrudedShapes696H(sourceShapes=widthPreviewShapes696E()){
     if(!extrudeEnabled696H || extrudeDepth696H<=0)return sourceShapes;
@@ -173,31 +180,39 @@
     });
     return out;
   }
+  // 696J: One consistent pipeline: shade the FRONT, construct an opaque
+  // extrusion BEHIND it, then add subtle highlights only to open strokes.
   function effectedShapes696H(sourceShapes=widthPreviewShapes696E()){
     sourceShapes=shadePreviewShapes696F(sourceShapes);
-    // 696G's light applies to the front face, not to every depth layer.
-    if(!extrudeEnabled696H)return volumePreviewShapes696G(sourceShapes);
-    const out=[],vec=volumeVector696G(extrudeAngle696H);
-    const steps=Math.max(3,Math.min(14,Math.ceil(extrudeDepth696H*5)));
+    const out=[];
+    const steps=extrudeEnabled696H&&extrudeDepth696H>0
+      ?Math.max(2,Math.min(9,Math.ceil(extrudeDepth696H*3))):0;
+    const vec=volumeVector696G(extrudeAngle696H);
     sourceShapes.forEach((shape,i)=>{
       if(!shape||!allowed.has(shape.tag))return;
-      const p=shape.props||{},filled=p.fill!=null&&p.fill!=='none';
-      const eligible=(filled||p.stroke!=='none')&&(extrudeScope696H==='all'||i===selected)&&extrudeDepth696H>0;
-      if(eligible){
+      const p=shape.props||{};
+      const filled=p.fill!=null&&p.fill!=='none';
+      const stroked=p.stroke!=='none';
+      const depthOn=steps>0&&(filled||stroked)&&(extrudeScope696H==='all'||i===selected);
+      if(depthOn){
+        // Opaque depth layers prevent ghost discs and stacked translucent shadows.
+        // No 696F shade metadata on side walls: only the front is lit.
         for(let step=steps;step>=1;step--){
           const t=step/steps;
-          out.push({tag:shape.tag,props:{...p,
+          const side={...p,
             transform:volumeTransform696G(p.transform,vec.x*extrudeDepth696H*t,vec.y*extrudeDepth696H*t),
             fill:filled?extrudeColor696H:'none',
-            stroke:p.stroke==='none'?'none':extrudeColor696H,
-            opacity:volumeOpacity696G(p.opacity,.65+.35*(1-t)),
+            stroke:stroked?extrudeColor696H:'none',
             'stroke-linecap':p['stroke-linecap']||'round',
-            'stroke-linejoin':p['stroke-linejoin']||'round'}});
+            'stroke-linejoin':p['stroke-linejoin']||'round'};
+          delete side['data-luba-shade'];
+          delete side.opacity;
+          out.push({tag:shape.tag,props:side});
         }
       }
-      if(volumeEnabled696G&&volumeStrength696G>0&&
-         (volumeScope696G==='all'||i===selected))out.push(...volumeDecorated696G(shape));
-      else out.push(shape);
+      if(volumeEnabled696G&&volumeStrength696G>0&&(volumeScope696G==='all'||i===selected)){
+        out.push(...volumeDecorated696G(shape,combinedLightAngle696J(shape)));
+      }else out.push(shape);
     });
     return out;
   }
@@ -208,7 +223,7 @@
     const output=[];
     sourceShapes.forEach((shape,i)=>{
       if(!shape||!allowed.has(shape.tag))return;
-      if(targetIndices.has(i))output.push(...volumeDecorated696G(shape));
+      if(targetIndices.has(i))output.push(...volumeDecorated696G(shape,combinedLightAngle696J(shape)));
       else output.push(shape);
     });
     return output;
@@ -3563,7 +3578,7 @@
       <div class="lnSvgVolumeRow696G"><span>Síla objemu</span><output data-volume-strength-label></output></div>
       <label class="lnSvgVolumeRange696G"><input data-volume-strength type="range" min="0" max="100" step="5" value="60" aria-label="Síla plastického efektu"></label>
       <div class="lnSvgVolumeInfo696G" data-volume-info role="status">Vyber obrys a zapni náhled.</div>
-      <small>Funguje i na obyčejných čarách bez výplně. Studio přidá světlý lesk a tmavý stín kolem tahu, takže obrys působí plasticky. Kresba se tímto panelem trvale nemění – kopírování i export ale použijí přesně to, co vidíš na plátně.</small>
+      <small>Určeno pro obrysy bez výplně. U vyplněných tvarů se vnitřní prstenec nevytváří; jejich plochu osvětluje Prostorové stínování. Kresba se tímto panelem trvale nemění – kopírování i export ale použijí přesně to, co vidíš na plátně.</small>
     </div>`;
   center695R.appendChild(volumePanel696G);
   const volumeEnabledInput696G=volumePanel696G.querySelector('[data-volume-enabled]');
@@ -3593,7 +3608,7 @@
     }else{
       const widths=targets.map(x=>x.width),min=Math.min(...widths),max=Math.max(...widths);
       const range=min===max?czWidth696E(min):`${czWidth696E(min)}–${czWidth696E(max)}`;
-      volumeInfo696G.textContent=`${targets.length} ${targets.length===1?'tvar':targets.length<=4?'tvary':'tvarů'} · tloušťka ${range} SVG jednotek · export i Kopírovat pro LubaNote převezmou tento plastický náhled.`;
+      volumeInfo696G.textContent=targets.every(x=>x.shape.props?.fill&&x.shape.props.fill!=='none')?'Vyplněné tvary: bez umělého prstence. Pro světlo na ploše použij Prostorové stínování.':`${targets.length} ${targets.length===1?'tvar':targets.length<=4?'tvary':'tvarů'} · tloušťka ${range} SVG jednotek · export i Kopírovat pro LubaNote převezmou tento plastický náhled.`;
     }
   };
   const queueVolumeRender696G=()=>requestAnimationFrame(()=>render());
@@ -3622,7 +3637,7 @@
       <label class="lnSvgVolumeRange696G"><input type="range" data-extrude-angle min="0" max="360" step="5" value="45" aria-label="Směr vysunutí"></label>
       <label class="lnSvgVolumeScope696G">Barva boční stěny <input type="color" data-extrude-color value="#30364b" aria-label="Barva boční stěny"></label>
       <div class="lnSvgVolumeInfo696G" data-extrude-info role="status">Zapni náhled a nastav hloubku.</div>
-      <small>Vysunutí skládá několik posunutých SVG vrstev za původní tvar. Vznikne prostorový dojem, ne skutečná 3D síť. Funguje na čarách i vyplněných tvarech. Kopírovat SVG a Kopírovat pro LubaNote převezmou náhled; zdrojová kresba, body a historie zůstanou nezměněné. Velká hloubka zvětší export.</small>
+      <small>Vysunutí skládá neprůhledné SVG vrstvy za původní tvar. Vznikne prostorový dojem, ne skutečná 3D síť. Funguje na čarách i vyplněných tvarech. Kopírovat SVG a Kopírovat pro LubaNote převezmou náhled; zdrojová kresba, body a historie zůstanou nezměněné. Velká hloubka zvětší export.</small>
     </div>`;
   center695R.appendChild(extrudePanel696H);
   const exEnabled=extrudePanel696H.querySelector('[data-extrude-enabled]');
