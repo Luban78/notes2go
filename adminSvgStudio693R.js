@@ -85,6 +85,13 @@
   let volumeStrength696G=60;
   let volumeAngle696G=315;
   let refreshVolumePanel696G=()=>{};
+  // 696H – vysunutí do hloubky: neinvazivní vrstvy SVG.
+  let extrudeEnabled696H=false;
+  let extrudeScope696H='all';
+  let extrudeDepth696H=1.5;
+  let extrudeAngle696H=45;
+  let extrudeColor696H='#30364b';
+  let refreshExtrudePanel696H=()=>{};
   const baseWidth696E=shape=>{
     if(!shape||!allowed.has(shape.tag)||shape.props?.stroke==='none')return null;
     const n=Number(shape.props?.['stroke-width']??1.85);
@@ -137,6 +144,61 @@
     const base={...shape,props:{...shape.props}};
     const highlight={tag:shape.tag,props:{...shape.props,fill:'none',stroke:'#fff',opacity:volumeOpacity696G(shape.props?.opacity,.18+.32*strength),'stroke-width':widthNumber696E(highlightWidth),transform:volumeTransform696G(shape.props?.transform,light.x*shift*.85,light.y*shift*.85)}};
     return [shadow,base,highlight];
+  }
+  function extrudedShapes696H(sourceShapes=widthPreviewShapes696E()){
+    if(!extrudeEnabled696H || extrudeDepth696H<=0)return sourceShapes;
+    const vec=volumeVector696G(extrudeAngle696H);
+    const steps=Math.max(3,Math.min(14,Math.ceil(extrudeDepth696H*5)));
+    const out=[];
+    sourceShapes.forEach((shape,i)=>{
+      if(!shape||!allowed.has(shape.tag))return;
+      if(extrudeScope696H==='selected'&&i!==selected){out.push(shape);return;}
+      const p=shape.props||{};
+      const filled=p.fill!=null&&p.fill!=='none';
+      const stroked=p.stroke!=='none';
+      if(!filled&&!stroked){out.push(shape);return;}
+      // Far layers first; the original front face is always drawn last.
+      for(let step=steps;step>=1;step--){
+        const t=step/steps;
+        const dx=vec.x*extrudeDepth696H*t,dy=vec.y*extrudeDepth696H*t;
+        const layer={...p,transform:volumeTransform696G(p.transform,dx,dy),
+          fill:filled?extrudeColor696H:'none',
+          stroke:stroked?extrudeColor696H:'none',
+          opacity:volumeOpacity696G(p.opacity,.65+.35*(1-t)),
+          'stroke-linecap':p['stroke-linecap']||'round',
+          'stroke-linejoin':p['stroke-linejoin']||'round'};
+        out.push({tag:shape.tag,props:layer});
+      }
+      out.push(shape);
+    });
+    return out;
+  }
+  function effectedShapes696H(sourceShapes=widthPreviewShapes696E()){
+    // 696G's light applies to the front face, not to every depth layer.
+    if(!extrudeEnabled696H)return volumePreviewShapes696G(sourceShapes);
+    const out=[],vec=volumeVector696G(extrudeAngle696H);
+    const steps=Math.max(3,Math.min(14,Math.ceil(extrudeDepth696H*5)));
+    sourceShapes.forEach((shape,i)=>{
+      if(!shape||!allowed.has(shape.tag))return;
+      const p=shape.props||{},filled=p.fill!=null&&p.fill!=='none';
+      const eligible=(filled||p.stroke!=='none')&&(extrudeScope696H==='all'||i===selected)&&extrudeDepth696H>0;
+      if(eligible){
+        for(let step=steps;step>=1;step--){
+          const t=step/steps;
+          out.push({tag:shape.tag,props:{...p,
+            transform:volumeTransform696G(p.transform,vec.x*extrudeDepth696H*t,vec.y*extrudeDepth696H*t),
+            fill:filled?extrudeColor696H:'none',
+            stroke:p.stroke==='none'?'none':extrudeColor696H,
+            opacity:volumeOpacity696G(p.opacity,.65+.35*(1-t)),
+            'stroke-linecap':p['stroke-linecap']||'round',
+            'stroke-linejoin':p['stroke-linejoin']||'round'}});
+        }
+      }
+      if(volumeEnabled696G&&volumeStrength696G>0&&
+         (volumeScope696G==='all'||i===selected))out.push(...volumeDecorated696G(shape));
+      else out.push(shape);
+    });
+    return out;
   }
   function volumePreviewShapes696G(sourceShapes=widthPreviewShapes696E()){
     if(!volumeEnabled696G||volumeStrength696G<=0)return sourceShapes;
@@ -306,7 +368,7 @@
   function offset(shape) {const t=affine694H(shape);return t?{x:t.x,y:t.y}:{x:0,y:0};}
   function setOffset(shape,x,y) {const t=affine694H(shape);if(t)assignAffine694H(shape,{...t,x,y});}
   function exportSvg() {
-    return `<svg xmlns="${NS}" viewBox="0 0 24 24">${volumePreviewShapes696G(widthPreviewShapes696E()).filter(s => s && allowed.has(s.tag)).map(s => svgPart(s).outerHTML).join('')}</svg>`;
+    return `<svg xmlns="${NS}" viewBox="0 0 24 24">${effectedShapes696H(widthPreviewShapes696E()).filter(s => s && allowed.has(s.tag)).map(s => svgPart(s).outerHTML).join('')}</svg>`;
   }
   // 696C: Efficient LubaNote icon export. This modifies ONLY the clipboard
   // representation; SVG Studio geometry, history and saved drafts stay intact.
@@ -318,7 +380,7 @@
   function exportForLuba696C() {
     // 696EB + 696G: Clipboard export must match the LIVE visible preview,
     // including temporary stroke-width and plastický obrys effects.
-    const source=volumePreviewShapes696G(widthPreviewShapes696E()).filter(s=>s&&allowed.has(s.tag));
+    const source=effectedShapes696H(widthPreviewShapes696E()).filter(s=>s&&allowed.has(s.tag));
     const output=[];
     let merged=0;
     const opaqueStroke696C=col=>/^(?:currentColor|#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?|[a-zA-Z]{1,20})$/.test(String(col||''));
@@ -940,6 +1002,7 @@
   function render() {
     scheduleOptimizationPreview696D();
     refreshVolumePanel696G();
+    refreshExtrudePanel696H();
     // Keep pointer capture on the persistent SVG root while redrawing children.
     svg.replaceChildren();
     for (let i = 0; i <= 24; i += 2) {
@@ -959,7 +1022,7 @@
       svg.appendChild(guide);
     }
     const shownWidth696E=widthPreviewShapes696E();
-    const shownVolume696G=volumePreviewShapes696G(shownWidth696E);
+    const shownVolume696G=effectedShapes696H(shownWidth696E);
     const visible = [...shownVolume696G.filter(s => s && allowed.has(s.tag)), ...(drawing && allowed.has(drawing.tag) ? [drawing] : [])];
     for (const s of visible) {
       const el = svgPart(s); el.style.pointerEvents = 'none'; svg.appendChild(el);
@@ -3510,6 +3573,56 @@
   volumePanel696G.addEventListener('toggle',()=>{refreshVolumePanel696G();});
   refreshVolumePanel696G();
 
+  // 696H: layered pseudo-3D extrusion, editable source paths stay unchanged.
+  const extrudePanel696H=document.createElement('details');
+  extrudePanel696H.className='lnSvgVolumePanel696G';
+  extrudePanel696H.open=true;
+  extrudePanel696H.innerHTML=`<summary>▰ 3D hloubka <small>vysunutí tvarů a čar</small></summary>
+    <div class="lnSvgVolumeBody696G">
+      <label class="lnSvgVolumeEnabled696G"><input type="checkbox" data-extrude-enabled> Zapnout živý náhled</label>
+      <label class="lnSvgVolumeScope696G">Upravit
+        <select data-extrude-scope aria-label="Rozsah 3D hloubky">
+          <option value="all">Všechny tvary</option>
+          <option value="selected">Jen vybraný tvar</option>
+        </select></label>
+      <div class="lnSvgVolumeRow696G"><span>Hloubka</span><output data-extrude-depth-label>1,5</output></div>
+      <label class="lnSvgVolumeRange696G"><input type="range" data-extrude-depth min="0" max="5" step=".25" value="1.5" aria-label="Hloubka vysunutí"></label>
+      <div class="lnSvgVolumeRow696G"><span>Směr vysunutí</span><output data-extrude-angle-label>45°</output></div>
+      <label class="lnSvgVolumeRange696G"><input type="range" data-extrude-angle min="0" max="360" step="5" value="45" aria-label="Směr vysunutí"></label>
+      <label class="lnSvgVolumeScope696G">Barva boční stěny <input type="color" data-extrude-color value="#30364b" aria-label="Barva boční stěny"></label>
+      <div class="lnSvgVolumeInfo696G" data-extrude-info role="status">Zapni náhled a nastav hloubku.</div>
+      <small>Vysunutí skládá několik posunutých SVG vrstev za původní tvar. Vznikne prostorový dojem, ne skutečná 3D síť. Funguje na čarách i vyplněných tvarech. Kopírovat SVG a Kopírovat pro LubaNote převezmou náhled; zdrojová kresba, body a historie zůstanou nezměněné. Velká hloubka zvětší export.</small>
+    </div>`;
+  center695R.appendChild(extrudePanel696H);
+  const exEnabled=extrudePanel696H.querySelector('[data-extrude-enabled]');
+  const exScope=extrudePanel696H.querySelector('[data-extrude-scope]');
+  const exDepth=extrudePanel696H.querySelector('[data-extrude-depth]');
+  const exAngle=extrudePanel696H.querySelector('[data-extrude-angle]');
+  const exColor=extrudePanel696H.querySelector('[data-extrude-color]');
+  const exInfo=extrudePanel696H.querySelector('[data-extrude-info]');
+  refreshExtrudePanel696H=()=>{
+    if(!extrudePanel696H.isConnected)return;
+    exEnabled.checked=extrudeEnabled696H;
+    exScope.value=extrudeScope696H;
+    exDepth.value=String(extrudeDepth696H);
+    exAngle.value=String(extrudeAngle696H);
+    exColor.value=extrudeColor696H;
+    extrudePanel696H.querySelector('[data-extrude-depth-label]').textContent=extrudeDepth696H.toLocaleString('cs-CZ')+' jednotek';
+    extrudePanel696H.querySelector('[data-extrude-angle-label]').textContent=volumeDirectionLabel696G(extrudeAngle696H);
+    const eligible=shapes.filter((s,i)=>s&&allowed.has(s.tag)&&(extrudeScope696H==='all'||i===selected));
+    const layers=extrudeEnabled696H?Math.max(3,Math.min(14,Math.ceil(extrudeDepth696H*5))):0;
+    exInfo.textContent=extrudeEnabled696H
+      ?`${eligible.length} tvarů · ${layers} vrstev hloubky na tvar · původní kresba beze změny`
+      :'Náhled je vypnutý. Zapni ho a nastav směr a hloubku.';
+  };
+  const queueExtrude696H=()=>requestAnimationFrame(()=>render());
+  exEnabled.addEventListener('change',()=>{extrudeEnabled696H=exEnabled.checked;queueExtrude696H();});
+  exScope.addEventListener('change',()=>{extrudeScope696H=exScope.value==='selected'?'selected':'all';queueExtrude696H();});
+  exDepth.addEventListener('input',()=>{extrudeDepth696H=Number(exDepth.value)||0;queueExtrude696H();});
+  exAngle.addEventListener('input',()=>{extrudeAngle696H=Number(exAngle.value)||0;queueExtrude696H();});
+  exColor.addEventListener('input',()=>{extrudeColor696H=exColor.value;queueExtrude696H();});
+  refreshExtrudePanel696H();
+
   // 696D: visible live comparison, independent from the edit canvas and draft storage.
   // The slider only changes exported text, never shapes or saved plans.
   const optimizePanel696D=document.createElement('details');
@@ -3559,11 +3672,11 @@
     if(!optimizePanel696D.open||view.hidden)return;
     // 696EB: A width preview changes only rendered clones, so it must be
     // part of the cache key; otherwise the optimization preview looks stale.
-    const key=optimizationLevel696D+':'+widthScale696E+':'+widthScope696E+':'+volumeEnabled696G+':'+volumeScope696G+':'+volumeStrength696G+':'+volumeAngle696G+':'+selected+':'+JSON.stringify(shapes);
+    const key=optimizationLevel696D+':'+widthScale696E+':'+widthScope696E+':'+volumeEnabled696G+':'+volumeScope696G+':'+volumeStrength696G+':'+volumeAngle696G+':'+extrudeEnabled696H+':'+extrudeScope696H+':'+extrudeDepth696H+':'+extrudeAngle696H+':'+extrudeColor696H+':'+selected+':'+JSON.stringify(shapes);
     if(key===lastPreviewKey696D)return;
     lastPreviewKey696D=key;
     try{
-      const shownShapes=volumePreviewShapes696G(widthPreviewShapes696E());
+      const shownShapes=effectedShapes696H(widthPreviewShapes696E());
       const pendingWidth=widthScale696E!==1;
       previewWidthNote696EB.hidden=!pendingWidth;
       const result=optimizedExport696D();
@@ -3612,8 +3725,8 @@
       for(const panel of [refPanel694R,colors695S,options695S])if(panel)left695R.appendChild(panel);
       // 696E: desktop's width slider stays BESIDE the canvas, not below the fold.
       const beforeWidth696E=right695R.querySelector('.lnSvgStudioPreviewArea693S');
-      if(beforeWidth696E){right695R.insertBefore(widthPanel696E,beforeWidth696E);right695R.insertBefore(volumePanel696G,beforeWidth696E);}
-      else right695R.append(widthPanel696E,volumePanel696G);
+      if(beforeWidth696E){right695R.insertBefore(widthPanel696E,beforeWidth696E);right695R.insertBefore(volumePanel696G,beforeWidth696E);right695R.insertBefore(extrudePanel696H,beforeWidth696E);}
+      else right695R.append(widthPanel696E,volumePanel696G,extrudePanel696H);
     }else{
       // On phones the canvas must be directly below the compact tool palette.
       // The original color/options panels remain available just BELOW canvas.
@@ -3621,7 +3734,7 @@
       if(refPanel694R)center695R.prepend(refPanel694R);
       for(const panel of [colors695S,options695S])if(panel)center695R.appendChild(panel);
       // Phone: keep the existing palette under the board; width slider follows it.
-      center695R.append(widthPanel696E,volumePanel696G);
+      center695R.append(widthPanel696E,volumePanel696G,extrudePanel696H);
     }
   };
   layout695S();
