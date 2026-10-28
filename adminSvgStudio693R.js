@@ -174,6 +174,7 @@
     return out;
   }
   function effectedShapes696H(sourceShapes=widthPreviewShapes696E()){
+    sourceShapes=shadePreviewShapes696F(sourceShapes);
     // 696G's light applies to the front face, not to every depth layer.
     if(!extrudeEnabled696H)return volumePreviewShapes696G(sourceShapes);
     const out=[],vec=volumeVector696G(extrudeAngle696H);
@@ -276,6 +277,32 @@
   let sourceIsEdited693T = false;
   source.addEventListener('input', () => { sourceIsEdited693T = true; });
 
+  // Shader helper is loaded by the icon library before the lazy SVG Studio.
+  function appendWithShade696F(root,element,props){
+    const helper=window.LubaSvgShade696F;
+    if(helper?.append)helper.append(root,element,props);
+    else root.appendChild(element);
+  }
+  let shadePreviewActive696F=false;
+  let shadeScope696F='selected';
+  let shadeAngle696F=225,shadePower696F=60,shadeDepth696F=55;
+  let refreshShadePanel696F=()=>{};
+  const shadeSetting696F=()=>`${shadeAngle696F},${shadePower696F},${shadeDepth696F}`;
+  const shadeTargetIndices696F=()=>shapes.map((shape,index)=>({shape,index})).filter(({shape,index})=>
+    allowed.has(shape.tag)&&(shadeScope696F==='all'||index===selected) &&
+    (shape.props?.fill!=='none'||shape.props?.stroke!=='none')).map(x=>x.index);
+  function shadePreviewShapes696F(parts){
+    if(!shadePreviewActive696F)return parts;
+    const targets=new Set(shadeTargetIndices696F());
+    if(!targets.size)return parts;
+    return parts.map((shape,index)=>{
+      if(!targets.has(index))return shape;
+      const props={...shape.props};
+      if(shadePower696F>0)props['data-luba-shade']=shadeSetting696F();
+      else delete props['data-luba-shade'];
+      return {...shape,props};
+    });
+  }
   const svgPart = o => {
     const el = document.createElementNS(NS, o.tag);
     for (const [name, value] of Object.entries(o.props)) el.setAttribute(name, String(value));
@@ -368,7 +395,10 @@
   function offset(shape) {const t=affine694H(shape);return t?{x:t.x,y:t.y}:{x:0,y:0};}
   function setOffset(shape,x,y) {const t=affine694H(shape);if(t)assignAffine694H(shape,{...t,x,y});}
   function exportSvg() {
-    return `<svg xmlns="${NS}" viewBox="0 0 24 24">${effectedShapes696H(widthPreviewShapes696E()).filter(s => s && allowed.has(s.tag)).map(s => svgPart(s).outerHTML).join('')}</svg>`;
+    const root=document.createElementNS(NS,'svg');
+    root.setAttribute('xmlns',NS);root.setAttribute('viewBox','0 0 24 24');
+    for(const item of effectedShapes696H(widthPreviewShapes696E()).filter(s=>s&&allowed.has(s.tag)))appendWithShade696F(root,svgPart(item),item.props);
+    return root.outerHTML;
   }
   // 696C: Efficient LubaNote icon export. This modifies ONLY the clipboard
   // representation; SVG Studio geometry, history and saved drafts stay intact.
@@ -1003,6 +1033,7 @@
     scheduleOptimizationPreview696D();
     refreshVolumePanel696G();
     refreshExtrudePanel696H();
+    refreshShadePanel696F();
     // Keep pointer capture on the persistent SVG root while redrawing children.
     svg.replaceChildren();
     for (let i = 0; i <= 24; i += 2) {
@@ -1025,7 +1056,7 @@
     const shownVolume696G=effectedShapes696H(shownWidth696E);
     const visible = [...shownVolume696G.filter(s => s && allowed.has(s.tag)), ...(drawing && allowed.has(drawing.tag) ? [drawing] : [])];
     for (const s of visible) {
-      const el = svgPart(s); el.style.pointerEvents = 'none'; svg.appendChild(el);
+      const el = svgPart(s); el.style.pointerEvents = 'none'; appendWithShade696F(svg,el,s.props);
     }
     if (selected >= 0 && shapes[selected] && ['move','eraser','scale','rotate'].includes(tool.value)) {
       const b=shapeBounds694H(shapes[selected]);
@@ -1084,7 +1115,7 @@
     }
     for (const p of [preview, previewLarge]) {
       if (!p) continue;
-      p.replaceChildren(...shownWidth696E.map(svgPart));
+      p.replaceChildren();for(const item of shownVolume696G)appendWithShade696F(p,svgPart(item),item.props);
     }
     if (!sourceIsEdited693T) source.value = exportSvg();
     undoBtn.disabled = history.length === 0;
@@ -3623,6 +3654,99 @@
   exColor.addEventListener('input',()=>{extrudeColor696H=exColor.value;queueExtrude696H();});
   refreshExtrudePanel696H();
 
+  // 696F: Object relief shading with instant preview, one-step Undo and safe
+  // LubaNote export. No extra freehand geometry is added to saved drafts.
+  const shadePanel696F=document.createElement('details');
+  shadePanel696F.className='lnSvgShadePanel696F';
+  shadePanel696F.open=true;
+  shadePanel696F.innerHTML=`<summary>☀ Prostorové stínování <small>světlo + plastický objem</small></summary>
+    <div class="lnSvgShadeBody696F">
+      <label class="lnSvgShadeScope696F">Upravit <select data-shade-scope aria-label="Na které tvary se použije stínování">
+        <option value="selected">Jen vybraný tvar</option><option value="all">Všechny viditelné tvary</option>
+      </select></label>
+      <label class="lnSvgShadeSlider696F">Směr světla <output data-shade-angle>225° · zleva shora</output>
+        <input type="range" data-shade-angle-input min="0" max="360" step="15" value="225" aria-label="Směr světla"></label>
+      <label class="lnSvgShadeSlider696F">Síla světla a stínu <output data-shade-power>60 %</output>
+        <input type="range" data-shade-power-input min="0" max="100" step="5" value="60" aria-label="Síla stínování"></label>
+      <label class="lnSvgShadeSlider696F">Hloubka efektu <output data-shade-depth>55 %</output>
+        <input type="range" data-shade-depth-input min="0" max="100" step="5" value="55" aria-label="Hloubka stínování"></label>
+      <div class="lnSvgShadeInfo696F" data-shade-info role="status">Vyber tvar nástrojem Přesun a pohni posuvníkem.</div>
+      <div class="lnSvgShadeActions696F">
+        <button type="button" data-shade-apply disabled>✓ Použít stínování</button>
+        <button type="button" data-shade-cancel disabled>↶ Zrušit náhled</button>
+        <button type="button" data-shade-remove disabled>✕ Odstranit stínování</button>
+      </div>
+      <small>Stínování vytváří jemný světlý a tmavý přechod uvnitř výplně nebo podél čáry. Není to vržený stín. Náhled a export se aktualizují ihned. Uložení návrhu se mění až po Použít.</small>
+    </div>`;
+  center695R.appendChild(shadePanel696F);
+  const shadeScopeControl696F=shadePanel696F.querySelector('[data-shade-scope]');
+  const shadeAngleControl696F=shadePanel696F.querySelector('[data-shade-angle-input]');
+  const shadePowerControl696F=shadePanel696F.querySelector('[data-shade-power-input]');
+  const shadeDepthControl696F=shadePanel696F.querySelector('[data-shade-depth-input]');
+  const shadeApply696F=shadePanel696F.querySelector('[data-shade-apply]');
+  const shadeCancel696F=shadePanel696F.querySelector('[data-shade-cancel]');
+  const shadeRemove696F=shadePanel696F.querySelector('[data-shade-remove]');
+  const shadeInfo696F=shadePanel696F.querySelector('[data-shade-info]');
+  function shadeUpdateLabels696F(){
+    const angles={0:'zprava',90:'zdola',180:'zleva',225:'zleva shora',270:'shora',315:'zprava shora',360:'zprava'};
+    shadePanel696F.querySelector('[data-shade-angle]').textContent=`${shadeAngle696F}°${angles[shadeAngle696F]?' · '+angles[shadeAngle696F]:''}`;
+    shadePanel696F.querySelector('[data-shade-power]').textContent=`${shadePower696F} %`;
+    shadePanel696F.querySelector('[data-shade-depth]').textContent=`${shadeDepth696F} %`;
+  }
+  refreshShadePanel696F=()=>{
+    if(!shadePanel696F.isConnected)return;
+    const targets=shadeTargetIndices696F();
+    const affected=targets.filter(i=>!!window.LubaSvgShade696F?.parse(String(shapes[i]?.props?.['data-luba-shade']||'')));
+    shadeApply696F.disabled=!shadePreviewActive696F||!targets.length;
+    shadeCancel696F.disabled=!shadePreviewActive696F;
+    shadeRemove696F.disabled=!affected.length;
+    shadeInfo696F.textContent=!targets.length
+      ?(shadeScope696F==='selected'?'Vyber objekt nástrojem Přesun.':'Nemáš žádný tvar s viditelnou čárou nebo výplní.')
+      :`${targets.length} ${targets.length===1?'tvar':'tvarů'} · ${affected.length} již stínováno${shadePreviewActive696F?' · ŽIVÝ NÁHLED: pro trvalou změnu klikni Použít.':''}`;
+  };
+  const shadeChange696F=()=>{
+    shadePreviewActive696F=true;
+    shadeAngle696F=Number(shadeAngleControl696F.value);
+    shadePower696F=Number(shadePowerControl696F.value);
+    shadeDepth696F=Number(shadeDepthControl696F.value);
+    shadeUpdateLabels696F();render();
+  };
+  for(const input of [shadeAngleControl696F,shadePowerControl696F,shadeDepthControl696F])input.addEventListener('input',shadeChange696F);
+  shadeScopeControl696F.addEventListener('change',()=>{
+    shadeScope696F=shadeScopeControl696F.value==='all'?'all':'selected';
+    shadePreviewActive696F=true;render();
+  });
+  shadeApply696F.addEventListener('click',()=>{
+    const targets=shadeTargetIndices696F();
+    if(!shadePreviewActive696F||!targets.length){refreshShadePanel696F();return;}
+    const before=snapshot(),value=shadeSetting696F();
+    for(const i of targets){
+      if(shadePower696F===0)delete shapes[i].props['data-luba-shade'];
+      else shapes[i].props['data-luba-shade']=value;
+    }
+    shadePreviewActive696F=false;
+    if(record(before))announce(`Stínování u ${targets.length} ${targets.length===1?'tvaru':'tvarů'} potvrzeno. Zpět vrátí celou úpravu.`);
+    else announce('Stínování beze změny.');
+    render();
+  });
+  shadeCancel696F.addEventListener('click',()=>{
+    shadePreviewActive696F=false;render();announce('Živý náhled stínování zrušen.');
+  });
+  shadeRemove696F.addEventListener('click',()=>{
+    const before=snapshot();let count=0;
+    for(const i of shadeTargetIndices696F()){
+      if(shapes[i].props['data-luba-shade']){delete shapes[i].props['data-luba-shade'];count++;}
+    }
+    shadePreviewActive696F=false;
+    if(count&&record(before))announce(`Stínování odstraněno z ${count} ${count===1?'tvaru':'tvarů'}.`);
+    else announce('Žádné stínování k odstranění.');
+    render();
+  });
+  shadePanel696F.addEventListener('toggle',()=>{
+    if(!shadePanel696F.open&&shadePreviewActive696F){shadePreviewActive696F=false;render();}
+  });
+  shadeUpdateLabels696F();refreshShadePanel696F();
+
   // 696D: visible live comparison, independent from the edit canvas and draft storage.
   // The slider only changes exported text, never shapes or saved plans.
   const optimizePanel696D=document.createElement('details');
@@ -3664,7 +3788,7 @@
     mini.setAttribute('fill','none');mini.setAttribute('stroke','currentColor');
     mini.setAttribute('stroke-width','1.85');
     mini.setAttribute('stroke-linecap','round');mini.setAttribute('stroke-linejoin','round');
-    for(const part of parts){if(part&&allowed.has(part.tag))mini.appendChild(svgPart(part));}
+    for(const part of parts){if(part&&allowed.has(part.tag))appendWithShade696F(mini,svgPart(part),part.props);}
     target.replaceChildren(mini);
   }
   function updatePreview696D(){
@@ -3672,7 +3796,7 @@
     if(!optimizePanel696D.open||view.hidden)return;
     // 696EB: A width preview changes only rendered clones, so it must be
     // part of the cache key; otherwise the optimization preview looks stale.
-    const key=optimizationLevel696D+':'+widthScale696E+':'+widthScope696E+':'+volumeEnabled696G+':'+volumeScope696G+':'+volumeStrength696G+':'+volumeAngle696G+':'+extrudeEnabled696H+':'+extrudeScope696H+':'+extrudeDepth696H+':'+extrudeAngle696H+':'+extrudeColor696H+':'+selected+':'+JSON.stringify(shapes);
+    const key=optimizationLevel696D+':'+widthScale696E+':'+widthScope696E+':'+volumeEnabled696G+':'+volumeScope696G+':'+volumeStrength696G+':'+volumeAngle696G+':'+extrudeEnabled696H+':'+extrudeScope696H+':'+extrudeDepth696H+':'+extrudeAngle696H+':'+extrudeColor696H+':'+shadePreviewActive696F+':'+shadeScope696F+':'+shadeSetting696F()+':'+selected+':'+JSON.stringify(shapes);
     if(key===lastPreviewKey696D)return;
     lastPreviewKey696D=key;
     try{
@@ -3725,8 +3849,8 @@
       for(const panel of [refPanel694R,colors695S,options695S])if(panel)left695R.appendChild(panel);
       // 696E: desktop's width slider stays BESIDE the canvas, not below the fold.
       const beforeWidth696E=right695R.querySelector('.lnSvgStudioPreviewArea693S');
-      if(beforeWidth696E){right695R.insertBefore(widthPanel696E,beforeWidth696E);right695R.insertBefore(volumePanel696G,beforeWidth696E);right695R.insertBefore(extrudePanel696H,beforeWidth696E);}
-      else right695R.append(widthPanel696E,volumePanel696G,extrudePanel696H);
+      if(beforeWidth696E){right695R.insertBefore(widthPanel696E,beforeWidth696E);right695R.insertBefore(volumePanel696G,beforeWidth696E);right695R.insertBefore(extrudePanel696H,beforeWidth696E);right695R.insertBefore(shadePanel696F,beforeWidth696E);}
+      else right695R.append(widthPanel696E,shadePanel696F,volumePanel696G,extrudePanel696H);
     }else{
       // On phones the canvas must be directly below the compact tool palette.
       // The original color/options panels remain available just BELOW canvas.
@@ -3734,7 +3858,7 @@
       if(refPanel694R)center695R.prepend(refPanel694R);
       for(const panel of [colors695S,options695S])if(panel)center695R.appendChild(panel);
       // Phone: keep the existing palette under the board; width slider follows it.
-      center695R.append(widthPanel696E,volumePanel696G,extrudePanel696H);
+      center695R.append(widthPanel696E,shadePanel696F,volumePanel696G,extrudePanel696H);
     }
   };
   layout695S();
