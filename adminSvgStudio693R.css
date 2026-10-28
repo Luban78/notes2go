@@ -671,3 +671,11 @@
 .lnSvgStudio .lnSvgOptPreviewControls696EA span{flex:1 1 160px;font-size:10px;line-height:1.35;color:var(--color-text-secondary)}
 .lnSvgStudio .lnSvgOptEnlarged696EA .lnSvgOptCompare696D{grid-template-columns:1fr}
 .lnSvgStudio .lnSvgOptEnlarged696EA .lnSvgOptView696D{width:100%;max-height:none;aspect-ratio:1;max-width:480px;margin:0 auto}
+
+/* 696EB: Keep Apply next to the live slider, so users do not miss it on phones. */
+.lnSvgStudio .lnSvgWidthScaleRow696EB{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:space-between;font-size:12px}
+.lnSvgStudio .lnSvgWidthScaleRow696EB output{font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-accent,var(--color-text));margin-left:auto}
+.lnSvgStudio .lnSvgWidthScaleRow696EB button{font:inherit;font-weight:700;font-size:12px;border-radius:8px;border:1px solid var(--color-accent,#21bac2);color:var(--color-text);background:var(--color-surface);padding:6px 12px;min-height:38px;white-space:nowrap}
+.lnSvgStudio .lnSvgWidthScaleRow696EB button:disabled{opacity:.45;border-color:var(--color-border)}
+.lnSvgStudio .lnSvgOptLiveNote696EB{display:block;color:var(--color-text);border:1px solid var(--color-border);border-radius:8px;padding:8px;font-size:11px;line-height:1.45}
+.lnSvgStudio .lnSvgOptLiveNote696EB[hidden]{display:none!important}

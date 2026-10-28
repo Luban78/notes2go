@@ -243,7 +243,9 @@
     'stroke-linecap':'round','stroke-linejoin':'round'
   });
   function exportForLuba696C() {
-    const source=shapes.filter(s=>s&&allowed.has(s.tag));
+    // 696EB: Clipboard export must match the live visible stroke-width preview.
+    // widthPreviewShapes696E returns safe clones; stored drafts are not modified.
+    const source=widthPreviewShapes696E().filter(s=>s&&allowed.has(s.tag));
     const output=[];
     let merged=0;
     const opaqueStroke696C=col=>/^(?:currentColor|#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?|[a-zA-Z]{1,20})$/.test(String(col||''));
@@ -1696,7 +1698,7 @@
   async function copyOptimized696D(){
     const result=optimizedExport696D();
     const copied=await copy(result.text);
-    if(copied)announce(`Kód pro LubaNote zkopírován. Křivky: ${result.originalQ} → ${result.afterSegments}, velikost ${Math.round(result.bytesBefore/102.4)/10} → ${Math.round(result.bytesAfter/102.4)/10} kB. Originál nezměněn.`);
+    if(copied)announce(`Kód pro LubaNote zkopírován. Křivky: ${result.originalQ} → ${result.afterSegments}, velikost ${Math.round(result.bytesBefore/102.4)/10} → ${Math.round(result.bytesAfter/102.4)/10} kB.${widthScale696E!==1?' Zkopírován i živý náhled tloušťky. Chceš-li ji uložit do návrhu, klepni ✓ Použít.':' Originál nezměněn.'}`);
   }
   $('lnSvgCopyLuba693R').addEventListener('click',copyOptimized696D);
   $('lnSvgCopySource693R').addEventListener('click',()=>copy(source.value));
@@ -3292,14 +3294,18 @@
           <option value="all">Všechny tvary</option>
           <option value="selected">Jen vybraný tvar</option>
         </select></label>
-      <label class="lnSvgWidthRange696E"><span>Síla tahu <output data-width-factor>100 % (1×)</output></span>
+      <div class="lnSvgWidthScaleRow696EB">
+        <span>Síla tahu</span>
+        <output data-width-factor>100 % (1×)</output>
+        <button type="button" data-width-apply disabled>✓ Použít</button>
+      </div>
+      <label class="lnSvgWidthRange696E">
         <input data-width-slider type="range" min="40" max="400" step="5" value="100" aria-label="Hromadná změna tloušťky v procentech"></label>
       <div class="lnSvgWidthInfo696E" data-width-info role="status">Otevři ikonu a pohni posuvníkem.</div>
       <div class="lnSvgWidthActions696E">
-        <button type="button" data-width-apply disabled>✓ Použít tloušťku</button>
         <button type="button" data-width-reset disabled>↶ Zrušit náhled</button>
       </div>
-      <small>100 % = původní tloušťka. Při změně zachováme poměry mezi tahy. Nemění výchozí nastavení pro nové tahy, barvy, výplně ani uložený návrh, dokud nepotvrdíš Použít.</small>
+      <small>Posuvník mění kresbu, oba náhledy a kód Kopírovat pro LubaNote ihned. ✓ Použít změnu trvale potvrdí do rozpracované kresby (jedno Zpět). Pro zachování mezi zařízeními potom Uložit a ručně Synchronizovat.</small>
     </div>`;
   center695R.appendChild(widthPanel696E);
   const widthSlider696E=widthPanel696E.querySelector('[data-width-slider]');
@@ -3329,7 +3335,7 @@
         const lo=czWidth696E(min*factor),hi=czWidth696E(max*factor);
         return lo===hi?lo:`${lo}–${hi}`;
       };
-      widthInfo696E.textContent=`${targets.length} ${targets.length===1?'tvar':targets.length<=4?'tvary':'tvarů'} · ${range(1)} → ${range(widthScale696E)} SVG jednotek${widthScale696E===1?' · beze změny':' · pouze náhled'}`;
+      widthInfo696E.textContent=`${targets.length} ${targets.length===1?'tvar':targets.length<=4?'tvary':'tvarů'} · ${range(1)} → ${range(widthScale696E)} SVG jednotek${widthScale696E===1?' · beze změny':' · živý náhled i export · uložíš přes Použít'}`;
     }
   };
   let widthFrame696E=0;
@@ -3385,6 +3391,7 @@
         <div><strong>Optimalizováno</strong><div class="lnSvgOptView696D" data-optimized></div></div>
       </div>
       <div class="lnSvgOptInfo696D" data-stat role="status">Otevři uloženou ikonu a pohybuj posuvníkem.</div>
+      <small class="lnSvgOptLiveNote696EB" data-width-preview-note hidden>👁 Zobrazuje se i aktuální, zatím nepotvrzená tloušťka čar. Kopírování použije přesně tento náhled. Pro trvalé uložení kresby klepni ✓ Použít v panelu Tloušťka čar.</small>
       <button type="button" data-copy-opt>📋 Kopírovat pro LubaNote</button>
       <small class="lnSvgOptSafety696D">Pouze export. Uložená kresba, body, historie i synchronizace zůstávají beze změny. Při vyšší úspoře sleduj drobné detaily.</small>
     </div>`;
@@ -3394,6 +3401,7 @@
   const levelInput696D=optimizePanel696D.querySelector('input[type=range]');
   const levelOutput696D=optimizePanel696D.querySelector('[data-level]');
   const stat696D=optimizePanel696D.querySelector('[data-stat]');
+  const previewWidthNote696EB=optimizePanel696D.querySelector('[data-width-preview-note]');
   const originalView696D=optimizePanel696D.querySelector('[data-original]');
   const optimView696D=optimizePanel696D.querySelector('[data-optimized]');
   const previewSizeButton696EA=optimizePanel696D.querySelector('[data-preview-size]');
@@ -3415,12 +3423,17 @@
   function updatePreview696D(){
     pendingPreview696D=false;
     if(!optimizePanel696D.open||view.hidden)return;
-    const key=optimizationLevel696D+':'+JSON.stringify(shapes);
+    // 696EB: A width preview changes only rendered clones, so it must be
+    // part of the cache key; otherwise the optimization preview looks stale.
+    const key=optimizationLevel696D+':'+widthScale696E+':'+widthScope696E+':'+selected+':'+JSON.stringify(shapes);
     if(key===lastPreviewKey696D)return;
     lastPreviewKey696D=key;
     try{
+      const shownShapes=widthPreviewShapes696E();
+      const pendingWidth=widthScale696E!==1&&shownShapes!==shapes;
+      previewWidthNote696EB.hidden=!pendingWidth;
       const result=optimizedExport696D();
-      miniSvg696D(originalView696D,shapes);
+      miniSvg696D(originalView696D,shownShapes);
       miniSvg696D(optimView696D,result.items);
       const kb=n=>(n/1024).toFixed(1).replace('.',',');
       const saved=result.bytesBefore-result.bytesAfter;
