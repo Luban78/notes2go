@@ -142,6 +142,29 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     });
   }
 
+  /* 697B: Experimental direct link to app battery mode. Android/HyperOS
+   * may not expose this activity; in that case retain verified 697A route.
+   * This changes no battery setting and requests no permission. */
+  @PluginMethod public void openBatterySettings697B(PluginCall call) {
+    getActivity().runOnUiThread(() -> {
+      if (getActivity().isFinishing() || getActivity().isDestroyed()) {
+        call.reject("ACTIVITY_NOT_AVAILABLE");
+        return;
+      }
+      try {
+        Intent target = new Intent("android.settings.APP_BATTERY_SETTINGS",
+            Uri.parse("package:" + getContext().getPackageName()));
+        getActivity().startActivity(target);
+        JSObject result = new JSObject();
+        result.put("route", "app-battery-direct-experimental");
+        call.resolve(result);
+      } catch (Exception ignored) {
+        // Fallback: the per-app battery screen confirmed by user in 697A.
+        openBatterySettings697A(call);
+      }
+    });
+  }
+
   // 692T: Consume only after the original reminders screen actually opened.
   // The same token is retained across a cold start and sync retries.
   @PluginMethod public void getPendingRemoteOpen(PluginCall call) {
