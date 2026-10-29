@@ -53,6 +53,47 @@ final class LubaNoteRemoteAlarm692O {
       pref.edit().putString(DIAG_ROWS_692X,next.toString()).commit();
     } catch (Exception ignored) { /* Diagnostics must NEVER interrupt reminders. */ }
   }
+  /* 696Z: Separate, bounded, near-term forensic trace.
+   * Diagnostic only: NEVER changes an alarm, its PendingIntent or user data.
+   * The existing 692X journal stays untouched; far-future recurring alarms
+   * cannot push the relevant ARM/CANCEL/FIRE evidence out of this trace.
+   * Only technical timestamps, methods, opaque note fingerprints and power
+   * states are stored; never note titles, bodies, secrets or account IDs.
+   */
+  private static final String DIAG_TRACE_696Z = "trace_696Z";
+  private static final long TRACE_FUTURE_696Z = 36L * 60L * 60L * 1000L;
+  private static final long TRACE_PAST_696Z = 3L * 60L * 60L * 1000L;
+  private static void diag696Z(Context ctx, String kind, String id, long at, String detail) {
+    try {
+      final long now=System.currentTimeMillis();
+      if (at>0 && (at<now-TRACE_PAST_696Z || at>now+TRACE_FUTURE_696Z)) return;
+      StringBuilder state=new StringBuilder();
+      android.os.PowerManager power=(android.os.PowerManager)ctx.getSystemService(Context.POWER_SERVICE);
+      if(power!=null) {
+        state.append(" interactive=").append(power.isInteractive());
+        if(Build.VERSION.SDK_INT>=23) {
+          state.append(" idle=").append(power.isDeviceIdleMode());
+          state.append(" exempt=").append(power.isIgnoringBatteryOptimizations(ctx.getPackageName()));
+        }
+        state.append(" saver=").append(power.isPowerSaveMode());
+      }
+      AlarmManager alarms=(AlarmManager)ctx.getSystemService(Context.ALARM_SERVICE);
+      state.append(" exactAllowed=").append(alarms!=null &&
+          (Build.VERSION.SDK_INT<31 || alarms.canScheduleExactAlarms()));
+      String fingerprint=id==null?"-":Integer.toHexString(id.hashCode());
+      String entry=now+" | "+kind+" | noteHash="+fingerprint+
+          " | targetMs="+at+" | delayMs="+(at>0?now-at:-1L)+
+          " | elapsedMs="+android.os.SystemClock.elapsedRealtime()+
+          " | "+detail+state;
+      SharedPreferences pref=ctx.getSharedPreferences(DIAG_PREF_692X,Context.MODE_PRIVATE);
+      JSONArray previous=new JSONArray(pref.getString(DIAG_TRACE_696Z,"[]"));
+      JSONArray next=new JSONArray();
+      for(int i=Math.max(0,previous.length()-119);i<previous.length();i++) next.put(previous.opt(i));
+      next.put(entry);
+      pref.edit().putString(DIAG_TRACE_696Z,next.toString()).commit();
+    } catch(Exception ignored) { /* Tracing must NEVER block alarms. */ }
+  }
+
   static synchronized String diagnosticReport692X(Context ctx) {
     StringBuilder report=new StringBuilder();
     report.append("LUBANOTE ALARM FORENSICS / 692X\n");
@@ -109,6 +150,13 @@ final class LubaNoteRemoteAlarm692O {
       JSONArray rows=new JSONArray(ctx.getSharedPreferences(DIAG_PREF_692X,Context.MODE_PRIVATE).getString(DIAG_ROWS_692X,"[]"));
       for(int i=0;i<rows.length();i++) report.append(rows.optString(i,"")).append("\n");
     } catch(Exception ignored) {report.append("journalUnavailable\n");}
+    report.append("696Z NEAR-TERM TRACE (past 3h / next 36h at event time; max 120 rows):\n");
+    report.append("ARM/CANCEL = FCM/shared-native; LOCAL_INDEX = metadata, not Capacitor receiver proof.\n");
+    try {
+      JSONArray rows=new JSONArray(ctx.getSharedPreferences(DIAG_PREF_692X,Context.MODE_PRIVATE)
+          .getString(DIAG_TRACE_696Z,"[]"));
+      for(int i=0;i<rows.length();i++) report.append(rows.optString(i,"")).append("\n");
+    } catch(Exception ignored) {report.append("696ZTraceUnavailable\n");}
     return report.toString();
   }
 
@@ -125,8 +173,12 @@ final class LubaNoteRemoteAlarm692O {
   }
 
   private static void cancel(Context ctx, String id, long at) {
+    cancel(ctx,id,at,"unspecified");
+  }
+  private static void cancel(Context ctx, String id, long at, String reason) {
     AlarmManager manager = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
     PendingIntent pi = intent(ctx,id,at,PendingIntent.FLAG_NO_CREATE);
+    diag696Z(ctx,"CANCEL",id,at,"reason="+reason+" piExists="+(pi!=null));
     if (pi != null) {
       if (manager != null) manager.cancel(pi);
       pi.cancel();
@@ -164,6 +216,7 @@ final class LubaNoteRemoteAlarm692O {
       method="LEGACY";
     }
     diag692X(ctx,"REMOTE_ARM",id,at,method);
+    diag696Z(ctx,"ARM",id,at,"method="+method);
   }
 
   /* 692V: APK-local alarm index. The browser's numeric notification IDs are
@@ -220,12 +273,17 @@ final class LubaNoteRemoteAlarm692O {
       local.put(Integer.toString(localId),record692V(noteId,localId,at));
       saveLocalIndex692V(ctx,local);
       diag692X(ctx,"LOCAL_ARM_TRACKED",noteId,at,"localId="+localId);
+      diag696Z(ctx,"LOCAL_INDEX_ARM",noteId,at,"localId="+localId+" index_only=true");
       // 692W: never cancel the exact remote alarm merely because a local one exists.
     } catch(Exception ignored) {}
   }
   static synchronized void forgetLocal692V(Context ctx,int localId) {
     if(!validLocalId692V(localId)) return;
     JSONObject local=localIndex692V(ctx);
+    JSONObject previous696Z=local.optJSONObject(Integer.toString(localId));
+    if(previous696Z!=null) diag696Z(ctx,"LOCAL_INDEX_FORGET",
+      previous696Z.optString("noteId",""),previous696Z.optLong("at",0L),
+      "localId="+localId+" index_only=true");
     local.remove(Integer.toString(localId));
     saveLocalIndex692V(ctx,local);
   }
@@ -262,7 +320,10 @@ final class LubaNoteRemoteAlarm692O {
       long at=row.optLong("at",0);
       if(requested.contains(at)) continue;
       int localId=row.optInt("id",0);
-      if(validLocalId692V(localId)) cancelCapacitor(ctx,localId);
+      if(validLocalId692V(localId)) {
+        diag696Z(ctx,"CAPACITOR_CANCEL",noteId,at,"reason=FCM_LOCAL_OBSOLETE localId="+localId);
+        cancelCapacitor(ctx,localId);
+      }
       local.remove(key);
       changed=true;
     }
@@ -309,9 +370,9 @@ final class LubaNoteRemoteAlarm692O {
       String id=keys.optString(i,"");
       JSONObject row=data.optJSONObject(id);
       JSONArray times=row == null ? null : row.optJSONArray("times");
-      if (times != null) for (int j=0;j<times.length();j++) cancel(ctx,id,times.optLong(j,0));
+      if (times != null) for (int j=0;j<times.length();j++) cancel(ctx,id,times.optLong(j,0),"CLEAR_RECORDS");
       JSONArray delivered=row == null ? null : row.optJSONArray("delivered");
-      if (delivered != null) for (int j=0;j<delivered.length();j++) cancel(ctx,id,delivered.optLong(j,0));
+      if (delivered != null) for (int j=0;j<delivered.length();j++) cancel(ctx,id,delivered.optLong(j,0),"CLEAR_RECORDS_DELIVERED");
     }
   }
   /* 692Z-A: Local ordinary note reminders use THE SAME Android PendingIntent
@@ -337,7 +398,7 @@ final class LubaNoteRemoteAlarm692O {
       for(int i=0;i<times.length();i++) {
         long current=times.optLong(i,0L);
         if(current==at) {already=true;future.put(current);}
-        else if(current==oldAt && oldAt>0) cancel(ctx,id,current);
+        else if(current==oldAt && oldAt>0) cancel(ctx,id,current,"LOCAL_TIME_REPLACED");
         else if(current>System.currentTimeMillis()) future.put(current);
       }
       if(!already) future.put(at);
@@ -351,6 +412,7 @@ final class LubaNoteRemoteAlarm692O {
       save(ctx,records);
       schedule(ctx,id,at);
       diag692X(ctx,"UNIFIED_LOCAL_ARM_692Z",id,at,"localId="+localId+" sharedNativePI=true");
+      diag696Z(ctx,"LOCAL_SHARED_SLOT",id,at,"localId="+localId+" sharedNativePI=true");
       return intent(ctx,id,at,PendingIntent.FLAG_NO_CREATE)!=null;
     } catch(Exception e) {
       diag692X(ctx,"UNIFIED_LOCAL_ERROR_692Z",id,at,"native_schedule_failed");
@@ -375,14 +437,14 @@ final class LubaNoteRemoteAlarm692O {
         JSONArray future=new JSONArray();
         if(times!=null) for(int j=0;j<times.length();j++) {
           long value=times.optLong(j,0);
-          if(value==at) cancel(ctx,id,at);
+          if(value==at) cancel(ctx,id,at,"LOCAL_NOTE_CANCELLED");
           else if(value>System.currentTimeMillis()) future.put(value);
         }
         JSONArray delivered=row.optJSONArray("delivered");
         JSONArray keptDelivered=new JSONArray();
         if(delivered!=null) for(int j=0;j<delivered.length();j++) {
           long value=delivered.optLong(j,0);
-          if(value==at) cancel(ctx,id,at);
+          if(value==at) cancel(ctx,id,at,"LOCAL_NOTE_CANCELLED");
           else keptDelivered.put(value);
         }
         row.put("times",future);
@@ -445,6 +507,7 @@ final class LubaNoteRemoteAlarm692O {
     JSONObject records = load(ctx);
     JSONArray keys = records.names();
     if (keys == null) return;
+    int keptCount696Z=0, cancelledCount696Z=0;
     for (int i=0; i<keys.length(); i++) {
       String id = keys.optString(i, "");
       JSONObject row = records.optJSONObject(id);
@@ -455,13 +518,21 @@ final class LubaNoteRemoteAlarm692O {
       if (times != null) for (int j=0; j<times.length(); j++) {
         long at=times.optLong(j,0L);
         if(at==localAt && at>System.currentTimeMillis() &&
-            intent(ctx,id,at,PendingIntent.FLAG_NO_CREATE)!=null) kept.put(at);
-        else cancel(ctx,id,at);
+            intent(ctx,id,at,PendingIntent.FLAG_NO_CREATE)!=null) {
+          kept.put(at);
+          keptCount696Z++;
+          diag696Z(ctx,"HANDOFF_KEEP",id,at,"reason=LOCAL_SHARED_SLOT");
+        } else {
+          cancel(ctx,id,at,"SYNC_HANDOFF");
+          cancelledCount696Z++;
+        }
       }
       try { row.put("times",kept); records.put(id,row); } catch(Exception ignored) {}
     }
     save(ctx, records);
     diag692X(ctx,"FOREGROUND_SYNC_HANDOFF",null,0,"remote_future_alarms_cleared");
+    diag696Z(ctx,"HANDOFF_SUMMARY",null,0,
+      "kept="+keptCount696Z+" cancelled="+cancelledCount696Z);
   }
 
   // Remove only the delivered instance the user acted on (Planner and note
@@ -477,7 +548,7 @@ final class LubaNoteRemoteAlarm692O {
     for(int i=0;i<delivered.length();i++) {
       long t=delivered.optLong(i,0);
       if (t == at || Math.abs(t-at)<=60000L) {
-        cancel(ctx,id,t);
+        cancel(ctx,id,t,"USER_RESOLVED");
         changed=true;
       } else remaining.put(t);
     }
@@ -520,9 +591,9 @@ final class LubaNoteRemoteAlarm692O {
       }
       if (existing!=null) {
         JSONArray previous=existing.optJSONArray("times");
-        if (previous!=null) for (int i=0;i<previous.length();i++) cancel(ctx,id,previous.optLong(i,0));
+        if (previous!=null) for (int i=0;i<previous.length();i++) cancel(ctx,id,previous.optLong(i,0),"FCM_REVISION_REPLACED");
         JSONArray delivered=existing.optJSONArray("delivered");
-        if (delivered!=null) for (int i=0;i<delivered.length();i++) cancel(ctx,id,delivered.optLong(i,0));
+        if (delivered!=null) for (int i=0;i<delivered.length();i++) cancel(ctx,id,delivered.optLong(i,0),"FCM_REVISION_DELIVERED");
       }
       // 692V: Web-side numeric IDs cannot identify APK-side alarms safely.
       // Clean only APK-local records verified to belong to this exact note.
@@ -548,6 +619,7 @@ final class LubaNoteRemoteAlarm692O {
         if(!requested.contains(at)) continue;
         int localId=entry.optInt("id",0);
         if(validLocalId692V(localId)) {
+          diag696Z(ctx,"CAPACITOR_CANCEL",id,at,"reason=FCM_SAME_TARGET localId="+localId);
           cancelCapacitor(ctx,localId);
           local.remove(key);
           localChanged=true;
@@ -572,6 +644,7 @@ final class LubaNoteRemoteAlarm692O {
       // Synchronous persistence so an app kill or reboot cannot discard alarms.
       pref.edit().putString(OWNER,owner).putString(RECORDS,records.toString()).commit();
       diag692X(ctx,"FCM_UPDATE_ACCEPTED",id,0,"scheduled="+safe.length()+" localCancelled="+localChanged);
+      diag696Z(ctx,"FCM_UPDATE",id,0,"scheduled="+safe.length()+" localCancelled="+localChanged);
     } catch (Exception ignored) { /* malformed FCM data must never crash app */ }
   }
 
@@ -592,6 +665,7 @@ final class LubaNoteRemoteAlarm692O {
   static synchronized void fire(Context ctx, String id, long at) {
     if (id==null || at<=0) return;
     diag692X(ctx,"REMOTE_RECEIVER_FIRED",id,at,"native_broadcast");
+    diag696Z(ctx,"FIRED",id,at,"native_broadcast");
     JSONObject records=load(ctx);
     JSONObject row=records.optJSONObject(id);
     JSONArray times=row==null?null:row.optJSONArray("times");
@@ -605,6 +679,7 @@ final class LubaNoteRemoteAlarm692O {
     }
     if (!present) {
       diag692X(ctx,"REMOTE_FIRE_IGNORED",id,at,"not_in_pending_record");
+      diag696Z(ctx,"FIRE_IGNORED",id,at,"reason=NOT_IN_PENDING_RECORD");
       return;
     }
 
@@ -686,6 +761,7 @@ final class LubaNoteRemoteAlarm692O {
     if(Build.VERSION.SDK_INT<26) builder.setDefaults(Notification.DEFAULT_ALL);
     manager.notify(requestId(id,at),builder.build());
     diag692X(ctx,"REMOTE_NOTIFICATION_POSTED",id,at,"notificationId="+requestId(id,at));
+    diag696Z(ctx,"POSTED",id,at,"notificationId="+requestId(id,at));
   }
 }
 
