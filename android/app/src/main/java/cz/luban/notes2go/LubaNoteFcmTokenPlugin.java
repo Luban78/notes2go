@@ -69,6 +69,79 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     });
   }
 
+  /* 697A: Read-only device identity for the Debug Hub battery-settings test.
+   * AOSP cannot reliably read Xiaomi's proprietary "No restrictions" choice. */
+  @PluginMethod public void getBatterySettingsInfo697A(PluginCall call) {
+    JSObject result = new JSObject();
+    result.put("manufacturer", Build.MANUFACTURER);
+    result.put("brand", Build.BRAND);
+    result.put("model", Build.MODEL);
+    result.put("androidApi", Build.VERSION.SDK_INT);
+    call.resolve(result);
+  }
+
+  /* 697A: User-initiated settings navigation ONLY. No new permission, alarm
+   * scheduling, background service or battery exemption request is added.
+   * Xiaomi's OEM Activity is undocumented and may be unavailable on HyperOS;
+   * fail over to a public Android per-app screen, then app details. */
+  @PluginMethod public void openBatterySettings697A(PluginCall call) {
+    getActivity().runOnUiThread(() -> {
+      if (getActivity().isFinishing() || getActivity().isDestroyed()) {
+        call.reject("ACTIVITY_NOT_AVAILABLE");
+        return;
+      }
+      String pkg = getContext().getPackageName();
+      String maker = (String.valueOf(Build.MANUFACTURER) + " " +
+          String.valueOf(Build.BRAND)).toLowerCase(java.util.Locale.ROOT);
+      boolean xiaomi = maker.contains("xiaomi") || maker.contains("redmi") ||
+          maker.contains("poco") || maker.contains("blackshark");
+      String route = "";
+
+      if (xiaomi) {
+        try {
+          Intent target = new Intent();
+          target.setClassName("com.miui.powerkeeper",
+              "com.miui.powerkeeper.ui.HiddenAppsConfigActivity");
+          target.putExtra("package_name", pkg);
+          target.putExtra("package_label", String.valueOf(
+              getContext().getApplicationInfo().loadLabel(getContext().getPackageManager())));
+          getActivity().startActivity(target);
+          route = "xiaomi-powerkeeper";
+        } catch (Exception ignored) { /* OEM screen not available or not exported */ }
+      }
+
+      if (route.isEmpty()) {
+        try {
+          Intent target = new Intent("android.settings.VIEW_ADVANCED_POWER_USAGE_DETAIL",
+              Uri.parse("package:" + pkg));
+          getActivity().startActivity(target);
+          route = "android-app-battery";
+        } catch (Exception ignored) { /* not all Android devices expose this screen */ }
+      }
+
+      if (route.isEmpty()) {
+        try {
+          Intent target = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+              Uri.parse("package:" + pkg));
+          getActivity().startActivity(target);
+          route = "app-details-fallback";
+        } catch (Exception ignored) { /* no supported settings page */ }
+      }
+
+      if (route.isEmpty()) {
+        call.reject("BATTERY_SETTINGS_UNAVAILABLE");
+        return;
+      }
+      JSObject result = new JSObject();
+      result.put("route", route);
+      result.put("manufacturer", Build.MANUFACTURER);
+      result.put("brand", Build.BRAND);
+      result.put("model", Build.MODEL);
+      result.put("androidApi", Build.VERSION.SDK_INT);
+      call.resolve(result);
+    });
+  }
+
   // 692T: Consume only after the original reminders screen actually opened.
   // The same token is retained across a cold start and sync retries.
   @PluginMethod public void getPendingRemoteOpen(PluginCall call) {
