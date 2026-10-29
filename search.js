@@ -323,11 +323,24 @@ searchNotes.addEventListener("blur", () => {
   nastavRozsireneVyhledavani(false);
 });
 
-window.addEventListener("pageshow", () => {
+/* 696U: On a cold load script.js has already rendered the cards once.
+ * pageshow(persisted=false) must not synchronously rebuild the entire list.
+ * BFCache restores and any previously user-activated search still need the
+ * old redraw so stale search filters cannot survive a navigation.
+ */
+window.addEventListener("pageshow", (event) => {
+  const bylAktivniDotaz696U = vyhledavaniAktivovaneUzivatelem;
   vyhledavaniAktivovaneUzivatelem = false;
   nastavRozsireneVyhledavani(false);
   zajistiCisteNeaktivniVyhledavani();
-  prekresliVysledkyVyhledavani();
+  if (event.persisted === true || bylAktivniDotaz696U) {
+    prekresliVysledkyVyhledavani();
+  } else {
+    aktualizujPrazdnyVysledekVyhledavani();
+    window.LubaNoteStartupDiag?.zapis?.(
+      "PERF", "696U SEARCH FIRST PAGESHOW | no duplicate cards render"
+    );
+  }
 });
 
 /*

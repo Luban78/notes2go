@@ -444,11 +444,15 @@
 
     sdilenePoznamky = plnaCache;
 
-    if (typeof window.renderTasks === "function") {
-      window.renderTasks();
-    } else {
-      vykresliSdileneKarty();
-    }
+    /* 696U: The regular notes have not changed. Hydrating the large
+     * shared-note cache may update only collaborator cards; it must not
+     * rebuild every private card and the entire masonry layout again.
+     * The owner-shared icon index is maintained separately in localStorage.
+     */
+    vykresliSdileneKarty();
+    window.LubaNoteStartupDiag?.zapis?.(
+      "PERF", "696U SHARED IDB HYDRATION | shared cards only"
+    );
   }
 
   function ulozCache(notes) {
@@ -1531,7 +1535,22 @@
   }
 
   function nastavUcet(userId) {
-    aktualniUserId = userId || localStorage.getItem(LOCAL_OWNER_KEY) || null;
+    const potvrzenyUserId696U = userId || localStorage.getItem(LOCAL_OWNER_KEY) || null;
+    if (potvrzenyUserId696U && potvrzenyUserId696U === aktualniUserId) {
+      /* 696U: account-active confirms the already displayed owner.
+       * Do not downgrade a full IDB cache to the light one, reopen the
+       * database or trigger a redundant renderTasks of all private cards.
+       * Keep the existing server freshness gate for a real shared refresh.
+       */
+      window.LubaNoteStartupDiag?.zapis?.(
+        "PERF", "696U SHARED SAME ACCOUNT | no duplicate cards render"
+      );
+      if (startUiPripraven && navigator.onLine && muzeAutoRefresh()) {
+        void obnovZeServeru({ tichy: true, vykreslit: true });
+      }
+      return;
+    }
+    aktualniUserId = potvrzenyUserId696U;
     serverovyStavNacten = false;
     sdilenePoznamky = nactiCache();
     lokalniVlastniSdileneId = nactiLokalniVlastniSdileneId(aktualniUserId);
