@@ -1,6 +1,7 @@
 package cz.luban.notes2go;
 
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
@@ -484,6 +485,36 @@ public class MainActivity extends BridgeActivity {
       getBridge().getWebView().evaluateJavascript(javascript, null);
     } catch (RuntimeException ignored) {
       // Na pozadí může být WebView už pozastavené.
+    }
+  }
+
+  /* 696X: System notification tap can return to an ALREADY running singleTask
+   * MainActivity. The 693G intent marker existed, but no onNewIntent handler
+   * delivered it to the WebView, so the snooze sheet never opened.
+   * Only the marker crosses this bridge; the native pending record retains
+   * noteId/at/token and is acknowledged by reminders.js after successful UI. */
+  private void predejKlikNaPripominku696X() {
+    handler685Q.postDelayed(() -> {
+      try {
+        if (getBridge() == null || getBridge().getWebView() == null) return;
+        getBridge().getWebView().evaluateJavascript(
+          "window.dispatchEvent(new Event('lubanote:native-reminder-tap-693G'));",
+          null
+        );
+      } catch (RuntimeException ignored) {
+        // Native pending record stays saved; JS will retry on focus/resume.
+      }
+    }, 80L);
+  }
+
+  @Override
+  protected void onNewIntent(Intent intent) {
+    super.onNewIntent(intent);
+    setIntent(intent);
+    if (intent != null &&
+        intent.getBooleanExtra("lubanote_remote_notification_tap_693G", false)) {
+      intent.removeExtra("lubanote_remote_notification_tap_693G");
+      predejKlikNaPripominku696X();
     }
   }
 

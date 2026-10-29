@@ -141,13 +141,21 @@
       if (!token || (token === lastRemoteOpenToken && Date.now() - lastRemoteOpenSentAt < 30000)) return;
       lastRemoteOpenToken = token;
       lastRemoteOpenSentAt = Date.now();
+      window.LubaNoteStartupDiag?.zapis?.('REM-TAP', '696X REMOTE TAP DELIVERED | pending=true');
       window.dispatchEvent(new CustomEvent('lubanote:remote-reminder-open', {detail: tap}));
     } catch { /* available after native app init */ }
   }
   // 693G: Immediate native handoff for taps while APK is already running.
   // The ordinary focus/pageshow fallback remains for cold starts.
   window.addEventListener('lubanote:native-reminder-tap-693G', () => {
+    // 696X: Direct onNewIntent -> WebView signal for a warm Android tap.
+    window.LubaNoteStartupDiag?.zapis?.('REM-TAP', '696X NATIVE TAP SIGNAL');
     void checkRemoteOpen692T(true);
+  });
+  // 696X: Backup when Android restores focus after the notification shade.
+  // Does not start sync, reschedule alarms, or touch the current note.
+  window.addEventListener('lubanote:android-window-focus', event => {
+    if (event?.detail?.focused === true) void checkRemoteOpen692T(true);
   });
   async function resume() {
     void checkRemoteOpen692T();
