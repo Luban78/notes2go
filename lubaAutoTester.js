@@ -16,7 +16,7 @@
   let performanceHistoryNotice="";
   let generaceBehu=0;
   const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const suiteNames={'live-perf-691CS':'Výkon – živý nativní výběr 691CS','sync-server':'LubaServer – skutečná synchronizační RPC (pouze čtení)', 'editor-sync':'Editor + SYNC – živá regrese editoru a izolované testy synchronizace',svg:'SVG Studio – bezpečné izolované kontroly',notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky – živý editor / native zoom / ořez / velikost / obtékání',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'Všechny dostupné testy – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí V1',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Izolované regrese + pokrytí V1',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
+  const suiteNames={'live-perf-691CS':'Výkon – živý nativní výběr 691CS','sync-server':'LubaServer – skutečná synchronizační RPC (pouze čtení)', 'editor-sync':'Editor + SYNC – živá regrese editoru a izolované testy synchronizace',svg:'SVG Studio – bezpečné izolované kontroly',notes:'Poznámky LOCAL / štítek Testy',extended:'Code / obrázky / jazyky – skutečné moduly',image:'Obrázky – živý editor / native zoom / ořez / velikost / obtékání',i18n:'Šest jazyků – kompletnost balíčků',caret:'Kurzor, úchyty a mazání ToDo dle nastavení',planner:'Planner / opakování (dle nastavení)',editor:'Editor Core V2 dle nastavení',todo:'ToDo Core V2 dle nastavení',all:'LubaNote V1 – Bullet, Editor, ToDo, Planner, E2E, DB a pokrytí (bez SVG Studia)',e2e:'E2E a bezpečnost',sync:'Synchronizace',ui:'Android a ovládání',db:'Databáze na LubaServeru',stability:'Izolované regrese + pokrytí V1',bullet:'Bullet / seznamy – Core V2 dle nastavení + MOVE'};
   function isAllowed(){
     try {return window.LubaNoteAdminTools?.isAllowed?.()===true || document.getElementById('ln-debug-hub')?.hidden===false;}catch(_e){return false;}
   }
@@ -1458,8 +1458,8 @@
   // Distinct statuses prevent static presence checks/manual gestures becoming PASS.
   async function spustitSvgStudio694Y(generace){
     if(generace!==generaceBehu || !running || screen?.hidden)return;
-    // 695A: SVG Studio is absent at startup. Load only for this explicit suite
-    // or Spustit vse; no user drafts are modified by the isolated checks.
+    // 696Y: SVG Studio is loaded only for the explicitly selected 'svg' suite.
+    // No user drafts are modified by isolated checks.
     let loadError695A=null;
     try{await window.LubaNoteAdminLazy695A?.ensureSvgStudio?.();}
     catch(error){loadError695A=error;}
@@ -1527,7 +1527,7 @@
       await spustitSkutecnyEditor690T(generace);
       if(generace===generaceBehu)await spustitViditelneNastroje690Y(generace);
     }
-    if(generace===generaceBehu&&activeSuite==='all')await spustitSvgStudio694Y(generace);
+    // 696Y: SVG Studio není součástí V1. Spustit vše ho nespouští; samostatná sada 'svg' zůstává dostupná.
     if(generace===generaceBehu)await dokoncitBeh();
   }
   async function run(suite){
