@@ -746,6 +746,61 @@
   // Nerozbíhá další HTTP, neshromažďuje texty poznámek ani jejich identifikátory.
   // Po 60 s se automaticky ukončí; nevstupuje do cyklu synchronizace.
   const konecMereni696R = performance.now()+MERE_DO_MS_696R;
+
+  /* 696T: CPU/JS attribution for Android WebView startup stalls.
+   * Buffered Long Animation Frames report actual blocking JS entry points.
+   * Only timings, local script basenames and function names are retained.
+   * No URLs with query strings, user content, sync actions or extra HTTP.
+   * Stop at 30s to keep production cost bounded. Does NOT log per frame.
+   */
+  const nejdelsiFrames696T=[];
+  const LOAF_DO_MS_696T=30000;
+  const MAX_FRAMES_696T=14;
+  let stavLoaf696T='Nepodporováno tímto WebView';
+  function zdrojScriptu696T(url){
+    if(!url)return '(neuvedený zdroj)';
+    try {
+      const u=new URL(String(url),location.href);
+      return (u.pathname.split('/').pop()||'(vložený skript)').slice(0,75);
+    } catch(_){return '(neznámý skript)';}
+  }
+  function nejhorsiSnimky696T(){
+    if(stavLoaf696T.startsWith('Nepodporováno'))return ['Long Animation Frames API: '+stavLoaf696T];
+    if(!nejdelsiFrames696T.length)return ['Zatím žádný vykreslovací snímek delší než 120 ms.'];
+    return nejdelsiFrames696T.map((frame,i)=>{
+      const zdroje=frame.scripts.length
+        ? frame.scripts.map(s=>`${s.ms}ms ${s.file}:${s.fn}${s.pos?' @'+s.pos:''}${s.layout?' (layout '+s.layout+'ms)':''}`).join(' ; ')
+        : 'Bez přiřaditelného JS (může jít o vykreslení, nativní práci nebo neúplné údaje)';
+      return `${i+1}. ${frame.at}ms od startu | snímek ${frame.ms}ms | blokování ${frame.block}ms | skripty: ${zdroje}`;
+    });
+  }
+  try {
+    if(typeof PerformanceObserver==='function' &&
+       PerformanceObserver.supportedEntryTypes?.includes('long-animation-frame')){
+      stavLoaf696T='Dostupné';
+      const observer696T=new PerformanceObserver(list=>{
+        for(const entry of list.getEntries()){
+          const at=Math.round(Number(entry.startTime)||0);
+          const ms=Math.round(Number(entry.duration)||0);
+          if(at>LOAF_DO_MS_696T||ms<120)continue;
+          const scripts=Array.from(entry.scripts||[])
+            .filter(x=>Number(x.duration)>=25)
+            .sort((a,b)=>Number(b.duration)-Number(a.duration))
+            .slice(0,3)
+            .map(x=>({ms:Math.round(x.duration),
+              file:zdrojScriptu696T(x.sourceURL),
+              fn:String(x.sourceFunctionName||x.invokerType||'nepojmenovaný').slice(0,70),
+              pos:Number.isInteger(x.sourceCharPosition)?x.sourceCharPosition:0,
+              layout:Math.round(Number(x.forcedStyleAndLayoutDuration)||0)}));
+          nejdelsiFrames696T.push({at,ms,block:Math.round(Number(entry.blockingDuration)||0),scripts});
+          nejdelsiFrames696T.sort((a,b)=>b.ms-a.ms||a.at-b.at);
+          if(nejdelsiFrames696T.length>MAX_FRAMES_696T)nejdelsiFrames696T.length=MAX_FRAMES_696T;
+        }
+      });
+      observer696T.observe({type:'long-animation-frame',buffered:true});
+      setTimeout(()=>observer696T.disconnect(),LOAF_DO_MS_696T);
+    }
+  }catch(_){stavLoaf696T='Nepodporováno nebo měření nebylo dostupné';}
   try {
     if (typeof PerformanceObserver === 'function' &&
         PerformanceObserver.supportedEntryTypes?.includes('longtask')) {
@@ -1016,6 +1071,10 @@
       `Pomalé snímky: ${ztraceneSnimky696R}, nejdelší prodleva: ${format(nejdelsiMezera696R||null)}`,
       `Dlouhé úlohy: ${dlouheUlohy696R}`,
       "",
+      "696T – NEJDELŠÍ ZÁSEKY: KTERÝ JS SOUBOR A FUNKCE",
+      `Stav měření: ${stavLoaf696T}. Prvních 30 sekund; bez obsahu poznámek.`,
+      ...nejhorsiSnimky696T(),
+      "",
       "DŮLEŽITÉ MÍLNÍKY",
       ...m.klicove.map((z,i)=>`${format(z.t)} | ${z.nazev} | od předchozího ${i?format(z.t-m.klicove[i-1].t):"—"} | ${popis(z)}`),
       "",
@@ -1071,6 +1130,9 @@
     fragment.appendChild(vytvor('h3','',`Plynulost po startu · ${ztraceneSnimky696R} výpadků snímků`));
     fragment.appendChild(vytvor('p','',`Nejdelší výpadek: ${format(nejdelsiMezera696R||null)} · dlouhé úlohy: ${dlouheUlohy696R}. Měření běží jen prvních 60 sekund po startu.`));
     slow.slice(0,16).forEach(z=>fragment.appendChild(vytvor('p','lnStartTraceWarn695O',`${format(z.t)} · ${z.zprava}`)));
+    fragment.appendChild(vytvor('h3','','696T · Který JavaScript brzdí start'));
+    fragment.appendChild(vytvor('p','',`Stav: ${stavLoaf696T}. Zobrazují se nejdelší snímky z prvních 30 sekund, včetně zdroje skriptu, pokud jej WebView poskytne.`));
+    nejhorsiSnimky696T().slice(0,8).forEach(x=>fragment.appendChild(vytvor('p','lnStartTraceWarn695O',x)));
     fragment.appendChild(vytvor('h3','',`Co běželo po UI READY (${m.po.length} záznamů)`));
     const poHlavni=m.po.filter(z=>/^(?:PERF|REM-FAST|REM-COUNT|TAG-VD|END|START|WATCH)$/.test(z.typ));
     poHlavni.slice(0,38).forEach(z=>fragment.appendChild(vytvor('p','lnStartTraceEventSummary696R',`${format(z.t)} · ${z.typ} · ${z.zprava}`)));
