@@ -5672,6 +5672,7 @@ async function dokoncitKartuPodleIndexu(index) {
 }
 
 let casovacOdlozenehoRenderuKaret = null;
+let pocetRenderuKaret696V = 0;
 
 function renderTasks() {
   /*
@@ -5688,15 +5689,27 @@ function renderTasks() {
     return;
   }
 
+  // 696V: Celou sadu karet sestavíme mimo živý DOM a připojíme najednou.
+  // Tím omezíme opakované invalidace layoutu během počátečního renderu.
+  // Drag, swipe, výběr i události karet se připojují na stejné elementy.
+  const zacatekRenderu696V = performance.now();
+  const cisloRenderu696V = ++pocetRenderuKaret696V;
   if (typeof renderTagFilters === "function") {
     renderTagFilters();
     updateTagFilterUI();
   }
-  
+
   pinnedLeft.innerHTML = "";
   pinnedRight.innerHTML = "";
   pinnedCards.hidden = true;
-  
+
+  const leveKarty696V = document.createDocumentFragment();
+  const praveKarty696V = document.createDocumentFragment();
+  const rezimSeznamu696V = localStorage.getItem("cardView") === "list";
+  const desktopKarty696V = window.matchMedia("(min-width: 900px)").matches;
+  let desktopSloupce696V = null;
+  let pocetKaret696V = 0;
+
   const loadedTasks = loadTask();
   // 696Q: jedna paleta CSS pro všechny karty stejné barvy,
   // připravená před vkládáním DOM. Žádná práce s SVG pro každou kartu.
@@ -6029,79 +6042,28 @@ function renderTasks() {
       }
     );
     
-    pinnedCards.hidden = false;
-    
-    const listMode =
-      localStorage.getItem("cardView") === "list";
-    
-    const desktopCardLayout =
-      window.matchMedia("(min-width: 900px)").matches;
-    
     /*
-     * PC GRID:
-     * 4 nezávislé masonry sloupce.
-     * Karty se rozdávají zleva doprava 1 → 2 → 3 → 4.
-     *
-     * PC LIST:
-     * všechny karty zůstávají přímo v pinnedLeft.
-     *
-     * Mobil:
-     * zachováme původní 2 nezávislé sloupce.
+     * 696V: Zachováno původní rozdělení karet a pořadí.
+     * Sloupce i karty se nejdřív skládají v DocumentFragment, takže
+     * uvnitř každé iterace nevzniká práce s živým layoutem stránky.
      */
-    if (
-      desktopCardLayout &&
-      !listMode
-    ) {
-      let desktopSloupce =
-        pinnedLeft.querySelectorAll(
-          ".desktopMasonryColumn"
-        );
-      
-      if (desktopSloupce.length === 0) {
-        for (
-          let i = 0; i < 4; i++
-        ) {
-          const sloupec =
-            document.createElement("div");
-          
-          sloupec.className =
-            "desktopMasonryColumn";
-          
-          pinnedLeft.append(sloupec);
+    if (desktopKarty696V && !rezimSeznamu696V) {
+      if (!desktopSloupce696V) {
+        desktopSloupce696V = [];
+        for (let i = 0; i < 4; i++) {
+          const sloupec = document.createElement("div");
+          sloupec.className = "desktopMasonryColumn";
+          desktopSloupce696V.push(sloupec);
+          leveKarty696V.append(sloupec);
         }
-        
-        desktopSloupce =
-          pinnedLeft.querySelectorAll(
-            ".desktopMasonryColumn"
-          );
       }
-      
-      const pocetKaret =
-        pinnedLeft.querySelectorAll(
-          ".taskCard"
-        ).length;
-      
-      const cisloSloupce =
-        pocetKaret % 4;
-      
-      desktopSloupce[
-        cisloSloupce
-      ].append(loadedCard);
-      
-    } else if (listMode) {
-      pinnedLeft.append(loadedCard);
-      
+      desktopSloupce696V[pocetKaret696V % 4].append(loadedCard);
+    } else if (rezimSeznamu696V || pocetKaret696V % 2 === 0) {
+      leveKarty696V.append(loadedCard);
     } else {
-      const cardCount =
-        pinnedLeft.children.length +
-        pinnedRight.children.length;
-      
-      if (cardCount % 2 === 0) {
-        pinnedLeft.append(loadedCard);
-      } else {
-        pinnedRight.append(loadedCard);
-      }
+      praveKarty696V.append(loadedCard);
     }
+    pocetKaret696V++;
 
     window.LubaNoteCardDrag?.pridejKarte?.(
       loadedCard,
@@ -6207,8 +6169,19 @@ function renderTasks() {
         loadedCard.classList.remove("cardOpening");
       }
     });
-    
+
   });
+  // Jedno připojení do DOM za celou dávku. Prázdný seznam zůstane skrytý.
+  pinnedLeft.append(leveKarty696V);
+  pinnedRight.append(praveKarty696V);
+  pinnedCards.hidden = pocetKaret696V === 0;
+  const delkaRenderu696V = Math.round(performance.now() - zacatekRenderu696V);
+  if (performance.now() < 30000 && cisloRenderu696V <= 16) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "PERF",
+      `696V CARDS BATCH | #${cisloRenderu696V} count=${pocetKaret696V} buildMs=${delkaRenderu696V} mode=${desktopKarty696V ? (rezimSeznamu696V ? "desktop-list" : "desktop-grid") : (rezimSeznamu696V ? "mobile-list" : "mobile-columns")}`
+    );
+  }
 }
 
 
