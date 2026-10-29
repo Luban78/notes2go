@@ -2870,29 +2870,6 @@ async function otestujNastaveniBaterie697A(tlacitko) {
   }
 }
 
-/* 697B: Try one-tap app battery mode, fallback to verified 697A page. */
-async function otestujNastaveniBaterie697B(tlacitko) {
-  const plugin = window.Capacitor?.Plugins?.LubaNoteFcmToken;
-  const puvodni = tlacitko.textContent;
-  if (typeof plugin?.openBatterySettings697B !== "function") {
-    zapis("697B | vyzaduje novou APK");
-    tlacitko.textContent = "Pouze v nové APK";
-    setTimeout(() => { tlacitko.textContent = puvodni; }, 2500);
-    return;
-  }
-  tlacitko.disabled = true;
-  try {
-    tlacitko.textContent = "Otevírám nastavení…";
-    const vysledek = await plugin.openBatterySettings697B();
-    zapis(`697B | otevreno=${vysledek?.route || "nezname"}`);
-  } catch (chyba) {
-    zapis(`697B | chyba=${String(chyba?.message || chyba || "nezname")}`);
-  } finally {
-    tlacitko.disabled = false;
-    setTimeout(() => { tlacitko.textContent = puvodni; }, 2500);
-  }
-}
-
 async function zkopirujReport(tlacitko) {
   const report =
     hlavickaReportu() +
@@ -3002,7 +2979,7 @@ async function zkopirujNavrat685G(tlacitko) {
           <summary>Další reporty a nástroje</summary>
           <div class="ln-dh-report-extras-inner">
             <button type="button" data-dh="copy-alarms-692x">Alarmy Android (692X)</button>
-            <button type="button" data-dh="battery-settings-697b">Baterie – přímý proklik (697B)</button>\n            <button type="button" data-dh="battery-settings-697a">Baterie – test prokliku (697A)</button>
+            <button type="button" data-dh="battery-settings-697a">Baterie – test prokliku (697A)</button>
             <button type="button" data-dh="copy-resume">Návrat aplikace (RESUME)</button>
             <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat celý report</button>
             <button type="button" data-dh="clear">Vymazat zobrazené záznamy</button>
@@ -3169,10 +3146,6 @@ async function zkopirujNavrat685G(tlacitko) {
 
       if (akce === "copy-alarms-692x") {
         void zkopirujAlarmy692X(tlacitko);
-        return;
-      }
-      if (akce === "battery-settings-697b") {
-        void otestujNastaveniBaterie697B(tlacitko);
         return;
       }
       if (akce === "battery-settings-697a") {
