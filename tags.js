@@ -2385,6 +2385,15 @@ async function loadTagsFromSupabase() {
     }
   }
   
+  // 696S: A network refresh often returns exactly the cached palette.
+  // Don't rebuild 70+ cards if names, membership and colors did not change.
+  // Compare presentation fields only; timestamps alone do not alter cards.
+  const podpisBarevKaret696S = list => JSON.stringify((list||[]).map(tag=>[
+    tag?.id??null,tag?.name??'',tag?.color??'system',
+    tag?.is_secret===true,tag?.deleted_at??null
+  ]));
+  const prekreslitKarty696S =
+    podpisBarevKaret696S(syncedTags)!==podpisBarevKaret696S(nacteneStitky);
   syncedTags = nacteneStitky;
   zapisVdBarevStitku("LOAD APPLIED");
 
@@ -2401,10 +2410,11 @@ renderTagFilters();
  * Pokud se štítky načetly až po prvním
  * vykreslení karet, musíme karty překreslit.
  */
-if (
-  typeof renderTasks === "function"
-) {
+if (typeof renderTasks === "function" && prekreslitKarty696S) {
   renderTasks();
+} else if (!prekreslitKarty696S) {
+  window.LubaNoteStartupDiag?.zapis?.('TAG-VD',
+    '696S CARDS RENDER SKIP | same tag colors/names as cache');
 }
 
 zapisVdBarevStitku("LOAD RENDERED");

@@ -196,7 +196,11 @@ async function nactiCekajiciSNative692Z(LocalNotifications) {
     const original=Array.isArray(raw?.notifications)?raw.notifications:[];
     const additional=Array.isArray(data?.notifications)?data.notifications:[];
     const ids=new Set(original.map(row=>Number(row?.id)));
-    return {notifications:[...original,...additional.filter(row=>!ids.has(Number(row?.id)))]};
+    // 696S: The native scheduler stores only the short preview, never
+    // largeBody. Tag native-only rows in RAM so preflight verifies exactly
+    // what that scheduler actually persists. Never tag a Capacitor row.
+    return {notifications:[...original,...additional.filter(row=>!ids.has(Number(row?.id)))
+      .map(row=>({...row,__lubaNativeNoteOrigin696S:true}))]};
   } catch (_) {return raw;}
 }
 
@@ -230,6 +234,25 @@ function muzePouzitSpolecnyAlarm692Z(extra,at) {
   } catch (_) {return false;}
 }
 
+/* 696S: Digest for ordinary Capacitor alarms carrying full largeBody.
+ * Its pending view omits largeBody; proof binds that unseen input to the
+ * same ID/owner/time/title/preview as the visible pending row. */
+async function vytvorOtiskBeznejNotifikace696S(id,title,when,text,extra) {
+  try {
+    if (!globalThis.crypto?.subtle || typeof TextEncoder !== 'function') return null;
+    const at = new Date(when).getTime();
+    if (!Number.isFinite(at)) return null;
+    const normalText = String(text || '').replace(/\s+/g,' ').trim();
+    const payload = JSON.stringify([
+      '696S-ordinary-full-body-v1',Number(id),
+      String(title || 'LubaNote'),at,normalText,
+      String(extra?.taskId || ''),'reminders',true,false,false
+    ]);
+    const dig = await crypto.subtle.digest('SHA-256',new TextEncoder().encode(payload));
+    return 'v1:'+Array.from(new Uint8Array(dig),b=>b.toString(16).padStart(2,'0')).join('');
+  } catch (_) {return null;}
+}
+
 async function scheduleNotification(
   notificationId,
   title,
@@ -248,6 +271,15 @@ async function scheduleNotification(
     String(noteText || "")
       .replace(/\s+/g, " ")
       .trim();
+
+  // 696S: For Capacitor notifications the proof is saved in native extra.
+  // Ordinary native 692Z alarms only schedule a short preview, so the
+  // preflight verifies that preview directly and needs no such proof.
+  if (cleanText.length>140 && extra?.lubanoteType==='note' && extra?.recurring!==true) {
+    const proof696S=await vytvorOtiskBeznejNotifikace696S(
+      notificationId,title,dateTime,cleanText,extra);
+    if(proof696S)extra={...extra,lubanoteOrdinaryProof696S:proof696S};
+  }
 
   const shortText =
     cleanText.length > 140
@@ -1045,6 +1077,9 @@ async function overKompletniNativniAlarmy691AZ(poznamky, pending) {
   }
 
   const zkontrolovane = new Set();
+  // Ordinary long-body Capacitor notes without an old stored proof need
+  // targeted repair, NOT cancellation of unrelated recurring alarms.
+  const opravJenPoznamky696S = [];
   const kratkyText = (s) => {
     const t = String(s || "").replace(/\s+/g, " ").trim();
     return t.length > 140 ? t.slice(0, 140) + "…" : t;
@@ -1091,15 +1126,26 @@ async function overKompletniNativniAlarmy691AZ(poznamky, pending) {
       } else if (new Date(note.date).getTime() > ted.getTime()) {
         if (!note.notificationId) return { ok: false, reason: "note-id-missing" };
         const fullText = String(note.note || "").replace(/\s+/g, " ").trim();
-        // Nativni getPending nezverejnuje largeBody; dlouhy text nelze uplne dokazat.
-        if (fullText.length > 140) return { ok: false, reason: "note-fulltext-unverifiable" };
         if (!overJeden(note.notificationId, note.title || "LubaNote",
           kratkyText(note.note) || "Máš naplánovanou připomínku.",
           new Date(note.date).getTime(), { type: "note", noteId: note.id })) {
-          // 695B: A single ordinary-note mismatch must not invalidate/cancel
-          // hundreds of independently verified recurring alarms. The ID is
-          // used only in memory for a scoped repair; never expose it in logs.
+          // 695B: keep the existing targeted mismatch behavior.
           return { ok: false, reason: "note-alarm-different", targetedNoteId695B: note.id };
+        }
+        if (fullText.length > 140) {
+          const nativeItem696S=pendingById.get(Number(note.notificationId));
+          // Native 692Z stores ONLY the short preview, which was verified by
+          // overJeden. Capacitor stores largeBody but getPending hides it;
+          // a saved digest proves the whole payload without exposing text.
+          if (!nativeItem696S?.__lubaNativeNoteOrigin696S) {
+            const proof696S=await vytvorOtiskBeznejNotifikace696S(
+              note.notificationId,note.title,note.date,note.note,
+              {taskId:note.id});
+            if (!proof696S ||
+                nativeItem696S?.extra?.lubanoteOrdinaryProof696S!==proof696S) {
+              opravJenPoznamky696S.push(note.id);
+            }
+          }
         }
       }
     }
@@ -1128,10 +1174,42 @@ async function overKompletniNativniAlarmy691AZ(poznamky, pending) {
   if (zkontrolovane.size !== pending.length) {
     return { ok: false, reason: "orphan-or-unexpected-native-alarm" };
   }
+  if (opravJenPoznamky696S.length) {
+    return {ok:false,reason:'note-fulltext-unverifiable',
+      targetedNoteIds696S:opravJenPoznamky696S};
+  }
   return { ok: true, checked: zkontrolovane.size };
 }
 
-async function obnovSystemoveNotifikacePoKompletniObnove(
+// 696S: coalesce identical in-flight full restores (load/auth-valid).
+// If data changed during first pass, serialize and re-evaluate the newer
+// snapshot instead of dropping a necessary synchronization.
+let kompletniObnovaBezi696S=null;
+function podpisNotifikacnihoStavu696S(poznamky){
+  let h=2166136261;
+  const data=JSON.stringify((Array.isArray(poznamky)?poznamky:[]).map(n=>[
+    n?.id,n?.isSecret,n?.completed,n?.reminder,n?.notificationId,n?.date,
+    n?.title,n?.note,n?.repeat,n?.plannedItems]));
+  for(let i=0;i<data.length;i++){h^=data.charCodeAt(i);h=Math.imul(h,16777619);}
+  return String(data.length)+':'+String(h>>>0);
+}
+async function obnovSystemoveNotifikacePoKompletniObnove(poznamky){
+  const podpis=podpisNotifikacnihoStavu696S(poznamky);
+  if(kompletniObnovaBezi696S){
+    if(kompletniObnovaBezi696S.podpis===podpis){
+      window.LubaNoteStartupDiag?.zapis?.('REM-GUARD','696S JOIN | same reminder snapshot');
+      return kompletniObnovaBezi696S.promise;
+    }
+    await kompletniObnovaBezi696S.promise;
+    return obnovSystemoveNotifikacePoKompletniObnove(poznamky);
+  }
+  const entry={podpis,promise:null};
+  entry.promise=obnovSystemoveNotifikacePoKompletniObnoveImpl696S(poznamky);
+  kompletniObnovaBezi696S=entry;
+  try{return await entry.promise;}
+  finally{if(kompletniObnovaBezi696S===entry)kompletniObnovaBezi696S=null;}
+}
+async function obnovSystemoveNotifikacePoKompletniObnoveImpl696S(
   poznamky
 ) {
   const LocalNotifications =
@@ -1189,6 +1267,24 @@ async function obnovSystemoveNotifikacePoKompletniObnove(
           window.LubaNoteStartupDiag?.zapis?.(
             "REM-GUARD", `695B TARGETED | ${kontrola.reason} | no-global-reset`
           );
+          return true;
+        }
+      }
+      // 696S: Every other native row was already verified and no orphan
+      // exists. Repair only legacy long-body Capacitor notes with missing
+      // full-content proof. Never reset the valid 32x recurring schedules.
+      if (kontrola.reason==='note-fulltext-unverifiable' &&
+          Array.isArray(kontrola.targetedNoteIds696S) &&
+          kontrola.targetedNoteIds696S.length>0 &&
+          kontrola.targetedNoteIds696S.length<=16) {
+        const owners696S=kontrola.targetedNoteIds696S.map(id=>
+          poznamky.find(n=>n?.id===id && n?.isSecret!==true && n?.completed!==true));
+        if (owners696S.every(Boolean)) {
+          for(const note696S of owners696S)
+            await obnovNotifikacePoznamkyPodleSoukromi(note696S);
+          await obnovIndexLokalnichAlarmu692V();
+          window.LubaNoteStartupDiag?.zapis?.('REM-GUARD',
+            `696S LONG BODY TARGETED | notes=${owners696S.length} | native=${pendingPredObnovou691AZ.length} | no-global-reset`);
           return true;
         }
       }
