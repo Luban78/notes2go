@@ -1373,7 +1373,17 @@ async function zajistiVychoziStitkyVSupabase(
 
     data = vysledek.data || [];
   }
-  
+
+  /* 696W – výchozí štítky se založí opravdu JEN na prázdném účtu.
+   * Dříve se doplňovaly podle chybějícího názvu. Po přejmenování
+   * "Důležité" -> "Tůležité" tak vznikl nový štítek "důležité".
+   * Existence libovolného záznamu (včetně soft-deleted) znamená,
+   * že účet už prošel založením. Nepřidávat výchozí štítky zpět.
+   */
+  if (data.length > 0) {
+    return false;
+  }
+
   const existujiciNazvy = (data || []).map(
     (tag) => tag.name.trim().toLowerCase()
   );
@@ -5120,8 +5130,11 @@ function jeTajnaPoznamka(poznamka) {
 
 
 function getAvailableTags() {
+  /* 696W – původní výchozí názvy nesmějí zůstávat ve výběru
+   * poté, co je uživatel přejmenuje nebo smaže.
+   * Skutečné štítky jsou v syncedTags (getAllTags) a poznámkách.
+   */
   return [...new Set([
-    ...DEFAULT_TAGS,
     ...getAllTags(),
     ...activeTags
   ])];
