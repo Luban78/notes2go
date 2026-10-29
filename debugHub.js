@@ -2840,36 +2840,6 @@ async function zkopirujAlarmy692X(tlacitko) {
   setTimeout(()=>{tlacitko.textContent=puvodni;},1800);
 }
 
-/* 697A: Explicit battery-settings navigation test, accessible only in Debug
- * Hub. No automatic startup prompt and no alarm, permission or data changes. */
-async function otestujNastaveniBaterie697A(tlacitko) {
-  const plugin = window.Capacitor?.Plugins?.LubaNoteFcmToken;
-  const puvodni = tlacitko.textContent;
-  if (typeof plugin?.openBatterySettings697A !== "function") {
-    zapis("697A | nedostupne: vyzaduje novou Android APK");
-    tlacitko.textContent = "Pouze v nové APK";
-    setTimeout(() => { tlacitko.textContent = puvodni; }, 2500);
-    return;
-  }
-  tlacitko.disabled = true;
-  try {
-    const info = await plugin.getBatterySettingsInfo697A?.();
-    if (info) {
-      zapis(`697A | telefon=${info.manufacturer || "?"}/${info.brand || "?"}` +
-        ` | model=${info.model || "?"} | Android API=${info.androidApi || "?"}`);
-    }
-    tlacitko.textContent = "Otevírám nastavení…";
-    const vysledek = await plugin.openBatterySettings697A();
-    zapis(`697A | otevreno=${vysledek?.route || "nezname"}`);
-  } catch (chyba) {
-    zapis(`697A | chyba=${String(chyba?.message || chyba || "nezname")}`);
-    tlacitko.textContent = "Nastavení nedostupné";
-  } finally {
-    tlacitko.disabled = false;
-    setTimeout(() => { tlacitko.textContent = puvodni; }, 2500);
-  }
-}
-
 async function zkopirujReport(tlacitko) {
   const report =
     hlavickaReportu() +
@@ -2979,7 +2949,6 @@ async function zkopirujNavrat685G(tlacitko) {
           <summary>Další reporty a nástroje</summary>
           <div class="ln-dh-report-extras-inner">
             <button type="button" data-dh="copy-alarms-692x">Alarmy Android (692X)</button>
-            <button type="button" data-dh="battery-settings-697a">Baterie – test prokliku (697A)</button>
             <button type="button" data-dh="copy-resume">Návrat aplikace (RESUME)</button>
             <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat celý report</button>
             <button type="button" data-dh="clear">Vymazat zobrazené záznamy</button>
@@ -3146,10 +3115,6 @@ async function zkopirujNavrat685G(tlacitko) {
 
       if (akce === "copy-alarms-692x") {
         void zkopirujAlarmy692X(tlacitko);
-        return;
-      }
-      if (akce === "battery-settings-697a") {
-        void otestujNastaveniBaterie697A(tlacitko);
         return;
       }
       if (akce === "copy-resume") {

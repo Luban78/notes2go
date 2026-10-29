@@ -6705,10 +6705,21 @@ function zobrazHlavniAkceKarty() {
       ? "odepnout"
       : "pripnout";
 
+  /* 697E: Na PC Hotovo/Vratit misto Barva. Opakovanou hotovou
+   * poznamku nelze vratit, stejne jako na mobilnim panelu swipe. */
+  const kartaJeHotova697E = selectedTask?.completed === true;
+  const textDokonceni697E = kartaJeHotova697E ? "Vrátit" : "Hotovo";
+  const ikonaDokonceni697E = kartaJeHotova697E ? "zpet" : "hotovo";
+  const nelzeVratitOpakovani697E = kartaJeHotova697E &&
+    selectedTask?.repeat?.enabled === true;
+  const disabledDokonceni697E = nelzeVratitOpakovani697E
+    ? 'disabled aria-disabled="true" title="Opakovanou poznámku nelze takto vrátit"'
+    : "";
+
   /*
    * PATCH 557 – vrací odladěnou akci Skryté z 538.
-   * Hotovo už je na kartě dostupné swipem doprava, takže akční panel
-   * nesmí znovu zabírat stejné místo duplicitní akcí Hotovo.
+   * Na mobilu zustava Hotovo dostupne gestem, na PC nahrazuje
+   * zastaralou polozku Barva v kontextovem menu.
    * Shared poznámku zatím nelze skrývat private příznakem hiddenAt.
    */
   const skrytiZakazano =
@@ -6770,8 +6781,8 @@ function zobrazHlavniAkceKarty() {
           👁️ ${textSkryti}
         </button>
 
-        <button type="button" data-card-action="color">
-          🎨 Barva
+        <button type="button" data-card-action="complete" ${disabledDokonceni697E}>
+          ${kartaJeHotova697E ? "↩️" : "✅"} ${textDokonceni697E}
         </button>
       `;
     }
@@ -6829,8 +6840,8 @@ function zobrazHlavniAkceKarty() {
         <span class="lubaActionIcon" data-luba-icon="skryte" aria-hidden="true"></span><span>${textSkryti}</span>
       </button>
 
-      <button type="button" class="lubaHasIcon" data-card-action="color">
-        <span class="lubaActionIcon" data-luba-icon="paleta" aria-hidden="true"></span><span>Barva</span>
+      <button type="button" class="lubaHasIcon" data-card-action="complete" ${disabledDokonceni697E}>
+        <span class="lubaActionIcon" data-luba-icon="${ikonaDokonceni697E}" aria-hidden="true"></span><span>${textDokonceni697E}</span>
       </button>
     `;
 
@@ -7248,7 +7259,53 @@ cardMenu.addEventListener("click", async (event) => {
     zobrazPaletuBarevKarty();
     return;
   }
-  
+
+  /* 697E: PC menu invokes the existing completion path directly.
+   * No pointer/swipe events and no new reminder scheduler. */
+  if (action === "complete") {
+    if (window.innerWidth < 900 || actionButton.disabled ||
+        cardMenu.getAttribute("aria-busy") === "true") return;
+
+    const indexKarty697E = selectedCardIndex;
+    const task697E = loadTask()[indexKarty697E];
+    if (!task697E) return;
+    const puvodneHotovo697E = task697E.completed === true;
+    const jeOpakovani697E = task697E.repeat?.enabled === true;
+    // Same as mobile: a completed recurring series cannot be swipe-restored.
+    if (jeOpakovani697E && puvodneHotovo697E) return;
+
+    cardMenu.setAttribute("aria-busy", "true");
+    actionButton.disabled = true;
+    cardMenu.hidden = true;
+    try {
+      if (jeOpakovani697E) {
+        // Invoke the existing recurring-note completion used on Android.
+        const dokonciOpakovani697E = window.LubaNoteReminders
+          ?.prepniDokonceniPolozkyGestem;
+        if (!task697E.id || typeof dokonciOpakovani697E !== "function") {
+          throw new Error("RECURRING_COMPLETION_UNAVAILABLE");
+        }
+        const uspesne697E = await dokonciOpakovani697E(
+          "note", task697E.id, task697E.date || null, "reminders"
+        );
+        if (uspesne697E !== true) {
+          throw new Error("RECURRING_COMPLETION_NOT_STARTED");
+        }
+      } else {
+        const zmenenaKarta697E = await dokoncitKartuPodleIndexu(indexKarty697E);
+        if (!zmenenaKarta697E) throw new Error("NOTE_COMPLETION_FAILED");
+        zobrazPotvrzeniAkce(puvodneHotovo697E ? "Poznámka obnovena" : "Poznámka hotová");
+      }
+    } catch (error) {
+      console.error("LubaNote 697E: Hotovo na PC selhalo", error);
+      zobrazZpravuAplikace?.("Hotovo", "Změnu se nepodařilo provést.");
+    } finally {
+      cardMenu.removeAttribute("aria-busy");
+      actionButton.disabled = false;
+    }
+    return;
+  }
+
   if (action === "select") {
     const idKarty =
       await zajistiStabilniIdKarty(
