@@ -52,6 +52,19 @@
       console.warn('LubaNote 697C: průvodce baterií', error);
     } finally { busy = false; }
   }
+  // 697D: User can reopen battery settings from Settings > Reminders anytime.
+  document.getElementById('openBatterySettings697D')?.addEventListener('click', async () => {
+    try {
+      await plugin.openBatterySettings697A();
+    } catch (error) {
+      console.warn('LubaNote 697D: nelze otevřít nastavení baterie', error);
+      window.otevriPotvrzovaciModalLubaNote?.({
+        nadpis: 'Nastavení baterie',
+        text: 'Systémové nastavení baterie se nepodařilo otevřít.',
+        popisekPotvrdit: 'Rozumím'
+      });
+    }
+  });
   window.addEventListener('lubanote:splash-ready', () => {
     setTimeout(() => { void offer(); }, 2800);
   });
