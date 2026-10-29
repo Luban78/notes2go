@@ -696,7 +696,7 @@
 
 
 
-/* 695O – RX/TX/E: pasivni casova osa od startu az po skutecne zmizeni splash.
+/* 696R / 695O – pasivní časová osa až po konec syncu a startovní zátěž.
  * Pouze diagnostika; nezahajuje sync, necte obsah poznamek a nepridava RPC.
  * Napojeni na jiz existujici LubaNoteStartupDiag (stejna data jako Debug Hub). */
 (() => {
@@ -711,6 +711,10 @@
   let uiPripraveno = false;
   let splashPryc = false;
   let pridanPrirozenyStart = false;
+  const MERE_DO_MS_696R = 60000;
+  let ztraceneSnimky696R = 0;
+  let nejdelsiMezera696R = 0;
+  let dlouheUlohy696R = 0;
   let okno = null;
   let predesleZamereni = null;
   let rozbaleno = false;
@@ -721,8 +725,9 @@
     return { t: Number(m[1]), typ: m[2].trim(), zprava: m[3].trim(), raw: String(radek) };
   }
   function vlozRadek(radek) {
-    if (splashPryc || zaznamy.length >= 520) return;
+    if (zaznamy.length >= 650) return;
     const zaznam = rozparsuj(radek);
+    if (zaznam && zaznam.t > MERE_DO_MS_696R) return;
     if (!zaznam) return;
     zaznamy.push(zaznam);
     if (zaznam.typ === "EVENT" && zaznam.zprava.includes("UI READY / splash-ready")) {
@@ -736,6 +741,43 @@
   }
   diagnostika.radky().forEach(vlozRadek);
   diagnostika.priRadku(vlozRadek);
+
+  // 696R: Krátké a bezpečné měření zaseknutí hlavního vlákna během startu.
+  // Nerozbíhá další HTTP, neshromažďuje texty poznámek ani jejich identifikátory.
+  // Po 60 s se automaticky ukončí; nevstupuje do cyklu synchronizace.
+  const konecMereni696R = performance.now()+MERE_DO_MS_696R;
+  try {
+    if (typeof PerformanceObserver === 'function' &&
+        PerformanceObserver.supportedEntryTypes?.includes('longtask')) {
+      const observer = new PerformanceObserver(list => {
+        for (const entry of list.getEntries()) {
+          if (performance.now()>konecMereni696R || entry.duration<180 || dlouheUlohy696R>=35)continue;
+          dlouheUlohy696R++;
+          diagnostika.zapis('PERF',`LONG TASK | ${Math.round(entry.duration)}ms`);
+        }
+      });
+      observer.observe({entryTypes:['longtask']});
+      setTimeout(()=>observer.disconnect(),MERE_DO_MS_696R);
+    }
+  }catch(_){/* Feature nepodporována: zbytek diagnostiky běží dál. */}
+  let posledniFrame696R=0;
+  function frame696R(now) {
+    if(now>konecMereni696R)return;
+    if (document.visibilityState==='visible') {
+      if (posledniFrame696R) {
+        const mezera=now-posledniFrame696R;
+        if(mezera>=350 && ztraceneSnimky696R<24) {
+          ztraceneSnimky696R++;
+          nejdelsiMezera696R=Math.max(nejdelsiMezera696R,mezera);
+          diagnostika.zapis('PERF',`FRAME GAP | ${Math.round(mezera)}ms`);
+        }
+      }
+      posledniFrame696R=now;
+    } else posledniFrame696R=0;
+    requestAnimationFrame(frame696R);
+  }
+  if(typeof requestAnimationFrame==='function')requestAnimationFrame(frame696R);
+
 
   // Sledujeme skutecne odstraneni splash: UI READY je pripravenost dat,
   // ale pismo, 2x requestAnimationFrame a CSS transition mohou trvat dale.
@@ -902,9 +944,33 @@
     const hotovo = zaznamy.find(z => z.typ === "EVENT" && z.zprava.includes("UI READY / splash-ready"));
     const odstraneno = zaznamy.find(z => z.zprava.includes("695O SPLASH REMOVED"));
     const skryvani = zaznamy.find(z => z.zprava.includes("695O SPLASH HIDE START"));
+    const syncEnd = zaznamy.find(z => z.typ==='END' && /^START SYNC FLOW \|/.test(z.zprava));
+    const remindersEnd = zaznamy.find(z => z.typ==='END' && /^SYNC TAIL RECURRING REMINDERS \|/.test(z.zprava));
+    const tagsEnd = zaznamy.find(z => z.typ==='TAG-VD' && z.zprava.startsWith('LOAD RENDERED'));
     const limit = hotovo?.t ?? Number.POSITIVE_INFINITY;
     const pred = zaznamy.filter(z => z.t <= limit);
-    return { hotovo, odstraneno, skryvani, pred, klicove:vyberKlicove(zaznamy.filter(z => z.t <= (odstraneno?.t ?? limit))) };
+    const po = hotovo ? zaznamy.filter(z => z.t > hotovo.t) : [];
+    return { hotovo, odstraneno, skryvani, syncEnd, remindersEnd, tagsEnd, pred, po,
+      klicove:vyberKlicove(zaznamy.filter(z => z.t <= (syncEnd?.t ?? odstraneno?.t ?? limit))) };
+  }
+  const delkaMs696R=radek=>{
+    const odpoved=/\|\s*(\d+)\s*ms\s*$/.exec(radek?.zprava||'');
+    return odpoved?Number(odpoved[1]):null;
+  };
+  function souhrn696R() {
+    const m=model();
+    return {
+      uiReadyMs:m.hotovo?.t??null,
+      splashRemovedMs:m.odstraneno?.t??null,
+      syncEndMs:m.syncEnd?.t??null,
+      syncDurationMs:delkaMs696R(m.syncEnd),
+      remindersDurationMs:delkaMs696R(m.remindersEnd),
+      tagsRenderedMs:m.tagsEnd?.t??null,
+      biggestFrameGapMs:nejdelsiMezera696R||null,
+      frameGapCount:ztraceneSnimky696R,
+      longTaskCount:dlouheUlohy696R,
+      elapsedMs:zaznamy.at(-1)?.t??null
+    };
   }
 
   function vytvorOkno() {
@@ -945,12 +1011,19 @@
       "LUBANOTE 695O – ÚPLNÝ ČASOVÝ ROZBOR STARTU",
       `Obsah připraven (UI READY): ${hotovo}`,
       `Splash odstraněn: ${videt}`,
+      `Sync dokončen: ${format(m.syncEnd?.t)} (trvání ${format(delkaMs696R(m.syncEnd))})`,
+      `Opakované připomínky: ${format(delkaMs696R(m.remindersEnd))}`,
+      `Pomalé snímky: ${ztraceneSnimky696R}, nejdelší prodleva: ${format(nejdelsiMezera696R||null)}`,
+      `Dlouhé úlohy: ${dlouheUlohy696R}`,
       "",
       "DŮLEŽITÉ MÍLNÍKY",
       ...m.klicove.map((z,i)=>`${format(z.t)} | ${z.nazev} | od předchozího ${i?format(z.t-m.klicove[i-1].t):"—"} | ${popis(z)}`),
       "",
       "VŠECHNY DIAGNOSTICKÉ UDÁLOSTI DO UI READY",
       ...m.pred.map(z=>`${z.raw}\n  Co to znamená: ${popis(z)}`),
+      "",
+      "UDÁLOSTI PO UI READY (AŽ DO 60 SEKUND)",
+      ...m.po.map(z=>z.raw),
       "",
       "Úseky mohou běžet souběžně. Čas mezi milníky není vždy dobou práce jediného kroku."
     ].join("\n");
@@ -966,7 +1039,9 @@
     const cards=vytvor("div","lnStartTraceCards695O");
     for(const [label,value] of [
       ["Obsah připraven (UI READY)",m.hotovo?format(m.hotovo.t):"čeká…"],
-      ["Splash skutečně zmizel",m.odstraneno?format(m.odstraneno.t):m.skryvani?"probíhá…":"čeká…"]
+      ["Splash skutečně zmizel",m.odstraneno?format(m.odstraneno.t):m.skryvani?"probíhá…":"čeká…"],
+      ["Konec synchronizace",m.syncEnd?format(m.syncEnd.t):"běží…"],
+      ["Obnova opakovaných připomínek",m.remindersEnd?format(delkaMs696R(m.remindersEnd)):"čeká/běží…"]
     ]) {
       const box=vytvor("div","lnStartTraceCard695O");
       box.append(vytvor("b","",value),vytvor("span","",label));
@@ -992,6 +1067,13 @@
     });
     if(!m.klicove.length)list.append(vytvor("p","","Záznam startu zatím není k dispozici."));
     fragment.appendChild(list);
+    const slow=m.po.filter(z=>z.typ==='PERF');
+    fragment.appendChild(vytvor('h3','',`Plynulost po startu · ${ztraceneSnimky696R} výpadků snímků`));
+    fragment.appendChild(vytvor('p','',`Nejdelší výpadek: ${format(nejdelsiMezera696R||null)} · dlouhé úlohy: ${dlouheUlohy696R}. Měření běží jen prvních 60 sekund po startu.`));
+    slow.slice(0,16).forEach(z=>fragment.appendChild(vytvor('p','lnStartTraceWarn695O',`${format(z.t)} · ${z.zprava}`)));
+    fragment.appendChild(vytvor('h3','',`Co běželo po UI READY (${m.po.length} záznamů)`));
+    const poHlavni=m.po.filter(z=>/^(?:PERF|REM-FAST|REM-COUNT|TAG-VD|END|START|WATCH)$/.test(z.typ));
+    poHlavni.slice(0,38).forEach(z=>fragment.appendChild(vytvor('p','lnStartTraceEventSummary696R',`${format(z.t)} · ${z.typ} · ${z.zprava}`)));
 
     const mezery=[];
     for(let i=1;i<m.klicove.length;i++){
@@ -1050,6 +1132,6 @@
     });
   }
   window.LubaNoteStartTimeline695O = Object.freeze({
-    otevri, model, report, parse: rozparsuj
+    otevri, model, report, parse: rozparsuj, souhrn: souhrn696R
   });
 })();

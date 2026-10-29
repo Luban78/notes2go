@@ -51,13 +51,44 @@
   updateNightIcon693M();
   night.addEventListener('click', () => baseNightToggle?.click());
   const overlay=document.createElement('div');overlay.className='lnSyncModal693J';overlay.hidden=true;
-  overlay.innerHTML='<div class="lnSyncBox693J" role="dialog" aria-modal="true" aria-label="Stav synchronizace"><header><span>Stav LubaNote</span><button type="button" data-close>✕</button></header><div data-state></div><div data-usage>Načítám využití prostoru…</div><div class="lnSyncTrack693J"><span data-fill></span></div><div data-free></div></div>';
+  overlay.innerHTML='<div class="lnSyncBox693J" role="dialog" aria-modal="true" aria-label="Stav synchronizace"><header><span>Stav LubaNote</span><button type="button" data-close>✕</button></header><div data-state></div><section data-start-times aria-label="Časy startu" style="font-size:12px;line-height:1.6;border:1px solid var(--color-border);padding:10px;border-radius:10px;margin:10px 0;"><strong>Start a synchronizace</strong><div data-times-summary>Načítám časové údaje…</div><button type="button" data-start-trace style="display:block;width:100%;margin-top:8px;">⏱ Podrobný rozbor a kopírování</button></section><div data-usage>Načítám využití prostoru…</div><div class="lnSyncTrack693J"><span data-fill></span></div><div data-free></div></div>';
   document.body.appendChild(overlay);
   const close=()=>{overlay.hidden=true;};overlay.querySelector('[data-close]').addEventListener('click',close);
   overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
   const fmt=n=>Number.isFinite(n)?`${(n/1048576).toLocaleString('cs-CZ',{maximumFractionDigits:2})} MB`:'—';
+  const timeFmt696R=ms=>Number.isFinite(ms)?`${(ms/1000).toLocaleString('cs-CZ',{maximumFractionDigits:2})} s`:'čeká…';
+  const renderTimes696R=()=>{
+    if(overlay.hidden)return;
+    const metric=window.LubaNoteStartTimeline695O?.souhrn?.();
+    const box=overlay.querySelector('[data-times-summary]');
+    if(!metric){box.textContent='Časový rozbor zatím není dostupný.';return;}
+    box.replaceChildren();
+    for(const [name,value] of [
+      ['UI READY',timeFmt696R(metric.uiReadyMs)],
+      ['Splash zmizel',timeFmt696R(metric.splashRemovedMs)],
+      ['Sync dokončen',timeFmt696R(metric.syncEndMs)],
+      ['Délka syncu',timeFmt696R(metric.syncDurationMs)],
+      ['Obnova opakovaných připomínek',timeFmt696R(metric.remindersDurationMs)],
+      ['Nejdelší výpadek vykreslování',timeFmt696R(metric.biggestFrameGapMs)]
+    ]){
+      const line=document.createElement('div');line.textContent=`${name}: ${value}`;
+      box.appendChild(line);
+    }
+  };
+  overlay.querySelector('[data-start-trace]').addEventListener('click',()=>{
+    overlay.hidden=true;
+    if(window.LubaNoteStartTimeline695O?.otevri)window.LubaNoteStartTimeline695O.otevri();
+  });
+  let cekaNaCasy696R=false;
+  window.addEventListener('lubanote:startup-diag',()=>{
+    // Překreslení max. jednou za snímek a pouze v otevřeném modalu.
+    if(overlay.hidden||cekaNaCasy696R)return;
+    cekaNaCasy696R=true;
+    requestAnimationFrame(()=>{cekaNaCasy696R=false;renderTimes696R();});
+  });
   sync.addEventListener('click',async()=>{
     overlay.hidden=false;overlay.querySelector('[data-state]').textContent=states[state()]||states.pending;
+    renderTimes696R();
     const used=overlay.querySelector('[data-usage]'),free=overlay.querySelector('[data-free]'),fill=overlay.querySelector('[data-fill]');
     used.textContent='Zjišťuji využití prostoru…';free.textContent='';fill.style.width='0%';
     if(state()==='local'){used.textContent='Pouze místní uložení – bez cloudové kvóty';return;}

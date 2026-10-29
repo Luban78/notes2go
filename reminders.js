@@ -967,7 +967,10 @@ async function obnovNotifikaceOpakovanychPoznamek() {
   let overeno = 0, obnoveno = 0;
   const duvody = Object.create(null);
   const ted = new Date();
+  let pozice696R = 0;
   for (const note of opakovanePoznamky) {
+    const index696R=++pozice696R;
+    const zacatekNote696R=performance.now();
     let shoda = false, duvod = pending ? "unverified" : "native-pending-unavailable";
     if (pending) {
       try {
@@ -978,14 +981,21 @@ async function obnovNotifikaceOpakovanychPoznamek() {
         duvod = "verification-error";
       }
     }
+    const casOvereni696R=Math.round(performance.now()-zacatekNote696R);
     if (shoda) {
       overeno++;
+      if(casOvereni696R>=150) window.LubaNoteStartupDiag?.zapis?.(
+        'REM-DIAG',`note ${index696R}/${opakovanePoznamky.length} | verify=${casOvereni696R}ms | exact`
+      );
       continue;
     }
     duvody[duvod] = (duvody[duvod] || 0) + 1;
     obnoveno++;
     // Original implementation unchanged for missing/stale/unverifiable alarms.
     await obnovNotifikacePoznamkyPodleSoukromi(note);
+    window.LubaNoteStartupDiag?.zapis?.(
+      'REM-DIAG',`note ${index696R}/${opakovanePoznamky.length} | verify=${casOvereni696R}ms | restore=${Math.round(performance.now()-zacatekNote696R-casOvereni696R)}ms | reason=${duvod}`
+    );
   }
   const prehled = Object.entries(duvody).map(([k, v]) => k + ":" + v).join(",") || "none";
   window.LubaNoteStartupDiag?.zapis?.(
