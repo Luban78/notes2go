@@ -264,17 +264,22 @@
     }
   }
 
+  /* 697N: MEDIA key acquisition must never await LOCAL cache repair.
+   * LOCAL vault hydration needs E2E Root; Root needs MEDIA key;
+   * repair itself awaits LOCAL cache hydration. Awaiting it here creates
+   * a startup deadlock after the first encrypted LOCAL note is saved.
+   * The repair retains its own error handling and runs asynchronously. */
   async function pripravMediaKlicZeZarizeni() {
     if (jeKlicDostupny()) {
-      await opravLokalniSifrovanaMediaPoZiskaniKlice();
+      void opravLokalniSifrovanaMediaPoZiskaniKlice();
       return true;
     }
     if (pripravaMediaKlicePromise) return pripravaMediaKlicePromise;
 
     pripravaMediaKlicePromise = nactiMediaKlicZeZarizeni()
-      .then(async (ok) => {
+      .then((ok) => {
         if (ok === true) {
-          await opravLokalniSifrovanaMediaPoZiskaniKlice();
+          void opravLokalniSifrovanaMediaPoZiskaniKlice();
         }
         return ok;
       })
