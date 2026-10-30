@@ -7918,9 +7918,9 @@ window.addEventListener(
    --------------------------------------------------
    Cíl:
    - nová NE-SECRET poznámka nesmí zmizet při reloadu / uspání WebView,
-   - draft se průběžně ukládá do IndexedDB, nikoli do localStorage,
+   - draft se průběžně ukládá jako E2E ciphertext do IndexedDB,
    - po návratu aplikace nabídneme Obnovit / Zahodit,
-   - Secret obsah se do této plaintext recovery vrstvy NIKDY neukládá.
+   - Secret obsah se do recovery vrstvy NIKDY neukládá.
    ========================================== */
 
 const LUBANOTE_DRAFT_DB_NAME =
@@ -7937,6 +7937,7 @@ let draftUlozeniTimer = null;
 let posledniUlozenyOtiskDraftu = null;
 let probihaObnovaDraftu = false;
 let draftObnovaNabidnuta = false;
+let zablokovanyDraftOwner697M = null;
 
 function otevriDraftDb() {
   if (draftDbPromise) {
@@ -8020,7 +8021,7 @@ async function nactiPersistovanyDraftPoznamky() {
   try {
     const db = await otevriDraftDb();
 
-    return await new Promise(
+    const ulozeny = await new Promise(
       (resolve, reject) => {
         const tx = db.transaction(
           LUBANOTE_DRAFT_STORE,
@@ -8038,7 +8039,23 @@ async function nactiPersistovanyDraftPoznamky() {
           reject(request.error);
       }
     );
+    if (!ulozeny) {
+      zablokovanyDraftOwner697M = null;
+      return null;
+    }
+    if (ulozeny.localEncrypted697M === 1) {
+      const vault = window.LubaNoteLocalVault697M;
+      if (!vault?.decryptDraft) throw new Error('697M: missing encrypted draft reader');
+      const draft = await vault.decryptDraft(ulozeny);
+      zablokovanyDraftOwner697M = null;
+      return draft;
+    }
+    // Recovery drafts written before 697M remain readable; new writes are ciphertext.
+    zablokovanyDraftOwner697M = null;
+    return ulozeny;
   } catch (error) {
+    // Never overwrite or discard ciphertext we could not decrypt.
+    zablokovanyDraftOwner697M = ownerUserId;
     console.warn(
       "LubaNote draft: recovery draft se nepodařilo načíst.",
       error
@@ -8059,6 +8076,9 @@ async function smazPersistovanyDraftPoznamky(
   try {
     const existujici =
       await nactiPersistovanyDraftPoznamky();
+    if (zablokovanyDraftOwner697M === ownerUserId) {
+      throw new Error('697M: šifrovaný koncept nelze bezpečně načíst');
+    }
 
     if (
       draftId &&
@@ -8213,6 +8233,15 @@ async function ulozPersistovanyDraftPoznamky() {
   }
 
   try {
+    if (zablokovanyDraftOwner697M === snapshot.ownerUserId) {
+      throw new Error('697M: šifrovaný koncept je nedostupný; přepis zablokován');
+    }
+    const vault = window.LubaNoteLocalVault697M;
+    if (!vault?.encryptDraft) throw new Error('697M: missing encrypted draft writer');
+    const zabezpecenyDraft = await vault.encryptDraft(snapshot);
+    if (ziskejVlastnikaDraftu() !== snapshot.ownerUserId) {
+      throw new Error('697M: draft account changed');
+    }
     const db = await otevriDraftDb();
 
     await new Promise((resolve, reject) => {
@@ -8222,7 +8251,7 @@ async function ulozPersistovanyDraftPoznamky() {
       );
 
       tx.objectStore(LUBANOTE_DRAFT_STORE)
-        .put(snapshot);
+        .put(zabezpecenyDraft);
 
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);

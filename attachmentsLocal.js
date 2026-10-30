@@ -247,12 +247,17 @@
   }
 
   async function ulozZaznamDoSkladu(sklad, zaznam) {
+    // 697M: centralni fail-closed guard. Ani nova servisni zapisova cesta
+    // nesmi obejit sifrovani originalniho obrazku v IndexedDB.
+    const zabezpeceny = sklad === SKLAD_PRILOH && zaznam?.blob instanceof Blob
+      ? await zasifrujBlobZaznam697M(zaznam)
+      : zaznam;
     return provedTransakci(
       sklad,
       "readwrite",
       (objectStore) => {
-        objectStore.put(zaznam);
-        return zaznam;
+        objectStore.put(zabezpeceny);
+        return zabezpeceny;
       },
       "Lokální přílohu se nepodařilo uložit."
     );
@@ -320,13 +325,19 @@
       ...(zmeny && typeof zmeny === "object" ? zmeny : {}),
       id: puvodni.id
     };
+    if (zmeny?.blob instanceof Blob && zmeny.blob !== puvodni.blob) {
+      delete novy.localEncrypted697M;
+      delete novy.encryptedIv;
+      delete novy.encryptedKeyId;
+      delete novy.localOwner697M;
+    }
 
     await ulozZaznamDoSkladu(
       SKLAD_PRILOH,
       novy
     );
 
-    return novy;
+    return nactiPrilohu(id);
   }
 
   async function zaradUpload({
@@ -570,11 +581,68 @@
   }
 
 
+  async function zasifrujBlobZaznam697M(zaznam) {
+    if (!(zaznam?.blob instanceof Blob)) return zaznam;
+    if (zaznam.localEncrypted697M === 1 && zaznam.blob.type === "application/octet-stream") {
+      return zaznam;
+    }
+    const vault = window.LubaNoteLocalVault697M;
+    if (!vault?.encryptBlob) throw new Error("697M: chybi lokalni sifrovani priloh");
+    const sifrovane = await vault.encryptBlob(zaznam.blob, zaznam.id);
+    return {
+      ...zaznam,
+      blob: sifrovane.encryptedBlob,
+      encryptedIv: sifrovane.encryptedIv,
+      encryptedKeyId: sifrovane.encryptedKeyId,
+      localEncrypted697M: 1,
+      localOwner697M: localStorage.getItem("lubanoteLocalOwnerUserId") || ""
+    };
+  }
+
   async function nactiPrilohu(id) {
-    return nactiZaznamZeSkladu(
-      SKLAD_PRILOH,
-      id
+    const zaznam = await nactiZaznamZeSkladu(SKLAD_PRILOH, id);
+    if (zaznam?.localEncrypted697M !== 1) return zaznam;
+    const owner = String(localStorage.getItem("lubanoteLocalOwnerUserId") || "");
+    if (!owner || zaznam.localOwner697M !== owner) {
+      throw new Error("697M: priloha patri jinemu lokalnimu uctu");
+    }
+    return window.LubaNoteLocalVault697M.decryptBlob(zaznam);
+  }
+
+  async function sifrujStarePrilohy697M() {
+    const owner = String(localStorage.getItem("lubanoteLocalOwnerUserId") || "");
+    if (!owner || !window.LubaNoteLocalVault697M?.getStatus?.().ready) {
+      return { ok: false, reason: "vault_not_ready" };
+    }
+    const mojeId = new Set(
+      (typeof nactiBeznePoznamkyZUloziste === "function"
+        ? nactiBeznePoznamkyZUloziste() : [])
+        .filter(note => note?.id).map(note => String(note.id))
     );
+    const db = await otevriDatabazi();
+    const records = await new Promise((resolve, reject) => {
+      const req = db.transaction(SKLAD_PRILOH, "readonly")
+        .objectStore(SKLAD_PRILOH).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error || new Error("697M attachment scan failed"));
+    });
+    let encrypted = 0;
+    let skipped = 0;
+    for (const zaznam of records) {
+      if (zaznam.localEncrypted697M === 1 || !(zaznam.blob instanceof Blob)) continue;
+      if (!mojeId.has(String(zaznam.noteId))) { skipped++; continue; }
+      const sifrovany = await zasifrujBlobZaznam697M(zaznam);
+      const overeny = await window.LubaNoteLocalVault697M.decryptBlob(sifrovany);
+      const a = new Uint8Array(await zaznam.blob.arrayBuffer());
+      const b = new Uint8Array(await overeny.blob.arrayBuffer());
+      if (a.length !== b.length || !a.every((x, i) => x === b[i])) {
+        throw new Error("697M: overeni sifrovane prilohy selhalo – puvodni zaznam zustal");
+      }
+      // Previous plaintext is replaced only after AES-GCM verification.
+      await ulozZaznamDoSkladu(SKLAD_PRILOH, sifrovany);
+      encrypted++;
+    }
+    return { ok: true, encrypted, skipped };
   }
 
   async function smazPrilohu(id) {
@@ -786,6 +854,7 @@
     ulozStinovouPrilohuZDataUrl,
     ulozCloudovouStinovouPrilohuZDataUrl,
     ulozObnovenouPrilohuDoCache,
+    sifrujStarePrilohy697M,
     nactiPrilohu,
     upravPrilohu,
     smazPrilohu,

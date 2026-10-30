@@ -341,7 +341,9 @@ function nactiSavedTaskSeStabilnimiId() {
       try {
         localStorage.setItem(
           REGULAR_TASK_STORAGE_KEY,
-          JSON.stringify(normalizovane)
+          JSON.stringify(window.LubaNoteLocalVault697M?.getStatus?.().ready
+            ? normalizovane.filter(task => task?.storageScope !== "local")
+            : normalizovane)
         );
       } catch (error) {
         if (error?.name !== "QuotaExceededError") {
@@ -681,13 +683,22 @@ function nactiZdrojSavedTaskProCteni() {
       (task) => task?.isSecret === true
     );
 
-    return [
+    return slucLocalVault697M([
       ...klonujDataPoznamek(plnaCacheBeznychPoznamek),
       ...legacyTajne
-    ];
+    ]);
   }
 
-  return lokalni;
+  return slucLocalVault697M(lokalni);
+}
+
+function slucLocalVault697M(zaznamy) {
+  const chranene = window.LubaNoteLocalVault697M?.snapshot?.();
+  if (!Array.isArray(chranene)) return zaznamy;
+  const mapa = new Map(chranene.map(note => [String(note.id), note]));
+  const ostatni = (Array.isArray(zaznamy) ? zaznamy : []).filter(note =>
+    !note?.id || !mapa.has(String(note.id)));
+  return [...ostatni, ...chranene];
 }
 
 function odlehciHtmlBeznePoznamkyProLocalStorage(html) {
@@ -824,7 +835,7 @@ function zaradOverflowUlozeniBeznychPoznamek(
   return frontaUkladaniBeznychPoznamek;
 }
 
-async function pripravOverflowCacheBeznychPoznamek() {
+async function pripravOverflowCachePouze697M() {
   if (!jeOverflowRezimBeznychPoznamek()) {
     stavPlneCacheBeznychPoznamek = "local";
     return false;
@@ -887,6 +898,31 @@ async function pripravOverflowCacheBeznychPoznamek() {
   return slibPripravyBeznychPoznamek;
 }
 
+/* 697M: Pred odemknutim UI pripravit i zasifrovany LOCAL trezor. */
+async function pripravOverflowCacheBeznychPoznamek() {
+  const overflow = await pripravOverflowCachePouze697M();
+  const vault = window.LubaNoteLocalVault697M;
+  if (!vault) throw new Error("697M LOCAL VAULT MODULE MISSING");
+  const surovaCache = (jeOverflowRezimBeznychPoznamek() &&
+      Array.isArray(plnaCacheBeznychPoznamek))
+    ? plnaCacheBeznychPoznamek
+    : nactiPoleZLocalStorage(REGULAR_TASK_STORAGE_KEY);
+  const puvodni = surovaCache
+    .filter(note => note?.storageScope === "local" && note.isSecret !== true);
+  const stav = await vault.prepare(puvodni);
+  if (stav.migrated) {
+    // 697M: ciphertext zapsan a zpet overen. Teprve pak odstranit plaintext
+    // z bezne cache a lehke localStorage kopie.
+    const vsechny = nactiZdrojSavedTaskProCteni()
+      .filter(note => note && note.isSecret !== true);
+    const ok = await ulozBeznePoznamkyPrimo(vsechny, true, true);
+    if (ok !== true) throw new Error("697M LOCAL VAULT: plaintext cleanup failed");
+    window.LubaNoteStartupDiag?.zapis?.("LOCAL-VAULT", `697M MIGRATED | notes=${stav.count}`);
+  }
+  // encrypted LOCAL items have to be rendered after hydration as well
+  return overflow === true || stav.count > 0 || stav.migrated;
+}
+
 function cekajNaUlozeniBeznychPoznamek() {
   return frontaUkladaniBeznychPoznamek;
 }
@@ -922,12 +958,36 @@ function nactiStarePlaintextTajnePoznamky() {
     .filter((task) => task?.isSecret === true);
 }
 
-function ulozBeznePoznamkyPrimo(
+async function ulozBeznePoznamkyPrimo(
   tasks,
-  zachovatLegacyTajne = true
+  zachovatLegacyTajne = true,
+  nahraditLocal = false
 ) {
-  const beznePoznamky = (Array.isArray(tasks) ? tasks : [])
+  const vsechnyBezne = (Array.isArray(tasks) ? tasks : [])
     .filter((task) => task && task.isSecret !== true);
+  const lokalni = vsechnyBezne.filter(note => note.storageScope === "local");
+  const beznePoznamky = vsechnyBezne.filter(note => note.storageScope !== "local");
+  const vault = window.LubaNoteLocalVault697M;
+  if (!vault) throw new Error("697M LOCAL VAULT MISSING");
+  let predchoziLocal = vault.snapshot();
+  if (!predchoziLocal) {
+    // Safe bootstrap before an unexpected early save; legacy LOCAL data
+    // must be encrypted before rewriting savedTask.
+    const legacy = nactiZdrojSavedTaskProCteni()
+      .filter(note => note?.storageScope === "local" && note.isSecret !== true);
+    const pripraveno = await vault.prepare(legacy);
+    if (!pripraveno.ready && (legacy.length || lokalni.length)) {
+      throw new Error("697M LOCAL VAULT NOT READY");
+    }
+    predchoziLocal = vault.snapshot() || [];
+  }
+  // Cloud-only reconciliation must not accidentally wipe device-only notes.
+  // Full user saves explicitly replace the entire LOCAL subset.
+  const kUlozeni = (lokalni.length || nahraditLocal)
+    ? lokalni : predchoziLocal;
+  if (kUlozeni.length || predchoziLocal.length || nahraditLocal) {
+    await vault.save(kUlozeni);
+  }
 
   /*
    * Staré plaintext tajné poznámky nesmíme při běžném syncu smazat
@@ -1632,7 +1692,7 @@ function saveAllTasks(tasks) {
   /* Plaintext tajné poznámky se do savedTask nikdy nezapisují. */
   const ulozeniBeznychPoznamek =
     Promise.resolve(
-      ulozBeznePoznamkyPrimo(beznePoznamky)
+      ulozBeznePoznamkyPrimo(beznePoznamky, true, true)
     ).catch((error) => {
       console.error(
         "Lokální uložení běžných poznámek selhalo:",
@@ -2102,7 +2162,8 @@ async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {
     }
   } else {
     await ulozBeznePoznamkyPrimo(
-      zdroj.filter((task) => task?.id !== noteId)
+      zdroj.filter((task) => task?.id !== noteId),
+      true, true
     );
   }
 
@@ -2292,7 +2353,7 @@ async function smazPoznamkyZKoseTrvale(noteIds, tajne = false) {
         await ulozTajnePoznamkySifrovaneHned(zbyvajici);
     } else {
       lokalneUlozeno =
-        await ulozBeznePoznamkyPrimo(zbyvajici);
+        await ulozBeznePoznamkyPrimo(zbyvajici, true, true);
     }
 
     if (lokalneUlozeno === false) {
@@ -2360,7 +2421,7 @@ async function smazPoznamkyZKoseTrvale(noteIds, tajne = false) {
           nastavDesifrovaneTajnePoznamky(zdroj);
           await ulozTajnePoznamkySifrovaneHned(zdroj);
         } else {
-          await ulozBeznePoznamkyPrimo(zdroj);
+          await ulozBeznePoznamkyPrimo(zdroj, true, true);
         }
       }
     } catch (rollbackError) {
@@ -4868,7 +4929,7 @@ async function obnovKompletniZalohu(
 
   await ulozBeznePoznamkyPrimo(
     regularNotes,
-    false
+    false, true
   );
   nastavFaziObnovy598("11 · uložení Secret poznámek");
 
@@ -5676,7 +5737,7 @@ function importTasks(file) {
           (task) => normalizujImportovanouPoznamku(task, importedAt)
         );
 
-        await ulozBeznePoznamkyPrimo(regularNotes, false);
+        await ulozBeznePoznamkyPrimo(regularNotes, false, true);
         ulozSifrovaneTajneZaznamy(imported.secretNotes);
         vycistiDesifrovaneTajnePoznamky();
         location.reload();
@@ -5718,7 +5779,7 @@ function importTasks(file) {
 
       await ulozBeznePoznamkyPrimo(
         normalizedTasks.filter((task) => task.isSecret !== true),
-        false
+        false, true
       );
 
       location.reload();
