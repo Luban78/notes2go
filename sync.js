@@ -2183,36 +2183,8 @@ async function uploadLocalNoteToSupabase(note, moznosti = {}) {
     }
   }
 
-  /*
-   * Starý cloud-shadow JPEG uploader smí běžet už jen pro obsah, který
-   * nepoužívá nový E2E media payload. U fotografie chráněné patchem 551
-   * je Storage plaintext upload výslovně zakázaný.
-   */
-  if (
-    note.isSecret !== true &&
-    !mediaChranenaE2E &&
-    !jeChranena &&
-    window.LubaNoteAttachmentsCloud
-      ?.zajistiStinovePrilohyPoznamkyVCloudu
-  ) {
-    try {
-      const stavPriloh =
-        await window.LubaNoteAttachmentsCloud
-          .zajistiStinovePrilohyPoznamkyVCloudu(note);
-
-      if (stavPriloh?.ok !== true) {
-        console.warn(
-          "LubaNote attachments: některá stínová cloudová příloha zatím není nahraná.",
-          stavPriloh
-        );
-      }
-    } catch (error) {
-      console.warn(
-        "LubaNote attachments: příprava cloudové stínové přílohy selhala.",
-        error
-      );
-    }
-  }
+  /* 697J: Zadny fallback na raw JPEG Storage. I legacy obsah se muze
+   * synchronizovat jen pres poznamkovy JSON a platne E2E guardy. */
 
   if (note.isSecret === true) {
     if (
@@ -8115,34 +8087,8 @@ async function startSync() {
     nastavKoncovyStavSynchronizaceUI();
   }
 
-  /*
-   * FÁZE B: obnova trvalé upload fronty je servisní úloha.
-   * NESMÍ blokovat první vykreslení aplikace ani splash screen.
-   *
-   * Bezpečné pořadí attachment -> revize poznámky zůstává zachováno
-   * přímo v uploadLocalNoteToSupabase(), kde se před serverovým
-   * zápisem konkrétní poznámky stále čeká na její stínové přílohy.
-   * Tohle je pouze dodatečné obnovení fronty po startu pro přílohy,
-   * které už nepotřebují novou textovou revizi poznámky.
-   */
-  if (
-    window.LubaNoteAttachmentsCloud
-      ?.zpracujStinovePrilohyPoznamekVCloudu
-  ) {
-    setTimeout(() => {
-      Promise.resolve(
-        window.LubaNoteAttachmentsCloud
-          .zpracujStinovePrilohyPoznamekVCloudu(
-            getLocalNotesForSync()
-          )
-      ).catch((error) => {
-        console.warn(
-          "LubaNote attachments: obnovení stínové upload fronty se dokončí později.",
-          error
-        );
-      });
-    }, 0);
-  }
+  /* 697J: Stara fronta raw JPEG uploadu se po startu uz NESPOUSTI.
+   * Kompatibilni uklid historickych priloh bezi dal nize. */
 
   /*
    * FÁZE B – fyzický cleanup starých pending_delete attachmentů.

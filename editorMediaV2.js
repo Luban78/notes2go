@@ -208,24 +208,10 @@
   }
 
   async function ulozShadowAttachment(dataUrl, file) {
-    if (jeTajnaPoznamka() || jeAktivniSdilenaPoznamka()) return "";
-
-    const api = window.LubaNoteAttachmentsLocal;
-    if (!api?.ulozCloudovouStinovouPrilohuZDataUrl) return "";
-
-    const id = noveAttachmentId();
-    try {
-      await api.ulozCloudovouStinovouPrilohuZDataUrl({
-        id,
-        dataUrl,
-        noteId: ziskejNoteId(),
-        fileName: file?.name || ""
-      });
-      return id;
-    } catch (error) {
-      console.warn("LubaNote attachments: shadow kopie obrázku selhala.", error);
-      return "";
-    }
+    /* 697J: Novy obrazek je pouze v obsahu poznamky a pred syncem
+     * prochazi mediaCrypto AES-GCM. Netvorit druhou JPEG kopii ani
+     * data-attachment-id, ktery by probudil stare cloud-shadow uploady. */
+    return "";
   }
 
   function jeAktivniSdilenaPoznamka() {

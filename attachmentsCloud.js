@@ -1,12 +1,9 @@
 /* ==================================================
    LUBANOTE – CLOUDOVÉ PŘÍLOHY – FÁZE B 
 
-   Cloudová STÍNOVÁ vrstva:
-   - nové normální obrázky mají dál Data URL v poznámce,
-   - jejich JPEG Blob se navíc bezpečně rezervuje a uploaduje
-     do privátního Supabase Storage,
-   - Storage chyba zatím NESMÍ zablokovat původní sync poznámky,
-   - Secret se v této fázi vůbec nezpracovává.
+   697J: Nešifrovaný JPEG cloud-shadow upload byl zrušen.
+   Ponecháváme kompatibilitu pro čtení, metadata a mazání starých příloh.
+   Nová média jdou výhradně přes E2E payload v poznámce.
 ================================================== */
 
 (() => {
@@ -190,322 +187,28 @@
     }
   }
 
-  async function nahrajJednuPrilohu(
-    attachmentId,
-    noteId
-  ) {
-    if (!attachmentId || !noteId) {
-      return {
-        ok: false,
-        reason: "missing_identity"
-      };
-    }
-
-    if (probihajiciUploady.has(attachmentId)) {
-      return probihajiciUploady.get(attachmentId);
-    }
-
-    const promise = (async () => {
-      const lokalni =
-        window.LubaNoteAttachmentsLocal;
-
-      if (!lokalni?.nactiPrilohu) {
-        return {
-          ok: false,
-          reason: "local_module_missing"
-        };
-      }
-
-      const zaznam =
-        await lokalni.nactiPrilohu(attachmentId);
-
-      /*
-       * FÁZE A vytvořila shadow_v1 záznamy. Ty jsou pouze
-       * stará diagnostická cache a do nového JPEG Storage je
-       * automaticky neposíláme.
-       */
-      if (!zaznam || zaznam.faze !== FAZE_CLOUD) {
-        return {
-          ok: true,
-          skipped: true,
-          reason: "not_phase_b_attachment"
-        };
-      }
-
-      if (!zaznam.blob) {
-        return {
-          ok: false,
-          reason: "local_blob_missing"
-        };
-      }
-
-      if (
-        zaznam.cloudState === "uploaded" ||
-        zaznam.cloudState === "active"
-      ) {
-        if (zaznam.noteId !== noteId) {
-          await lokalni.upravPrilohu(
-            attachmentId,
-            { noteId }
-          );
-        }
-
-        return {
-          ok: true,
-          storagePath: zaznam.storagePath || "",
-          alreadyUploaded: true
-        };
-      }
-
-      if (!await pripravCloud()) {
-        return {
-          ok: false,
-          reason: "cloud_unavailable"
-        };
-      }
-
-      const mimeType =
-        zaznam.mimeType || zaznam.blob.type || "image/jpeg";
-
-      if (mimeType !== "image/jpeg") {
-        throw new Error(
-          `Fáze B očekává image/jpeg, lokálně je ${mimeType}.`
-        );
-      }
-
-      await lokalni.upravPrilohu(
-        attachmentId,
-        {
-          noteId,
-          cloudState: "reserving",
-          lastCloudAttemptAt:
-            new Date().toISOString()
-        }
-      );
-
-      await lokalni.aktualizujUpload?.(
-        attachmentId,
-        {
-          noteId,
-          stav: "reserving",
-          posledniChyba: ""
-        }
-      );
-
-      const { data: rezervace, error: chybaRezervace } =
-        await supabaseClient.rpc(
-          "lubanote_reserve_attachment",
-          {
-            p_attachment_id: attachmentId,
-            p_note_id: noteId,
-            p_declared_bytes: Number(zaznam.blob.size) || 0,
-            p_mime_type: mimeType
-          }
-        );
-
-      if (chybaRezervace) {
-        throw chybaRezervace;
-      }
-
-      if (rezervace?.ok !== true) {
-        const duvod =
-          rezervace?.reason || "reservation_denied";
-        const error = new Error(
-          rezervace?.message ||
-          `Rezervace přílohy byla odmítnuta: ${duvod}`
-        );
-        error.code = duvod;
-        throw error;
-      }
-
-      const storagePath =
-        rezervace.storage_path ||
-        zaznam.storagePath ||
-        "";
-
-      if (!storagePath) {
-        throw new Error(
-          "Server nevrátil cestu pro Storage."
-        );
-      }
-
-      await lokalni.upravPrilohu(
-        attachmentId,
-        {
-          noteId,
-          storagePath,
-          cloudState: "uploading"
-        }
-      );
-
-      await lokalni.aktualizujUpload?.(
-        attachmentId,
-        {
-          noteId,
-          stav: "uploading",
-          posledniChyba: ""
-        }
-      );
-
-      if (rezervace.already_uploaded !== true) {
-        const buffer =
-          await zaznam.blob.arrayBuffer();
-
-        const { error: chybaUploadu } =
-          await supabaseClient.storage
-            .from(BUCKET)
-            .upload(
-              storagePath,
-              buffer,
-              {
-                contentType: "image/jpeg",
-                cacheControl: "3600",
-                upsert: false
-              }
-            );
-
-        if (
-          chybaUploadu &&
-          !jeChybaDuplicitnihoUploadu(chybaUploadu)
-        ) {
-          throw chybaUploadu;
-        }
-      }
-
-      const { data: potvrzeni, error: chybaPotvrzeni } =
-        await supabaseClient.rpc(
-          "lubanote_confirm_attachment",
-          {
-            p_attachment_id: attachmentId
-          }
-        );
-
-      if (chybaPotvrzeni) {
-        throw chybaPotvrzeni;
-      }
-
-      if (potvrzeni?.ok !== true) {
-        const error = new Error(
-          potvrzeni?.message ||
-          `Upload přílohy nebyl potvrzen: ${potvrzeni?.reason || "unknown"}`
-        );
-        error.code = potvrzeni?.reason || "confirm_failed";
-        throw error;
-      }
-
-      const uploadedAt =
-        new Date().toISOString();
-
-      await lokalni.upravPrilohu(
-        attachmentId,
-        {
-          noteId,
-          storagePath,
-          cloudState: "uploaded",
-          uploadedAt,
-          lastCloudError: ""
-        }
-      );
-
-      await lokalni.aktualizujUpload?.(
-        attachmentId,
-        {
-          noteId,
-          stav: "uploaded",
-          posledniChyba: ""
-        }
-      );
-
-      return {
-        ok: true,
-        storagePath,
-        sizeBytes: Number(potvrzeni.size_bytes) ||
-          Number(zaznam.blob.size) || 0
-      };
-    })().catch(async (error) => {
-      await zaznamenejChybu(
-        attachmentId,
-        error
-      );
-
-      console.warn(
-        "LubaNote attachments: cloudový upload přílohy selhal (Fáze B stín, poznámka zůstává bezpečná v Data URL).",
-        attachmentId,
-        error
-      );
-
-      return {
-        ok: false,
-        reason: error?.code || "upload_failed",
-        error
-      };
-    }).finally(() => {
-      probihajiciUploady.delete(attachmentId);
-    });
-
-    probihajiciUploady.set(
-      attachmentId,
-      promise
-    );
-
-    return promise;
+  /* 697J: Faze B JPEG Storage uploader je DEFINITIVNE zakazany.
+   * Predchozi implementace prenesla zaznam.blob.arrayBuffer() bez sifrovani.
+   * Historicke objekty lze stale cist a mazat; nikdy nevytvaret nove.
+   * Guard zustava i na teto vnitrni urovni pro pripad zmeny call-site. */
+  async function nahrajJednuPrilohu(attachmentId, noteId) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "plaintext_storage_upload_disabled_697J",
+      attachmentId: String(attachmentId || ""),
+      noteId: String(noteId || "")
+    };
   }
 
   async function zajistiStinovePrilohyPoznamkyVCloudu(note) {
-    if (!note || note.isSecret === true) {
-      return {
-        ok: true,
-        skipped: true,
-        count: 0
-      };
-    }
-
-    if (jePoznamkaPouzeLokalni(note)) {
-      return {
-        ok: true,
-        skipped: true,
-        reason: "local_only",
-        count: 0
-      };
-    }
-
-    /* PATCH 551 – tvrdá síťová pojistka. I kdyby tuto funkci zavolala
-       nějaká starší servisní cesta přímo, běžnou inline fotografii už
-       NESMÍ nahrát jako plaintext JPEG do Storage. */
-    if (poznamkaObsahujeE2EInlineFotografii(note)) {
-      return {
-        ok: true,
-        skipped: true,
-        reason: "media_e2e_551",
-        count: 0
-      };
-    }
-
-    const ids = ziskejAttachmentIdsZPoznamky(note);
-
-    if (ids.length === 0) {
-      return {
-        ok: true,
-        count: 0
-      };
-    }
-
-    const vysledky = [];
-
-    for (const id of ids) {
-      const vysledek = await nahrajJednuPrilohu(
-        id,
-        note.id
-      );
-      vysledky.push({ id, ...vysledek });
-    }
-
+    /* I stare Data URL / data-attachment-id musi prejit jen pres E2E
+     * cloudovy JSON, nikdy pres raw JPEG Storage. Zde neprovadime zadne RPC. */
     return {
-      ok: vysledky.every(
-        (polozka) => polozka.ok === true
-      ),
-      count: vysledky.length,
-      vysledky
+      ok: true,
+      skipped: true,
+      reason: "plaintext_storage_upload_disabled_697J",
+      count: 0
     };
   }
 
@@ -675,47 +378,13 @@
   }
 
   async function zpracujStinovePrilohyPoznamekVCloudu(notes) {
-    const seznam = Array.isArray(notes) ? notes : [];
-    let zpracovano = 0;
-    let neuspesne = 0;
-
-    for (const note of seznam) {
-      if (
-        !note?.id ||
-        note.isSecret === true ||
-        jePoznamkaPouzeLokalni(note)
-      ) {
-        continue;
-      }
-
-      /* PATCH 551 – běžná fotografie je od této verze E2E payload v
-         JSONu poznámky. Starý cloud-shadow uploader ji NESMÍ znovu poslat
-         jako plaintext JPEG do Supabase Storage. Lokální IndexedDB stín
-         může zůstat jako device-only cache, ale síťová cesta je vypnutá. */
-      if (poznamkaObsahujeE2EInlineFotografii(note)) {
-        continue;
-      }
-
-      const ids = ziskejAttachmentIdsZPoznamky(note);
-
-      if (ids.length === 0) {
-        continue;
-      }
-
-      const stav =
-        await zajistiStinovePrilohyPoznamkyVCloudu(note);
-
-      zpracovano += Number(stav?.count) || 0;
-
-      if (stav?.ok !== true) {
-        neuspesne += 1;
-      }
-    }
-
+    /* Fronta historickych shadow JPEG zustava jen lokalni diagnostikou. */
     return {
-      ok: neuspesne === 0,
-      zpracovano,
-      neuspesne
+      ok: true,
+      skipped: true,
+      reason: "plaintext_storage_upload_disabled_697J",
+      zpracovano: 0,
+      neuspesne: 0
     };
   }
 
