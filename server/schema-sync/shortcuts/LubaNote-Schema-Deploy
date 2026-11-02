@@ -1,0 +1,3 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# One tap after first installation + approval. In the initial testing phase: --check.
+exec ssh -tt luban78@100.67.124.80 /home/luban78/luba-server/schema-sync/launch.sh --check
