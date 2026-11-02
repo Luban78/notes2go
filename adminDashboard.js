@@ -185,6 +185,8 @@
     document.getElementById("adminUsersList");
   const stavText =
     document.getElementById("adminDashboardStatus");
+  const autoDemoTlacitko699E = document.getElementById("adminAutoDemoToggle699E");
+  const autoDemoZprava699E = document.getElementById("adminAutoDemoStatus699E");
 
   const cekajiciPocet =
     document.getElementById("adminPendingCount");
@@ -2948,6 +2950,83 @@
     );
   }
 
+  /* PATCH 699E – Serverově ovládané automatické Demo.
+   * UI je pouze indikátor a klient. Obě RPC každou akci ověřují na serveru;
+   * při chybě nikdy netvrdíme, že je Demo vypnuté nebo zapnuté.
+   */
+  let autoDemoNacitam699E = false;
+  let autoDemoStav699E = null;
+
+  function zobrazAutoDemoStav699E(stav, zprava = "") {
+    if (!autoDemoTlacitko699E || !autoDemoZprava699E) return;
+    autoDemoStav699E = typeof stav === "boolean" ? stav : null;
+    autoDemoTlacitko699E.setAttribute("aria-checked", String(autoDemoStav699E === true));
+    autoDemoTlacitko699E.classList.toggle("enabled", autoDemoStav699E === true);
+    autoDemoTlacitko699E.textContent = autoDemoStav699E === null
+      ? "Neznámý stav" : (autoDemoStav699E ? "ZAPNUTO" : "VYPNUTO");
+    autoDemoTlacitko699E.disabled = autoDemoNacitam699E || autoDemoStav699E === null || !jeAdmin;
+    autoDemoZprava699E.textContent = zprava || (autoDemoStav699E === null
+      ? "Stav nelze ověřit. Automatické Demo nelze přepnout."
+      : autoDemoStav699E
+        ? "Po potvrzení e-mailu se novým účtům automaticky aktivuje 14denní Demo."
+        : "Automatické přidělování Dema je vypnuté. Ruční schvalování funguje dál.");
+  }
+
+  async function nactiAutoDemo699E() {
+    if (!autoDemoTlacitko699E || !autoDemoZprava699E || !jeAdmin || autoDemoNacitam699E) return;
+    autoDemoNacitam699E = true;
+    zobrazAutoDemoStav699E(null, "Načítám stav automatického Dema ze serveru…");
+    try {
+      if (!(await pripravClient()) || !supabaseClient) throw new Error("Supabase nedostupný");
+      const { data, error } = await supabaseClient.rpc("lubanote_admin_get_auto_demo_699e");
+      if (error) throw error;
+      if (typeof data !== "boolean") throw new Error("Neplatný stav serveru");
+      autoDemoNacitam699E = false;
+      zobrazAutoDemoStav699E(data);
+    } catch (error) {
+      console.warn("699E auto Demo read failed:", error?.message || error);
+      autoDemoNacitam699E = false;
+      zobrazAutoDemoStav699E(null, "Nepodařilo se ověřit stav. Zkontroluj instalaci SQL 699E a připojení.");
+    }
+  }
+
+  async function ulozAutoDemo699E(novyStav) {
+    if (!jeAdmin || autoDemoNacitam699E || typeof autoDemoStav699E !== "boolean") return;
+    autoDemoNacitam699E = true;
+    zobrazAutoDemoStav699E(autoDemoStav699E, "Ukládám změnu na server…");
+    try {
+      if (!(await pripravClient()) || !supabaseClient) throw new Error("Supabase nedostupný");
+      const { data, error } = await supabaseClient.rpc(
+        "lubanote_admin_set_auto_demo_699e", { p_enabled: novyStav }
+      );
+      if (error) throw error;
+      if (data !== novyStav) throw new Error("Server nepotvrdil požadovaný stav");
+      autoDemoNacitam699E = false;
+      zobrazAutoDemoStav699E(data);
+    } catch (error) {
+      console.warn("699E auto Demo switch failed:", error?.message || error);
+      autoDemoNacitam699E = false;
+      zobrazAutoDemoStav699E(null, "Změnu se nepodařilo potvrdit. Načti aktuální stav znovu.");
+      void nactiAutoDemo699E();
+    }
+  }
+
+  function prepniAutoDemo699E() {
+    if (!autoDemoTlacitko699E || !jeAdmin || autoDemoNacitam699E ||
+        typeof autoDemoStav699E !== "boolean") return;
+    const novyStav = !autoDemoStav699E;
+    if (novyStav) {
+      otevriAdminPotvrzeni({
+        nadpis: "Automatické Demo",
+        zprava: "Zapnout automatické 14denní Demo po potvrzení e-mailu?",
+        potvrditText: "Zapnout Demo",
+        poPotvrzeni: () => ulozAutoDemo699E(true)
+      });
+    } else {
+      void ulozAutoDemo699E(false);
+    }
+  }
+
   async function nactiUzivatele() {
     if (nacitam || !jeAdmin) {
       return;
@@ -3194,7 +3273,7 @@
     if (!jeAdmin) return;
     zobrazUcty();
     nastavFiltr("pending");
-    await nactiUzivatele();
+    await Promise.all([nactiUzivatele(), nactiAutoDemo699E()]);
   }
 
   function otevriVisualDebugZAdmina() {
@@ -3528,10 +3607,11 @@
     () => nastavFiltr("all")
   );
 
-  obnovitTlacitko.addEventListener(
-    "click",
-    nactiUzivatele
-  );
+  obnovitTlacitko.addEventListener("click", () => {
+    void nactiUzivatele();
+    void nactiAutoDemo699E();
+  });
+  autoDemoTlacitko699E?.addEventListener("click", prepniAutoDemo699E);
 
   window.addEventListener(
     "lubanote:language-change",
@@ -3560,6 +3640,7 @@
         zobrazUcty();
         nastavFiltr("pending");
         nactiUzivatele();
+        nactiAutoDemo699E();
       } else zobrazDomov();
       return;
     }

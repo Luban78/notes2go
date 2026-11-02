@@ -18902,3 +18902,46 @@ body.ln-luba-klavesnice-open .lnSyncRecoveryNotice683BX:not([hidden]) {
   .lnDesktopStatus692A-main { gap: 9px; }
   .lnDesktopStatus692A-track { width: 55px; }
 }
+
+/* 699E – Admin Dashboard / Účty: přepínač automatického 14denního Dema. */
+.adminAutoDemo699E {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.adminAutoDemo699EText { display: grid; gap: 5px; min-width: 0; }
+.adminAutoDemo699EText strong { font-size: .96rem; }
+.adminAutoDemo699EText small, .adminAutoDemo699EStatus {
+  color: var(--color-text-secondary);
+  font-size: .82rem;
+  line-height: 1.4;
+}
+.adminAutoDemo699EToggle {
+  min-width: 108px;
+  min-height: 42px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 750;
+}
+.adminAutoDemo699EToggle.enabled {
+  background: var(--color-accent);
+  color: #111;
+  border-color: var(--color-accent);
+}
+.adminAutoDemo699EToggle:disabled { opacity: .65; }
+.adminAutoDemo699EStatus { grid-column: 1/-1; margin: 0; }
+@media(max-width:390px) {
+  .adminAutoDemo699E { grid-template-columns: 1fr; }
+  .adminAutoDemo699EToggle { width: 100%; }
+}

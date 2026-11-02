@@ -29,7 +29,7 @@
 
   <title>LubaNote</title>
   
-  <link rel="stylesheet" href="style.css?v=692B-pc-status-one-row">
+  <link rel="stylesheet" href="style.css?v=699E-admin-auto-demo-toggle">
   <link rel="stylesheet" href="documents.css?v=658bz-reader-learning-dictionary">
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
@@ -2060,6 +2060,17 @@
           <strong id="adminAccountsHeading">Správa účtů</strong>
         </div>
 
+        <!-- 699E: stav se čte z databázového triggeru, nikoli z localStorage. -->
+        <section class="adminAutoDemo699E" aria-label="Automatické Demo po potvrzení e-mailu">
+          <div class="adminAutoDemo699EText">
+            <strong>Automatické Demo (14 dní)</strong>
+            <small>Nově ověřené účty získají Demo jen při zapnutém přepínači.</small>
+          </div>
+          <button id="adminAutoDemoToggle699E" class="adminAutoDemo699EToggle" type="button"
+                  role="switch" aria-checked="false" aria-label="Povolit automatické Demo" disabled>Načítám…</button>
+          <p id="adminAutoDemoStatus699E" class="adminAutoDemo699EStatus" role="status" aria-live="polite">Stav ověřuje server.</p>
+        </section>
+
         <div class="adminStats" aria-label="Přehled uživatelů">
           <div class="adminStatCard">
             <span id="adminPendingCount" class="adminStatValue">–</span>
@@ -3064,7 +3075,7 @@
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
   <!-- 695A: Lightweight, admin-only lazy loader; actual tools are not parsed on startup. -->
   <script src="adminToolsLazy695A.js?v=697E-battery-cleanup"></script>
-  <script src="adminDashboard.js?v=695A-lazy-admin-tools"></script>
+  <script src="adminDashboard.js?v=699E-admin-auto-demo-toggle"></script>
   <script src="fpsBenchmark691BQ.js?v=691BV-manual-performance-history"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=697J-plaintext-storage-off"></script>
