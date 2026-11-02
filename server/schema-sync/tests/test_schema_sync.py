@@ -177,3 +177,49 @@ $body$;
             finally: m.REGISTRY=old
 
 if __name__=='__main__': unittest.main()
+
+class SchemaDeploy699DTests(unittest.TestCase):
+    def test_migration_structure_compares_tables_and_columns(self):
+        src = 'TABLE|notes\nCOLUMN|notes|id|uuid|true\nCOLUMN|notes|title|text|false\n'
+        dst = 'TABLE|notes\nCOLUMN|notes|id|uuid|true\n'
+        with patch.object(m, 'catalog_query', side_effect=[src, dst]):
+            missing, extra = m.structure_diff('lubaserver', 'cloud')
+        self.assertEqual(missing, {'COLUMN|notes|title|text|false'})
+        self.assertFalse(extra)
+
+    def test_local_server_status_excluded_from_migration_structure(self):
+        with patch.object(m, 'catalog_query', return_value='TABLE|notes\n') as query:
+            self.assertEqual(m.migration_structure('cloud'), {'TABLE|notes'})
+        self.assertIn("c.relname <> 'lubanote_server_status'", query.call_args.args[1])
+        self.assertIn('a.attnotnull::text', query.call_args.args[1])
+
+    def test_transaction_preflight_and_commit_share_same_sql_adapter(self):
+        with patch.object(m, 'run') as fake_run:
+            m.apply('cloud', Path('/tmp/one.sql'), Path('/tmp/guard.sql'), commit=False)
+            m.apply('cloud', Path('/tmp/one.sql'), Path('/tmp/guard.sql'), commit=True)
+        first = fake_run.call_args_list[0].args[0]
+        second = fake_run.call_args_list[1].args[0]
+        self.assertEqual(first[-2], 'rollback')
+        self.assertEqual(second[-2], 'commit')
+        self.assertEqual(first[:-2] + first[-1:], second[:-2] + second[-1:])
+        self.assertIn("FINISH='ROLLBACK;'", m.APPLY_SCRIPT)
+        self.assertIn("FINISH='COMMIT;'", m.APPLY_SCRIPT)
+        self.assertIn('ON_ERROR_STOP=1', m.APPLY_SCRIPT)
+        self.assertIn('cat "$4"', m.APPLY_SCRIPT)
+
+    def test_catalog_guard_contains_expected_hash_and_fails_closed(self):
+        import hashlib
+        items = {'TABLE|notes', 'COLUMN|notes|title|text|false'}
+        guard = m.migration_catalog_guard(items)
+        expected = hashlib.md5('\n'.join(sorted(items)).encode('utf-8')).hexdigest()
+        self.assertIn(expected, guard)
+        self.assertIn('MIGRATION_CATALOG_MISMATCH', guard)
+        self.assertIn('pg_class', guard)
+        self.assertIn('RAISE EXCEPTION', guard)
+
+    def test_the_cli_gate_still_requires_one_time_approval(self):
+        from pathlib import Path
+        src = MODULE.read_text()
+        self.assertIn('APPROVED_AFTER_REAL_TEST=YES', src)
+        self.assertIn('APPLY_PREFLIGHT=', src)
+        self.assertIn('VERIFIED_BY_SCHEMA_AND_COLUMNS', src)

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""LubaNote 699C: migration-compatible schema sync from live LubaServer.
+"""LubaNote 699D: guarded application schema deploy from live LubaServer.
 
 This is a controlled wrapper for DBDiff; all runtime credentials stay in 0600 temp files.
 The code intentionally fails closed for DDL that cannot be reviewed safely.
 """
 import datetime as dt
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -346,6 +347,56 @@ WHERE n.nspname='public' AND c.relname='{table}' AND c.relkind IN ('r','p');'''
     return rows
 
 
+
+def migration_structure_sql():
+    # IMPORTANT: exact same catalog expression used both for live check and
+    # for the in-transaction assertion against the source digest.
+    return """SELECT 'TABLE|' || c.relname AS item
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname='public' AND c.relkind IN ('r','p')
+  AND c.relname <> 'lubanote_server_status'
+UNION ALL
+SELECT 'COLUMN|' || c.relname || '|' || a.attname || '|' ||
+       format_type(a.atttypid,a.atttypmod) || '|' || a.attnotnull::text AS item
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+JOIN pg_attribute a ON a.attrelid=c.oid
+WHERE n.nspname='public' AND c.relkind IN ('r','p')
+  AND c.relname <> 'lubanote_server_status'
+  AND a.attnum > 0 AND NOT a.attisdropped"""
+
+
+def migration_structure(backend):
+    """Catalog-only comparison for all user-data public tables/columns."""
+    return frozenset(catalog_query(backend, migration_structure_sql() + '\nORDER BY 1;').splitlines())
+
+
+def migration_catalog_guard(source_catalog):
+    """Transaction-time assertion: never COMMIT if a table/column is missing.
+
+    The exact same query is executed within the DDL transaction (after DDL,
+    before COMMIT or ROLLBACK); even an already-partial target is rejected.
+    """
+    fingerprint = hashlib.md5('\n'.join(sorted(source_catalog)).encode('utf-8')).hexdigest()
+    sql = migration_structure_sql()
+    return f"""DO $ln699d_catalog$
+DECLARE actual text;
+BEGIN
+  SELECT md5(COALESCE(string_agg(item, E'\\n' ORDER BY item), '')) INTO actual
+  FROM ({sql}) items;
+  IF actual IS DISTINCT FROM '{fingerprint}' THEN
+    RAISE EXCEPTION 'MIGRATION_CATALOG_MISMATCH' USING ERRCODE = 'P0001';
+  END IF;
+END;
+$ln699d_catalog$;
+"""
+
+
+def structure_diff(source_backend, target_backend):
+    source = migration_structure(source_backend)
+    target = migration_structure(target_backend)
+    return source - target, target - source
+
+
 def new_table_acl_sql(src_backend, table):
     rows = table_acl(src_backend, table)
     if rows[0][1:] not in (['true','postgres'], ['t','postgres']):
@@ -441,7 +492,7 @@ def write_report(path, ignored, eligible, blocked):
         'ignored': [{'reason': k, 'statement_type': short_kind(v)} for k,v in ignored],
         'eligible': [{'reason': k, 'statement_type': short_kind(v)} for k,v in eligible],
         'blocked': [{'reason': k, 'statement_type': short_kind(v)} for k,v in blocked],
-        'note': 'DDL only; no data or Auth/Storage migration; read-only check.',
+        'note': 'DDL only; no user data or Auth/Storage migration; safety classification.',
     }
     path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     path.chmod(0o600)
@@ -489,13 +540,16 @@ source "$BASE/bin/destination-lib"
 DEST_CFG="$BASE/config/backend-profiles/$1.destination.env"
 dest_load
 [[ "$DEST_BACKEND_ID" == "$1" ]] || exit 10
-# The SQL is executed in a transaction for this backend only, not for all servers.
-# No schema-only restore; no data migration; no alteration of auth/storage schemas.
-{ printf 'BEGIN;\nSET LOCAL lock_timeout=\0473s\047;\nSET LOCAL statement_timeout=\04790s\047;\nSET LOCAL search_path=public,pg_temp;\n'; cat "$2"; printf '\nCOMMIT;\n'; } | dest_psql -q -v ON_ERROR_STOP=1 >/dev/null
+[[ "$3" == rollback || "$3" == commit ]] || exit 11
+# Exactly the same SQL and adapter run for the rollback preflight and the apply.
+# No schema-only restore, data migration, or alteration of auth/storage schemas.
+if [[ "$3" == rollback ]]; then FINISH='ROLLBACK;'; else FINISH='COMMIT;'; fi
+{ printf 'BEGIN;\nSET LOCAL lock_timeout=\0473s\047;\nSET LOCAL statement_timeout=\04790s\047;\nSET LOCAL search_path=public,pg_temp;\n'; cat "$2"; cat "$4"; printf '\n%s\n' "$FINISH"; } | dest_psql -q -v ON_ERROR_STOP=1 >/dev/null
 '''
 
-def apply(ident, sql_file):
-    run(["bash", "-c", APPLY_SCRIPT, "_", ident, str(sql_file)], timeout=180)
+def apply(ident, sql_file, guard_file, *, commit=False):
+    run(["bash", "-c", APPLY_SCRIPT, "_", ident, str(sql_file),
+         "commit" if commit else "rollback", str(guard_file)], timeout=180)
 
 def main():
     if len(sys.argv) > 2 or (len(sys.argv) == 2 and sys.argv[1] not in ('--check', '--apply')):
@@ -510,13 +564,16 @@ def main():
         raise SyncError('Active backend is not LubaServer')
     if source_id not in ids:
         raise SyncError('LubaServer missing from backend registry')
-    if mode == '--apply' and (not APPROVAL.is_file() or APPROVAL.read_text().strip() != 'APPROVED_AFTER_REAL_TEST=YES'):
-        raise SyncError('Live apply is locked until isolated/live read-only verification and explicit approval')
+    if mode == '--apply':
+        if (APPROVAL.is_symlink() or not APPROVAL.is_file() or
+            APPROVAL.stat().st_uid != os.getuid() or (APPROVAL.stat().st_mode & 0o777) != 0o600 or
+            APPROVAL.read_text().strip() != 'APPROVED_AFTER_REAL_TEST=YES'):
+            raise SyncError('Live apply locked; one-time approval file must be owned by user, 0600, exact opt-in')
     dest_ids = [i for i in ids if i != source_id]
     states = {i: freeze(i) for i in ids}
     if states[source_id] != 'UNFROZEN' or any(states[i] != 'FROZEN' for i in dest_ids):
         raise SyncError('Source must be UNFROZEN; all destinations must be FROZEN')
-    print('=== LUBANOTE SCHEMA SYNC 699B ===', flush=True)
+    print('=== LUBANOTE SCHEMA SYNC 699D ===', flush=True)
     print(f'MODE={mode} SOURCE={source_id} DESTINATIONS={" ".join(dest_ids)}', flush=True)
     print('SCOPE=migration_compatible_public DATA_SYNC=NO', flush=True)
     print('BACKEND_STATES=' + ' '.join(f'{x}:{states[x]}' for x in ids), flush=True)
@@ -544,27 +601,47 @@ def main():
                     except SyncError:
                         blocked.append(('CATALOG_ACL_REVIEW', '/* details deliberately withheld */;'))
                 write_report(target_dir/'classification.json', ignored, eligible, blocked)
+                missing, extra = structure_diff(source_id, ident)
                 print(f'BACKEND={ident} PLAN_BYTES={len(raw.encode())} IGNORED={len(ignored)} ELIGIBLE={len(eligible)} BLOCKED={len(blocked)}', flush=True)
+                print(f'BACKEND={ident} MIGRATION_COLUMNS_MISSING={len(missing)} MIGRATION_COLUMNS_EXTRA={len(extra)}', flush=True)
                 for reason in sorted({k for k,_ in blocked}):
                     print(f'BLOCKED_REASON={ident}:{reason}', flush=True)
-                plans.append((ident, target_dir, raw, ignored, eligible, blocked))
+                plans.append((ident, target_dir, raw, ignored, eligible, blocked, missing, extra))
     if mode == '--check':
         print(f'READ_ONLY=PASS PLANS={run_folder} DATABASE_WRITES=NONE', flush=True)
-        if any(b for _,_,_,_,_,b in plans):
+        if any(b or ((missing or extra) and not eligible) for _,_,_,_,eligible,b,missing,extra in plans):
             print('RESULT=REVIEW_REQUIRED', flush=True)
-        elif any(e for _,_,_,_,e,_ in plans):
+        elif any(e for _,_,_,_,e,_,_,_ in plans):
             print('RESULT=SAFE_CANDIDATES_TO_TEST', flush=True)
         else:
             print('RESULT=NO_MIGRATION_RELEVANT_SCHEMA_DIFF', flush=True)
         return
-    if any(b for _,_,_,_,_,b in plans):
+    if any(b for _,_,_,_,_,b,_,_ in plans):
         raise SyncError('Unsupported or risky differences; no DB was changed. See classification.json')
-    # Build complete audited SQL before any target write.
-    for ident, directory, raw, ignored, eligible, blocked in plans:
+    if any(extra for _,_,_,_,_,_,_,extra in plans):
+        raise SyncError('Extra/mismatched migration table or column on target; no DB was changed')
+    if any(missing and not eligible for _,_,_,_,eligible,_,missing,_ in plans):
+        raise SyncError('Missing migration table/column not covered by deploy plan; no DB was changed')
+    # Build complete audited SQL before any target write; include a
+    # transaction-local catalog assertion in BOTH preflight and COMMIT.
+    source_catalog = migration_structure(source_id)
+    guard = migration_catalog_guard(source_catalog)
+    for ident, directory, raw, ignored, eligible, blocked, missing, extra in plans:
         safe_sql = build_deploy_sql(source_id, ident, eligible)
         (directory/'deploy.sql').write_text(safe_sql, encoding='utf-8')
         (directory/'deploy.sql').chmod(0o600)
-    for ident, directory, raw, ignored, eligible, blocked in plans:
+        (directory/'catalog_guard.sql').write_text(guard, encoding='utf-8')
+        (directory/'catalog_guard.sql').chmod(0o600)
+    # All targets must pass exact SQL in a rollback-only transaction before
+    # the first commit anywhere. This cannot predict all cross-server risks.
+    for ident, directory, raw, ignored, eligible, blocked, missing, extra in plans:
+        if not eligible:
+            continue
+        if system_status().get('active_backend') != source_id or freeze(ident) != 'FROZEN':
+            raise SyncError('Backend state changed before transaction preflight')
+        apply(ident, directory/'deploy.sql', directory/'catalog_guard.sql', commit=False)
+        print(f'APPLY_PREFLIGHT={ident} ROLLBACK_PASS', flush=True)
+    for ident, directory, raw, ignored, eligible, blocked, missing, extra in plans:
         if not eligible:
             print(f'APPLY={ident} SKIP_NO_MIGRATION_DIFFERENCES', flush=True)
             continue
@@ -581,8 +658,10 @@ def main():
                     (checkdir/'dbdiff.yml').unlink(missing_ok=True)
                 if split_sql(checked.read_text(encoding='utf-8')) != split_sql(raw):
                     raise SyncError(f'{ident}: schema changed since plan; refusing stale deploy')
+        if migration_structure(source_id) != source_catalog:
+            raise SyncError('Source migration catalogue changed during deployment; refusing apply')
         print(f'APPLY={ident} START', flush=True)
-        apply(ident, directory/'deploy.sql')
+        apply(ident, directory/'deploy.sql', directory/'catalog_guard.sql', commit=True)
         with SshTunnel(profiles[source_id]) as src:
             with SshTunnel(profiles[ident]) as dst:
                 verify_dir = directory / 'verify'
@@ -595,7 +674,10 @@ def main():
                 write_report(verify_dir/'classification.json', remain_ignored, remain_eligible, remain_blocked)
                 if remain_eligible or remain_blocked:
                     raise SyncError(f'{ident}: remaining migration differences; see {verify_dir}')
-        print(f'APPLY={ident} VERIFIED_BY_SCHEMA_SCOPE', flush=True)
+        remaining_missing, remaining_extra = structure_diff(source_id, ident)
+        if remaining_missing or remaining_extra:
+            raise SyncError(f'{ident}: migration table/column catalog still differs; see {verify_dir}')
+        print(f'APPLY={ident} VERIFIED_BY_SCHEMA_AND_COLUMNS', flush=True)
     print('SCHEMA_SYNC=PASS', flush=True)
 
 if __name__ == "__main__":
