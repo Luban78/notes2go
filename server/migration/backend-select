@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 umask 077
-# LUBANOTE_SHARED_OP_LOCK_698C – backend-select nesmi bezet pri schema deploy/migraci.
-command -v flock >/dev/null || { echo 'BACKEND_SELECT=BLOCKED reason=flock_missing' >&2; exit 1; }
-exec 8< "$HOME/luba-server/migration-manager/state"
-flock -n 8 || { echo 'BACKEND_SELECT=BLOCKED reason=server_deploy_or_migration_running' >&2; exit 1; }
 BASE="${LUBANOTE_MIGRATION_BASE:-$HOME/luba-server/migration-manager}"
 CFG="$BASE/config"; PROFILES="$CFG/backend-profiles"
 STATE="$BASE/state/state"; CURRENT="$BASE/state/current_run"
