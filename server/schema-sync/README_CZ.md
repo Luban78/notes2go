@@ -3,7 +3,7 @@
 ## Co řešíme
 
 LubaServer je zdroj pravdy pro aplikační strukturu databáze. Běžný vývoj zde
-vytváří tabulky, sloupce, funkce, triggery a RLS. Supabase Cloud a později VPS
+vytváří tabulky, sloupce , funkce, triggery a RLS. Supabase Cloud a později VPS
 musí mít aplikační strukturu, která dovolí stávajícímu Migration Manageru
 provést PREPARE → VERIFY → CUTOVER. **Nepřenášíme zde uživatelská data**;
 to již dělá Migration Manager. **Nepřepisujeme Migration Manager**.
