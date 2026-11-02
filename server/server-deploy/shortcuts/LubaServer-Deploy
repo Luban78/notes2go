@@ -1,0 +1,3 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# 698B: po prvnim schvalenem nasazeni – bez hesla pres existujici SSH.
+exec ssh -tt luban78@100.67.124.80 /home/luban78/luba-server/server-deploy/launch.sh --apply
