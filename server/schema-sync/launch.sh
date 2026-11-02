@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# 699A - GitHub sync + separate server-schema sync. No web deploy, no APK changes.
+# 699B - GitHub sync + separate server-schema sync. No web deploy, no APK changes.
 set -Eeuo pipefail
 umask 077
+printf '%s\n' '********************************' '********************************'
+trap 'printf "%s\n" "********************************" "********************************"' EXIT
+export PATH="$HOME/.local/bin:$PATH"
 MODE="${1:---check}"
 case "$MODE" in --check|--apply) ;; *) echo 'Use: launch.sh --check|--apply' >&2; exit 2 ;; esac
 ROOT="$HOME/luba-server"
@@ -17,7 +20,7 @@ command -v python3 >/dev/null
 exec 9> "$ROOT/schema-sync.lock"
 flock -n 9 || { echo 'SCHEMA_SYNC=BLOCKED another_sync_running'; exit 1; }
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+trap 'rm -rf "$TMP"; printf "%s\\n" "********************************" "********************************"' EXIT
 # Git fetch only updates remote ref, NOT working tree or web production.
 git -C "$REPO" fetch --quiet origin main
 SHA="$(git -C "$REPO" rev-parse origin/main)"
