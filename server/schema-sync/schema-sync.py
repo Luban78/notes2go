@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""LubaNote 699B: migration-compatible schema sync from live LubaServer.
+"""LubaNote 699C: migration-compatible schema sync from live LubaServer.
 
 This is a controlled wrapper for DBDiff; all runtime credentials stay in 0600 temp files.
 The code intentionally fails closed for DDL that cannot be reviewed safely.
@@ -458,13 +458,29 @@ def plan(source, target, directory):
             "--include=up", "--renames=off", "--config=" + str(config),
             "--output=" + str(output),
             f"server1.{source['DEST_DB_NAME']}:server2.{target['DEST_DB_NAME']}"]
-    # DBDiff may print warnings, which the terminal needs to see. Never dump credentials.
+    # DBDiff 3.0.0-rc.29 does not create an output file when schemas are
+    # identical. It returns 0 and explicitly prints this message instead:
+    #   Databases are identical — no migration needed.
+    # Only this exact success signal authorizes an empty plan. An absent or
+    # empty file for any other reason is a hard failure (never false PASS).
+    if output.exists():
+        raise SyncError("Refusing to overwrite a pre-existing SQL plan")
     try:
-        run(argv, timeout=300)
+        result = run(argv, timeout=300)
     except SyncError:
         raise SyncError("Schema comparison failed; check that DBDiff is installed and two DBs are accessible")
     if not output.is_file():
-        raise SyncError("DBDiff did not create SQL plan")
+        clean_output = re.sub(r"\x1b\[[0-9;]*m", "", result)
+        identical = re.search(
+            r"(?m)^\s*Databases are identical\s+[\u2014-]\s+no migration needed\.\s*$",
+            clean_output,
+        )
+        if not identical:
+            raise SyncError("DBDiff produced no SQL file and did not confirm identical databases")
+        output.write_text("", encoding="utf-8")
+        output.chmod(0o600)
+    elif output.stat().st_size == 0:
+        raise SyncError("DBDiff produced an empty SQL file without identical-database confirmation")
     return output
 
 APPLY_SCRIPT = r'''set -Eeuo pipefail

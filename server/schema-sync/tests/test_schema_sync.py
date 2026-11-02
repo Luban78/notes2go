@@ -125,6 +125,46 @@ $body$;
             self.assertEqual(p.stat().st_mode & 0o777,0o600)
             self.assertIn('password: '+m.yval(a['PG_PASS']),p.read_text())
 
+    def test_dbdiff_identical_output_creates_empty_plan(self):
+        with tempfile.TemporaryDirectory() as d:
+            directory = Path(d)
+            db = {'DEST_DB_NAME':'postgres','DEST_DB_USER':'postgres',
+                  'PG_HOST':'127.0.0.1','PG_PORT':'5432','PG_PASS':'test'}
+            with patch.object(m, 'run', return_value='Databases are identical — no migration needed.\n'):
+                result = m.plan(db, db, directory)
+            self.assertEqual(result.read_text(), '')
+            self.assertEqual(result.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(m.classify(result.read_text()), ([],[],[]))
+
+    def test_dbdiff_no_file_without_explicit_success_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            db = {'DEST_DB_NAME':'postgres','DEST_DB_USER':'postgres',
+                  'PG_HOST':'127.0.0.1','PG_PORT':'5432','PG_PASS':'test'}
+            with patch.object(m, 'run', return_value='Completed\n'):
+                with self.assertRaisesRegex(m.SyncError, 'did not confirm identical'):
+                    m.plan(db, db, Path(d))
+
+    def test_dbdiff_error_never_becomes_empty_success(self):
+        with tempfile.TemporaryDirectory() as d:
+            db = {'DEST_DB_NAME':'postgres','DEST_DB_USER':'postgres',
+                  'PG_HOST':'127.0.0.1','PG_PORT':'5432','PG_PASS':'test'}
+            with patch.object(m, 'run', side_effect=m.SyncError('nonzero')):
+                with self.assertRaisesRegex(m.SyncError, 'Schema comparison failed'):
+                    m.plan(db, db, Path(d))
+
+    def test_dbdiff_generated_plan_is_preserved(self):
+        with tempfile.TemporaryDirectory() as d:
+            directory = Path(d)
+            db = {'DEST_DB_NAME':'postgres','DEST_DB_USER':'postgres',
+                  'PG_HOST':'127.0.0.1','PG_PORT':'5432','PG_PASS':'test'}
+            sql = 'ALTER TABLE "notes" ADD COLUMN "x" text;\n'
+            def fake_run(argv, **_):
+                Path(next(a.split('=',1)[1] for a in argv if a.startswith('--output='))).write_text(sql)
+                return 'Written: plan.sql\n'
+            with patch.object(m, 'run', side_effect=fake_run):
+                result = m.plan(db, db, directory)
+            self.assertEqual(result.read_text(), sql)
+
     def test_backend_registry_disallows_duplicates(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'backends.conf'; old=m.REGISTRY
