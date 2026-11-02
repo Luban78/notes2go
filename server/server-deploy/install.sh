@@ -16,7 +16,7 @@ else
     echo "BACKUP=$BACKUP"
   fi
   mkdir -p "$TARGET"
-  cp -a "$SOURCE/server-deploy.sh" "$SOURCE/launch.sh" "$SOURCE/migrations" "$SOURCE/verify" "$SOURCE/backends.conf" "$TARGET/"
+  cp -a "$SOURCE/server-deploy.sh" "$SOURCE/launch.sh" "$SOURCE/migrations" "$SOURCE/verify" "$SOURCE/backends.conf" "$SOURCE/install-shared-lock.sh" "$TARGET/"
   chmod 700 "$TARGET"
   chmod 700 "$TARGET/server-deploy.sh" "$TARGET/launch.sh"
   find "$TARGET/migrations" "$TARGET/verify" -type f -name '*.sql' -exec chmod 600 {} +

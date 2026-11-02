@@ -76,3 +76,25 @@ FROZEN a doplnime jeho ID do `backends.conf`. Pri nasledujicim `--check`
 se bude kontrolovat taky. Pro kompletni prechod produkce muze byt nutna
 migrace existujicich uzivatelu/dat a kompatibilni schema – Server Deploy
 sam o sobe nenahrazuje PREPARE → VERIFY → CUTOVER.
+
+
+## 698C: sdileny lock a kontrola owneru (zatim nenasezovat SQL)
+
+Pred ostrym `--apply` musi mit runtime `lubanote-migrate` a `backend-select`
+instalovany stejny flock guard jako Server Deploy. Jinak se `--apply` ZABLOKUJE.
+Opraveny GitHub skript Migration Manageru neni automaticky nahravan do runtime;
+instalator `install-shared-lock.sh` vklada pouze minimalni zamek do zivych
+skriptu a pred zmenou vytvori jejich zalozene kopie. Neprepisuje migracni logiku
+ani backend konfigurace. Kontrola funkci/roli odmita opravneni, ktera by
+znemoznila ALTER TABLE nebo CREATE OR REPLACE FUNCTION.
+
+Bezpecne poradi (po nahrani 698C na GitHub):
+
+1. Pouze `install-shared-lock.sh --check` (zadne zmeny, zadne SQL).
+2. Provedeme `launch.sh --check` a probereme log a role Cloudu/LubaServeru.
+3. Az potom samostatne domluvime `install-shared-lock.sh --apply`,
+   to meni jen existujici runtime shell skripty a vytvori jejich zalohy.
+4. A az po overeni shared locku smi byt uvazovano o serverovem `--apply` SQL.
+
+POZOR: sdileny lock chrani migraci spustenou pres tyto 2 CLI entrypointy.
+Nechrani rucni zmeny DB nebo nezavisle operace mimo tento system.
