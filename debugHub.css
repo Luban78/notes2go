@@ -592,3 +592,22 @@
   accent-color: #17bacc !important;
 }
 #ln-debug-hub .ln-dh-key-tuning-699k output { font-weight: 800 !important; }
+
+/* 699L – jednoznačný náhled odezvy v Debug Hubu. */
+#ln-debug-hub .ln-dh-keyboard-preview-699l {
+  width: 100% !important;
+  min-height: 40px !important;
+  background: #173940 !important;
+  border: 1px solid #4b8791 !important;
+  color: #edfaff !important;
+  transition: none !important;
+  touch-action: none;
+}
+#ln-debug-hub .ln-dh-keyboard-preview-699l.is-press-feedback {
+  background: #17bacc !important;
+  color: #071c23 !important;
+}
+#ln-debug-hub .ln-dh-key-tuning-699k [data-dh-kb-feedback-status] {
+  color: #a6e4d5 !important;
+  overflow-wrap: anywhere;
+}

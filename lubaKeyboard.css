@@ -1057,3 +1057,11 @@ body.ln-luba-klavesnice-open.ln-lk-actions-expanded
 
 /* 699K – bez dodatečného Android systémového tap highlightu. */
 #lubaKeyboard .ln-lk-key { -webkit-tap-highlight-color: transparent; }
+
+/* 699L – přepínač obou symbolových stránek +4 px, horní řada beze změn. */
+.ln-lk-body.is-standard-symbols .ln-lk-symbol-gboard-last-699j .ln-lk-key.ln-lk-symbol-side-699j:first-child {
+  flex-basis: calc(var(--ln-lk-letter-w) * 1.38 + 4px);
+  width: calc(var(--ln-lk-letter-w) * 1.38 + 4px);
+}
+/* 699L – bez zděděných CSS přechodů, které mohou po puštění prstu doznít. */
+#lubaKeyboard .ln-lk-key { transition: none !important; }
