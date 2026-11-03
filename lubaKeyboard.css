@@ -293,7 +293,7 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   opacity: .8;
 }
 
-.ln-lk-key:active,
+.ln-lk-key.is-press-feedback,
 .ln-lk-key.is-active {
   background: var(--color-accent, #7444dc);
   background: color-mix(in srgb, var(--color-accent, #7444dc) 58%, var(--color-surface, #222));
@@ -370,6 +370,37 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
 .ln-lk-bottom-standard .ln-lk-std-space   { flex: 4.22 1 0; font-size: 0.8125rem; }
 .ln-lk-bottom-standard .ln-lk-std-enter   { flex: 1.12 1 0; font-size: 1.125rem; }
 
+
+/* 699J: jednotné rozměry spodní řady dle referenčního Gboardu. */
+.ln-lk-bottom-standard .ln-lk-std-symbols { flex: 1.32 1 0; }
+.ln-lk-bottom-standard .ln-lk-std-punct { flex: .72 1 0; }
+.ln-lk-bottom-standard .ln-lk-std-extra-699j { flex: .78 1 0; font-size: 1.13rem; }
+.ln-lk-bottom-standard .ln-lk-std-space { flex: 3.65 1 0; }
+.ln-lk-bottom-standard .ln-lk-std-enter { flex: 1.22 1 0; font-size: 1.6rem; }
+.ln-lk-bottom-standard .ln-lk-number-toggle-699j { white-space: pre-line; line-height: .87; font-size: .79rem; }
+
+/* Na třetí symbolové řadě má Gboard ovládání vlevo i Backspace vpravo. */
+.ln-lk-symbol-gboard-last-699j { justify-content: space-between; }
+.ln-lk-body.is-standard-symbols .ln-lk-symbol-gboard-last-699j .ln-lk-symbol-side-699j {
+  flex: 0 0 calc(var(--ln-lk-letter-w) + 8px);
+  width: calc(var(--ln-lk-letter-w) + 8px);
+  background: color-mix(in srgb, var(--color-surface, #222) 72%, var(--color-accent, #7444dc) 18%);
+}
+
+/* Emoji a číselník jsou skutečné režimy, ne nefunkční tlačítka. */
+.ln-lk-emoji-grid-699j {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 4px;
+  max-height: 172px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.ln-lk-emoji-grid-699j .ln-lk-emoji-key-699j { height: 37px; font-size: 1.25rem; }
+.ln-lk-body.is-numpad-mode-699j .ln-lk-numpad-row-699j .ln-lk-key { height: 38px; }
+.ln-lk-body.is-numpad-mode-699j .ln-lk-numpad-side-699j {
+  background: color-mix(in srgb, var(--color-surface, #222) 72%, var(--color-accent, #7444dc) 18%);
+}
 
 /* PATCH 455 – čárka zůstává normální klávesou; malá ozubená značka
    jen napovídá, že long-press otevře Nastavení / jazyky. */
@@ -793,7 +824,7 @@ body.ln-lk-old-android-nav .ln-lk-bottom-standard .ln-lk-key:not(.ln-lk-std-spac
   background: var(--color-background, #211a29);
 }
 body.ln-lk-old-android-nav .ln-lk-key.is-active,
-body.ln-lk-old-android-nav .ln-lk-key:active,
+body.ln-lk-old-android-nav .ln-lk-key.is-press-feedback,
 body.ln-lk-old-android-nav .ln-lk-alt.is-active {
   background: var(--color-accent, #7444dc) !important;
   color: #fff !important;

@@ -610,6 +610,8 @@
   let layoutId = nactiLayout();
   let mode = "letters";
   let symbolPage = 0;
+  // 699J: návrat z Gboard číselníku do původní vrstvy.
+  let modePredCisly699J = "symbols";
   let shift = false;
   let caps = false;
   let longPressTimer = null;
@@ -2498,6 +2500,7 @@
 
   function vykresliLetters() {
     const layout = aktualniLayout();
+    telo.classList.remove("is-standard-symbols", "is-emoji-mode-699j", "is-numpad-mode-699j");
     telo.classList.toggle("is-grid", layout.grid === true);
     telo.classList.toggle("is-dense", layout.dense === true);
     telo.dataset.dir = layout.dir || "ltr";
@@ -2535,30 +2538,79 @@
     }
   }
 
+  // 699J – přesná poloha symbolů podle dodaných snímků českého Gboardu.
+  // Na třetí řadě jsou také funkční okrajové klávesy (další vrstva, Backspace).
+  const SYMBOLY_GBOARD_699J = Object.freeze([
+    [
+      ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+      ["@", "#", "$", "_", "&", "-", "+", "(", ")", "/"],
+      ["*", '"', "'", ":", ";", "!", "?"]
+    ],
+    [
+      ["~", "`", "|", "•", "√", "π", "÷", "×", "§", "Δ"],
+      ["£", "¢", "€", "¥", "^", "°", "=", "{", "}", "\\"],
+      ["%", "©", "®", "™", "✓", "[", "]"]
+    ]
+  ]);
+
   function vykresliSymbols() {
     const layout = aktualniLayout();
     const standard = layout.standardMobile === true;
-    telo.classList.remove("is-grid", "is-dense");
+    telo.classList.remove("is-grid", "is-dense", "is-emoji-mode-699j", "is-numpad-mode-699j");
     telo.classList.toggle("is-standard", standard);
     telo.classList.toggle("is-standard-symbols", standard);
 
-    /* PATCH 658AR – standardní mobilní symbolová vrstva.
-       Zachováváme tři známé úrovně: ABC → ?123 → =\<, ale samotné
-       symboly už nejsou rozdrobené do čtyř nestejných řádků. Stejně jako
-       na běžné Android klávesnici mají obě symbolové stránky tři řádky;
-       čárka a tečka zůstávají ve spodní funkční řadě. */
-    const rows = symbolPage === 0 ? [
-      znaky("1234567890"),
-      ["@", "#", "$", "%", "&", "-", "+", "(", ")", "/"],
-      ["*", '"', "'", ":", ";", "!", "?", "_"]
-    ] : [
-      ["~", "`", "|", "•", "√", "Π", "÷", "×", "¶", "∆"],
-      ["£", "¢", "€", "¥", "^", "°", "=", "{", "}", "\\"],
-      ["©", "®", "™", "℅", "[", "]", "<", ">"]
-    ];
-
+    const rows = SYMBOLY_GBOARD_699J[symbolPage] || SYMBOLY_GBOARD_699J[0];
     rows.forEach((values, rowIndex) => {
-      pridejRadek(values, { id: "symbols" }, `ln-lk-symbol-row ln-lk-symbol-row-${rowIndex + 1}`);
+      if (rowIndex !== 2) {
+        pridejRadek(values, { id: "symbols" }, `ln-lk-symbol-row ln-lk-symbol-row-${rowIndex + 1}`);
+        return;
+      }
+      const radek = document.createElement("div");
+      radek.className = "ln-lk-row ln-lk-symbol-row ln-lk-symbol-row-3 ln-lk-symbol-gboard-last-699j";
+      radek.appendChild(button(symbolPage === 0 ? "=\\<" : "?123", "symbols-more", "",
+        "ln-lk-symbol-side-699j", "Přepnout stránku symbolů"));
+      values.forEach((znak) => radek.appendChild(button(znak, "text", znak, "", znak)));
+      radek.appendChild(button("⌫", "backspace", "", "ln-lk-symbol-side-699j", "Backspace"));
+      telo.appendChild(radek);
+    });
+  }
+
+  // Funkční emoji a číselník pro dvě klávesy, které má Gboard v patě.
+  // Jde o dočasné režimy, uložený jazyk klávesnice se nemění.
+  function vykresliEmoji699J() {
+    telo.classList.remove("is-grid", "is-dense", "is-standard-symbols", "is-numpad-mode-699j");
+    telo.classList.add("is-standard", "is-emoji-mode-699j");
+    const mrizka = document.createElement("div");
+    mrizka.className = "ln-lk-emoji-grid-699j";
+    LAYOUTY.emoji.rows.forEach((radek) => {
+      // Původní data mají některé emoji rozdělené na kódové body (např. ❤️).
+      // Segmenter je znovu spojí na jeden vizuální znak a jednu klávesu.
+      const text = radek.join("");
+      const znakyEmoji = typeof Intl.Segmenter === "function"
+        ? Array.from(new Intl.Segmenter("cs", { granularity: "grapheme" }).segment(text), (s) => s.segment)
+        : Array.from(text).filter((c) => !/[\uFE0E\uFE0F]/u.test(c));
+      znakyEmoji.forEach((znak) => {
+        mrizka.appendChild(button(znak, "text", znak, "ln-lk-emoji-key-699j", znak));
+      });
+    });
+    telo.appendChild(mrizka);
+  }
+
+  function vykresliCiselnik699J() {
+    telo.classList.remove("is-grid", "is-dense", "is-standard-symbols", "is-emoji-mode-699j");
+    telo.classList.add("is-standard", "is-numpad-mode-699j");
+    const radky = [
+      ["7", "8", "9", "÷"], ["4", "5", "6", "×"],
+      ["1", "2", "3", "-"], [",", "0", "+", "⌫"]
+    ];
+    radky.forEach((hodnoty) => {
+      const radek = document.createElement("div");
+      radek.className = "ln-lk-row ln-lk-numpad-row-699j";
+      hodnoty.forEach((znak) => radek.appendChild(
+        znak === "⌫" ? button(znak, "backspace", "", "ln-lk-numpad-side-699j", "Backspace")
+          : button(znak, "text", znak, "", znak)));
+      telo.appendChild(radek);
     });
   }
 
@@ -2594,24 +2646,45 @@
     row.className = `ln-lk-row ln-lk-bottom ${standard ? "ln-lk-bottom-standard" : ""}`.trim();
 
     if (standard) {
-      /* PATCH 444 – jazyk už má vlastní tlačítko nahoře, proto ve spodní
-         řadě není duplicitní globus. ?123 se v symbolové vrstvě správně
-         změní na ABC, ne na volbu jazyka. */
+      // 699J: stejných šest pozic v patě jako na přiloženém Gboardu.
+      // Písmena: ?123, čárka/lomítko v URL, emoji, mezera, tečka, Enter.
+      // Symboly: ABC, čárka/<, číselník, mezera, tečka/>, Enter.
+      // Čárka ponechává původní long-press volbu nastavení / jazyka.
+      const jeUrl = mode === "letters" && (
+        aktivniTextovePole?.type === "url" ||
+        aktivniTextovePole?.inputMode === "url" ||
+        aktivniTextovePole?.dataset?.lubaOriginalInputmode === "url" ||
+        document.activeElement?.getAttribute?.("inputmode") === "url"
+      );
       if (mode === "letters") {
         row.appendChild(button("?123", "symbols", "", "ln-lk-std-symbols", "Čísla a symboly"));
-      } else {
+        const interpunkce = jeUrl ? "/" : ",";
+        const znak = button(interpunkce, "text", interpunkce,
+          "ln-lk-std-punct ln-lk-comma-settings", "Interpunkce – podržením nastavení");
+        znak.dataset.lkLongAction = "chooser";
+        row.appendChild(znak);
+        row.appendChild(button("☺", "emoji-699j", "", "ln-lk-std-extra-699j", "Emoji"));
+      } else if (mode === "symbols") {
         row.appendChild(button("ABC", "symbols", "", "ln-lk-std-symbols", "Zpět na písmena"));
-        row.appendChild(button(symbolPage === 0 ? "=\\<" : "?123", "symbols-more", "", "ln-lk-std-more", "Další symboly"));
+        const znak = symbolPage === 0 ? "," : "<";
+        const interpunkce = button(znak, "text", znak,
+          `ln-lk-std-punct ${symbolPage === 0 ? "ln-lk-comma-settings" : ""}`,
+          "Interpunkce");
+        if (symbolPage === 0) interpunkce.dataset.lkLongAction = "chooser";
+        row.appendChild(interpunkce);
+        row.appendChild(button("¹²\n³⁴", "numbers-699j", "", "ln-lk-std-extra-699j ln-lk-number-toggle-699j", "Číselná klávesnice"));
+      } else {
+        row.appendChild(button("ABC", "letters-699j", "", "ln-lk-std-symbols", "Zpět na písmena"));
+        row.appendChild(button("?123", "symbols", "", "ln-lk-std-punct", "Symboly"));
+        row.appendChild(button(mode === "emoji" ? "⌫" : "¹²\n³⁴", mode === "emoji" ? "backspace" : "numbers-699j", "",
+          "ln-lk-std-extra-699j", "Backspace nebo číselník"));
       }
-      const carka = button(",", "text", ",", "ln-lk-std-punct ln-lk-comma-settings",
-        "Čárka – podržením nastavení klávesnice");
-      carka.dataset.lkLongAction = "chooser";
-      row.appendChild(carka);
       row.appendChild(button("mezera", "space", "", "ln-lk-space ln-lk-std-space", "Mezera"));
-      const tecka = button(".", "text", ".", "ln-lk-std-punct has-alt", "Tečka – podržením další znaky");
-      tecka.dataset.lkAlt = JSON.stringify(TECKA_ALT);
+      const koncove = mode === "symbols" && symbolPage === 1 ? ">" : ".";
+      const tecka = button(koncove, "text", koncove, "ln-lk-std-punct has-alt", "Interpunkce");
+      if (koncove === ".") tecka.dataset.lkAlt = JSON.stringify(TECKA_ALT);
       row.appendChild(tecka);
-      row.appendChild(button("↵", "enter", "", "ln-lk-enter ln-lk-std-enter", "Enter"));
+      row.appendChild(button("→", "enter", "", "ln-lk-enter ln-lk-std-enter", "Enter"));
       telo.appendChild(row);
       return;
     }
@@ -2641,6 +2714,8 @@
     panel?.setAttribute("dir", "ltr");
 
     if (mode === "symbols" && layout.id !== "unicode") vykresliSymbols();
+    else if (mode === "emoji") vykresliEmoji699J();
+    else if (mode === "numpad") vykresliCiselnik699J();
     else vykresliLetters();
     vykresliBottom();
     aktualizujCompose();
@@ -3081,6 +3156,30 @@
     vykresliKlavesnici();
   }
 
+  function emojiAction699J() {
+    flushCompose("emoji", false);
+    mode = mode === "emoji" ? "letters" : "emoji";
+    vykresliKlavesnici();
+  }
+
+  function numbersAction699J() {
+    flushCompose("numbers", false);
+    if (mode === "numpad") {
+      mode = modePredCisly699J;
+    } else {
+      modePredCisly699J = mode === "letters" ? "symbols" : mode;
+      mode = "numpad";
+    }
+    vykresliKlavesnici();
+  }
+
+  function lettersAction699J() {
+    flushCompose("letters", false);
+    mode = "letters";
+    symbolPage = 0;
+    vykresliKlavesnici();
+  }
+
   function provedAkci(action, value = "") {
     haptic();
     switch (action) {
@@ -3095,6 +3194,9 @@
       case "shift": shiftAction(); break;
       case "symbols": symbolsAction(); break;
       case "symbols-more": symbolsMoreAction(); break;
+      case "emoji-699j": emojiAction699J(); break;
+      case "numbers-699j": numbersAction699J(); break;
+      case "letters-699j": lettersAction699J(); break;
       case "chooser": chooser?.hidden ? otevriChooser() : zavriChooser(); break;
       case "hide": skryj(); break;
       case "candidate": candidateAction(value); break;
@@ -3440,6 +3542,12 @@
       if (!b) return;
       event.preventDefault();
       if (b.dataset.lkAction) {
+        // 699J: krátký vizuální záblesk nezávislý na době držení prstu.
+        // Neprodlužuje 420ms long-press ani opakování Backspace.
+        if (b.classList.contains("ln-lk-key")) {
+          b.classList.add("is-press-feedback");
+          setTimeout(() => b.classList.remove("is-press-feedback"), 85);
+        }
         /* Touch pointer si necháme zachycený na původní klávese. Díky
            elementFromPoint() přitom pořád víme, nad kterou variantou je
            fyzicky prst. To je stabilní i na starším Android WebView. */
