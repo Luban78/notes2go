@@ -685,6 +685,22 @@ body.ln-luba-klavesnice-open .ln-v2-editor {
   text-decoration-line: line-through;
 }
 
+/* PATCH 699H – plánování celého TODO přes caret má stabilní sourceTodoId
+   a ln-v2-todo-planned, ale dosud NEMĚLO žádné viditelné podtržení.
+   Výběr části textu používá původní .plannedTextLink na konkrétních segmentech. */
+.ln-v2-editor .ln-v2-todo.ln-v2-todo-planned > .ln-v2-cast {
+  text-decoration-line: underline;
+  text-decoration-style: solid;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--color-accent);
+}
+
+/* U hotového naplánovaného TODO ponecháme zároveň přeškrtnutí i podtržení. */
+.ln-v2-editor .ln-v2-todo.ln-v2-todo-planned.ln-v2-todo-hotovo > .ln-v2-cast {
+  text-decoration-line: underline line-through;
+}
+
 .ln-v2-editor .ln-v2-todo > .ln-v2-list-image {
   float: none !important;
   clear: both !important;

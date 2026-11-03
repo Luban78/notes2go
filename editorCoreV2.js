@@ -4387,11 +4387,11 @@
     const vyber = ziskejFormatovaciVyber();
     if (!vyber) return { ok: false, duvod: "Nebyl nalezen výběr textu." };
 
-    /* PATCH 699G – vyber CASTI TODO se planuje jako oznaceny text.
-     * Cely TODO radek (pouhy caret nebo explicitne oznaceny cely text) si
-     * ponechava puvodni vazbu na stabilni todoId. U vyberu casti radku
-     * ulozime backlink do TODO html; Planner kontroluje i tento format.
-     * Pres vice TODO radku vyber dale neplanovat (viz niz). */
+    /* PATCH 699H – jakykoliv skutecny textovy vyber uvnitr jedne TODO
+     * polozky (i OZNACENY CELY TEXT) uklada Planner backlink a podtrzeni
+     * stejne jako odstavec. Pouze sbaleny caret planuje cele TODO pomoci
+     * sourceTodoId a tridy ln-v2-todo-planned. Rozsahy pres vice TODO
+     * polozek zustavaji zablokovane jako drive. */
     if (vyber.zacatek.blok === vyber.konec.blok) {
       const todoBlok = dokument.bloky[vyber.zacatek.blok];
       if (jeTodoBlok(todoBlok)) {
@@ -4400,9 +4400,9 @@
         const vybranaCast = vyber.sbaleny
           ? ""
           : celyText.slice(vyber.zacatek.offset, vyber.konec.offset).trim();
-        const jeVybranaCast = Boolean(vybranaCast) &&
-          (vyber.zacatek.offset > 0 || vyber.konec.offset < celyText.length);
-        if (jeVybranaCast) {
+        /* 699G chybne preklapelo plny textovy vyber zpet na TODO,
+         * takze se ani nevytvoril podtrzeny planovaci odkaz. */
+        if (!vyber.sbaleny && vybranaCast) {
           ulozenyPlanovaciVyber = klonVyberu(vyber);
           return {
             ok: true,
@@ -4411,6 +4411,9 @@
             start: absolutniOffsetPozice(vyber.zacatek),
             end: absolutniOffsetPozice(vyber.konec)
           };
+        }
+        if (!vyber.sbaleny) {
+          return { ok: false, duvod: "Označ text ToDo, který chceš naplánovat." };
         }
         ulozenyPlanovaciVyber = null;
         return { ok: true, typ: "todo", text: celyText.trim(), todoId: todoBlok.id };
