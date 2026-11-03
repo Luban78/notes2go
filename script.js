@@ -3346,7 +3346,10 @@ secretTaskButton.classList.toggle(
 );
   aktualizujIkonuTajnePoznamky();
   secretTaskButton.classList.toggle("active", secretTaskEnabled);
-  activeArea = "private";
+  /* PATCH 699G – nova poznamka dedi aktivni HLAVNI oblast Work / Private.
+   * Filtr Vse i neplatna hodnota ponechavaji dosavadni vychozi Soukrome.
+   * Editace existujicich poznamek ani volba stitku se nemeni. */
+  activeArea = activeAreaFilter === "work" ? "work" : "private";
   /* PATCH 683AL – nový záznam dědí právě zvolený horní filtr štítku.
    * Pouze existující štítek z aktivního LOCAL/SYNC prostoru;
    * Secret štítek nikdy nepřebíráme, pokud je Secret zamčený.

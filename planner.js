@@ -371,7 +371,7 @@ function migrateLocalPlannedItemsIntoNotes(notes) {
  *
  * 1) Když uživatel smaže přímo TODO řádek, odstraní se jeho Planner položka.
  * 2) Když uživatel smaže naplánovaný označený text, odstraní se Planner položka,
- *    pokud už v richContent neexistuje odpovídající data-planned-item-id nebo
+ *    pokud už v richContent ani v TODO html neexistuje odpovídající backlink nebo
  *    pokud po smazání zůstal jen prázdný wrapper.
  *
  * Celá zdrojová poznámka se touto funkcí nikdy nemaže.
@@ -387,30 +387,28 @@ async function synchronizujPlanovaneTodoSPoznamkou(note) {
       .map(todo => todo.id)
   );
 
-  /*
-   * Ověření selection backlinků děláme podle stabilního plannedItemId,
-   * ne podle textu. Stejný text se totiž může v poznámce objevit vícekrát.
-   */
+  /* PATCH 699G – oznaceny text muze byt v richContent i v TODO HTML.
+   * U ciste TODO poznamky je richContent zamerne prazdne. Overujeme tedy
+   * backlink podle plan ID v obou formatovych proudech, ne podle textu. */
   const platneSelectionIds = new Set();
-
-  if (typeof note.richContent === "string") {
+  const textPlanovanehoVyberu = new Map();
+  const nacitejPlanovaneOdkazyZHtml = (html) => {
+    if (typeof html !== "string" || !html) return;
     const sablona = document.createElement("template");
-    sablona.innerHTML = note.richContent;
-
-    sablona.content
-      .querySelectorAll("[data-planned-item-id]")
-      .forEach((odkaz) => {
-        const plannedItemId =
-          String(odkaz.dataset?.plannedItemId || "").trim();
-
-        const maObsah =
-          String(odkaz.textContent || "").trim().length > 0;
-
-        if (plannedItemId && maObsah) {
-          platneSelectionIds.add(plannedItemId);
-        }
-      });
-  }
+    sablona.innerHTML = html;
+    sablona.content.querySelectorAll("[data-planned-item-id]").forEach((odkaz) => {
+      const id = String(odkaz.dataset?.plannedItemId || "").trim();
+      const text = String(odkaz.textContent || "").trim();
+      if (!id || !text) return;
+      platneSelectionIds.add(id);
+      textPlanovanehoVyberu.set(id, text);
+    });
+  };
+  (Array.isArray(note.todos) ? note.todos : []).forEach((todo) => {
+    nacitejPlanovaneOdkazyZHtml(todo?.html);
+  });
+  /* Smiseny dokument ma v richContent kanonicky obsah; ten ma prednost. */
+  nacitejPlanovaneOdkazyZHtml(note.richContent);
 
   let plannedItemsVPoznamce =
     Array.isArray(note.plannedItems)
@@ -426,25 +424,12 @@ async function synchronizujPlanovaneTodoSPoznamkou(note) {
    * Při přejmenování TODO nebo naplánovaného podtrženého textu ale tento snapshot
    * nesmí zůstat starý. Autoritou je stabilní vazba:
    *   - TODO      -> sourceTodoId
-   *   - selection -> data-planned-item-id v aktuálním richContent
+   *   - selection -> data-planned-item-id v richContent nebo TODO html
    *
    * DŮLEŽITÉ: richContent ani CoreV2 formát zde NEMĚNÍME. Tím zůstává zachovaný
    * plannedTextLink / podtržení v editoru. Aktualizujeme pouze metadata Planneru.
    */
-  const textPlanovanehoVyberu = new Map();
-
-  if (typeof note.richContent === "string") {
-    const sablonaTextu = document.createElement("template");
-    sablonaTextu.innerHTML = note.richContent;
-
-    sablonaTextu.content
-      .querySelectorAll("[data-planned-item-id]")
-      .forEach((odkaz) => {
-        const id = String(odkaz.dataset?.plannedItemId || "").trim();
-        const text = String(odkaz.textContent || "").trim();
-        if (id && text) textPlanovanehoVyberu.set(id, text);
-      });
-  }
+  /* Mapa textu se nacetla soucasne s platnymi backlinky vyse. */
 
   const todoPodleId = new Map(
     (Array.isArray(note.todos) ? note.todos : [])
@@ -541,7 +526,7 @@ async function synchronizujPlanovaneTodoSPoznamkou(note) {
          * Když richContent chybí úplně (např. velmi stará poznámka),
          * nic automaticky nemažeme – nemáme důkaz, že backlink zmizel.
          */
-        if (typeof note.richContent !== "string") {
+        if (typeof note.richContent !== "string" && !Array.isArray(note.todos)) {
           return false;
         }
 

@@ -3474,16 +3474,22 @@ function najdiPlannedLinkVHtml(
   sourceNote,
   plannedItemId
 ) {
-  if (!sourceNote?.richContent || !plannedItemId) {
-    return null;
+  if (!sourceNote || !plannedItemId) return null;
+  /* PATCH 699G – odkaz na vybranou cast ciste TODO poznamky je v todos[].html. */
+  const htmlObsahy = [
+    sourceNote.richContent,
+    ...(Array.isArray(sourceNote.todos) ? sourceNote.todos.map((todo) => todo?.html) : [])
+  ];
+  for (const html of htmlObsahy) {
+    if (typeof html !== "string" || !html) continue;
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    const odkaz = template.content.querySelectorAll("[data-planned-item-id]");
+    for (const link of odkaz) {
+      if (String(link.dataset?.plannedItemId || "") === String(plannedItemId)) return link;
+    }
   }
-
-  const template = document.createElement("template");
-  template.innerHTML = sourceNote.richContent;
-
-  return template.content.querySelector(
-    `[data-planned-item-id="${plannedItemId}"]`
-  );
+  return null;
 }
 
 
@@ -3567,43 +3573,40 @@ function updatePlannedLinkHtml(
   plannedItemId,
   action
 ) {
-  if (!sourceNote?.richContent) {
-    return;
-  }
-
-  const template = document.createElement("template");
-  template.innerHTML = sourceNote.richContent;
-
-  const link = template.content.querySelector(
-    `[data-planned-item-id="${plannedItemId}"]`
-  );
-
-  if (!link) {
-    return;
-  }
-
-  if (action === "complete") {
-    link.classList.add("plannedTextLinkCompleted");
-  }
-
-  if (action === "restore") {
-    link.classList.remove("plannedTextLinkCompleted");
-  }
-
-  if (action === "remove") {
-    const parent = link.parentNode;
-
-    if (parent) {
-      while (link.firstChild) {
-        parent.insertBefore(link.firstChild, link);
+  if (!sourceNote || !plannedItemId) return;
+  /* PATCH 699G – stav odkazu menime v kanonickem richContent i v TODO zrcadle.
+   * Jinak ciste TODO ztraci podtrzeni po zavreni editoru a completion/restore. */
+  const aktualizujHtml = (html) => {
+    if (typeof html !== "string" || !html) return html;
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    let zmeneno = false;
+    template.content.querySelectorAll("[data-planned-item-id]").forEach((link) => {
+      if (String(link.dataset?.plannedItemId || "") !== String(plannedItemId)) return;
+      if (action === "complete") link.classList.add("plannedTextLinkCompleted");
+      if (action === "restore") link.classList.remove("plannedTextLinkCompleted");
+      if (action === "remove") {
+        const parent = link.parentNode;
+        if (parent) {
+          while (link.firstChild) parent.insertBefore(link.firstChild, link);
+          link.remove();
+          parent.normalize();
+        }
       }
-
-      link.remove();
-      parent.normalize();
-    }
+      zmeneno = true;
+    });
+    return zmeneno ? template.innerHTML : html;
+  };
+  if (typeof sourceNote.richContent === "string") {
+    sourceNote.richContent = aktualizujHtml(sourceNote.richContent);
   }
-
-  sourceNote.richContent = template.innerHTML;
+  if (Array.isArray(sourceNote.todos)) {
+    sourceNote.todos = sourceNote.todos.map((todo) => {
+      if (!todo || typeof todo.html !== "string") return todo;
+      const noveHtml = aktualizujHtml(todo.html);
+      return noveHtml === todo.html ? todo : { ...todo, html: noveHtml };
+    });
+  }
 }
 
 

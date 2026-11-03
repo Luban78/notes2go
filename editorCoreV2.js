@@ -4387,26 +4387,33 @@
     const vyber = ziskejFormatovaciVyber();
     if (!vyber) return { ok: false, duvod: "Nebyl nalezen výběr textu." };
 
-    /*
-     * V2.20 – TODO MÁ PŘEDNOST PŘED OBECNÝM TEXTOVÝM VÝBĚREM.
-     *
-     * Pokud je caret NEBO označený text uvnitř jedné TODO položky, plánuje se
-     * vždy celá TODO položka přes její stabilní todoId. Dříve se označené slovo
-     * uvnitř TODO chybně klasifikovalo jako `selection`. Poznámka s TODO ale
-     * ukládá text v `note.todos` a její `richContent` je prázdný, takže následná
-     * synchronizace správně odstranila takovou „selection“ Planner položku jako
-     * backlink, který v richContent neexistuje. Výsledkem byl podtržený text v
-     * editoru, ale žádný úkol v Planneru.
-     *
-     * TOTO PRAVIDLO NEMĚNIT bez regresního testu TODO → Planner.
-     */
+    /* PATCH 699G – vyber CASTI TODO se planuje jako oznaceny text.
+     * Cely TODO radek (pouhy caret nebo explicitne oznaceny cely text) si
+     * ponechava puvodni vazbu na stabilni todoId. U vyberu casti radku
+     * ulozime backlink do TODO html; Planner kontroluje i tento format.
+     * Pres vice TODO radku vyber dale neplanovat (viz niz). */
     if (vyber.zacatek.blok === vyber.konec.blok) {
       const todoBlok = dokument.bloky[vyber.zacatek.blok];
       if (jeTodoBlok(todoBlok)) {
-        const text = textBloku(todoBlok).trim();
-        if (!text) return { ok: false, duvod: "Prázdné TODO nelze naplánovat." };
+        const celyText = textBloku(todoBlok);
+        if (!celyText.trim()) return { ok: false, duvod: "Prázdné TODO nelze naplánovat." };
+        const vybranaCast = vyber.sbaleny
+          ? ""
+          : celyText.slice(vyber.zacatek.offset, vyber.konec.offset).trim();
+        const jeVybranaCast = Boolean(vybranaCast) &&
+          (vyber.zacatek.offset > 0 || vyber.konec.offset < celyText.length);
+        if (jeVybranaCast) {
+          ulozenyPlanovaciVyber = klonVyberu(vyber);
+          return {
+            ok: true,
+            typ: "selection",
+            text: vybranaCast,
+            start: absolutniOffsetPozice(vyber.zacatek),
+            end: absolutniOffsetPozice(vyber.konec)
+          };
+        }
         ulozenyPlanovaciVyber = null;
-        return { ok: true, typ: "todo", text, todoId: todoBlok.id };
+        return { ok: true, typ: "todo", text: celyText.trim(), todoId: todoBlok.id };
       }
     }
 
