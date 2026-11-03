@@ -21,6 +21,41 @@
 
   const ULOZ_LAYOUT = "lubanote_lubakeyboard_layout_v1";
   const ULOZ_REZIM = "lubanote_lubakeyboard_mode_v1";
+  // 699K – lokální ladění délky vizuální odezvy (Debug Hub).
+  const ULOZ_ODEZVA_699K = "lubanote_lubakeyboard_feedback_ms_699k";
+  const VYCHOZI_ODEZVA_699K = 40;
+  function normalizujOdezvu699K(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(0, Math.min(200, Math.round(n / 5) * 5)) : VYCHOZI_ODEZVA_699K;
+  }
+  let odezvaMs699K = (() => {
+    try {
+      const val = localStorage.getItem(ULOZ_ODEZVA_699K);
+      return val === null ? VYCHOZI_ODEZVA_699K : normalizujOdezvu699K(val);
+    } catch (_) { return VYCHOZI_ODEZVA_699K; }
+  })();
+  let odezvaTlacitko699K = null;
+  let odezvaTimer699K = null;
+  function zrusOdezvu699K() {
+    clearTimeout(odezvaTimer699K);
+    odezvaTimer699K = null;
+    odezvaTlacitko699K?.classList.remove("is-press-feedback");
+    odezvaTlacitko699K = null;
+  }
+  function rozsvitOdezvu699K(btn) {
+    zrusOdezvu699K();
+    if (!btn?.classList.contains("ln-lk-key") || odezvaMs699K === 0) return;
+    odezvaTlacitko699K = btn;
+    btn.classList.add("is-press-feedback");
+    odezvaTimer699K = setTimeout(zrusOdezvu699K, odezvaMs699K);
+  }
+  function nastavOdezvu699K(value) {
+    odezvaMs699K = normalizujOdezvu699K(value);
+    zrusOdezvu699K();
+    try { localStorage.setItem(ULOZ_ODEZVA_699K, String(odezvaMs699K)); } catch (_) {}
+    return odezvaMs699K;
+  }
+
   const ULOZ_RECENT = "lubanote_lubakeyboard_recent_v1";
   const ULOZ_NAVRHY = "lubanote_lubakeyboard_learned_words_v1";
   const ULOZ_KANDIDATY = "lubanote_lubakeyboard_word_candidates_v1";
@@ -427,6 +462,24 @@
     return znaky(text);
   }
 
+  // 699K – produkční latinské jazyky používají stejné třířádkové
+  // mobilní rozvržení; národní znaky jsou na dlouhém stisku písmen.
+  const NEMECKE_ALT_699K = Object.freeze({
+    ...LATIN_ALT,
+    a: "äáàâãåæ", o: "öóòôõøœ", u: "üúùûū",
+    s: "ßśš", e: "éèêëē", n: "ñń"
+  });
+  const POLSKE_ALT_699K = Object.freeze({
+    ...LATIN_ALT,
+    a: "ąáàâä", c: "ćčç", e: "ęéèêë", l: "łľĺ",
+    n: "ńñň", o: "óòôö", s: "śšß", z: "żźž"
+  });
+  const SPANELSKE_ALT_699K = Object.freeze({
+    ...LATIN_ALT,
+    a: "áàâä", e: "éèêë", i: "íìîï", n: "ñńň",
+    o: "óòôö", u: "úüùû"
+  });
+
   const LAYOUTY = Object.freeze({
     cs: {
       id: "cs", skupina: "Latinka", nazev: "Čeština", badge: "CS", locale: "cs-CZ",
@@ -445,8 +498,8 @@
     },
     de: {
       id: "de", skupina: "Latinka", nazev: "Deutsch", badge: "DE", locale: "de-DE",
-      rows: [radek("qwertzuiopü"), radek("asdfghjklöä"), radek("yxcvbnm")],
-      extra: znaky("ßéèç"), alt: LATIN_ALT, shift: true
+      rows: [radek("qwertzuiop"), radek("asdfghjkl"), radek("yxcvbnm")],
+      alt: NEMECKE_ALT_699K, shift: true, standardMobile: true
     },
     fr: {
       id: "fr", skupina: "Latinka", nazev: "Français", badge: "FR", locale: "fr-FR",
@@ -455,13 +508,13 @@
     },
     es: {
       id: "es", skupina: "Latinka", nazev: "Español", badge: "ES", locale: "es-ES",
-      rows: [radek("qwertyuiop"), radek("asdfghjklñ"), radek("zxcvbnm")],
-      extra: znaky("áéíóúü¿¡"), alt: LATIN_ALT, shift: true
+      rows: [radek("qwertyuiop"), radek("asdfghjkl"), radek("zxcvbnm")],
+      alt: SPANELSKE_ALT_699K, shift: true, standardMobile: true
     },
     pl: {
       id: "pl", skupina: "Latinka", nazev: "Polski", badge: "PL", locale: "pl-PL",
       rows: [radek("qwertyuiop"), radek("asdfghjkl"), radek("zxcvbnm")],
-      extra: znaky("ąćęłńóśźż"), alt: LATIN_ALT, shift: true
+      alt: POLSKE_ALT_699K, shift: true, standardMobile: true
     },
     tr: {
       id: "tr", skupina: "Latinka", nazev: "Türkçe", badge: "TR", locale: "tr-TR",
@@ -2570,7 +2623,14 @@
       radek.className = "ln-lk-row ln-lk-symbol-row ln-lk-symbol-row-3 ln-lk-symbol-gboard-last-699j";
       radek.appendChild(button(symbolPage === 0 ? "=\\<" : "?123", "symbols-more", "",
         "ln-lk-symbol-side-699j", "Přepnout stránku symbolů"));
-      values.forEach((znak) => radek.appendChild(button(znak, "text", znak, "", znak)));
+      values.forEach((znak) => {
+        const b = button(znak, "text", znak, "", znak);
+        if (layout.id === "es" && (znak === "?" || znak === "!")) {
+          b.dataset.lkAlt = JSON.stringify([znak === "?" ? "¿" : "¡"]);
+          b.classList.add("has-alt");
+        }
+        radek.appendChild(b);
+      });
       radek.appendChild(button("⌫", "backspace", "", "ln-lk-symbol-side-699j", "Backspace"));
       telo.appendChild(radek);
     });
@@ -3542,12 +3602,9 @@
       if (!b) return;
       event.preventDefault();
       if (b.dataset.lkAction) {
-        // 699J: krátký vizuální záblesk nezávislý na době držení prstu.
-        // Neprodlužuje 420ms long-press ani opakování Backspace.
-        if (b.classList.contains("ln-lk-key")) {
-          b.classList.add("is-press-feedback");
-          setTimeout(() => b.classList.remove("is-press-feedback"), 85);
-        }
+        // 699K: délku záblesku nastavuje Debug Hub, ale po uvolnění
+        // musí klávesa zhasnout HNED, nikoli čekat na konec časovače.
+        rozsvitOdezvu699K(b);
         /* Touch pointer si necháme zachycený na původní klávese. Díky
            elementFromPoint() přitom pořád víme, nad kterou variantou je
            fyzicky prst. To je stabilní i na starším Android WebView. */
@@ -3558,12 +3615,19 @@
     }, true);
 
     panel.addEventListener("pointermove", (event) => {
+      // Při odjetí prstem mimo původní klávesu vizuální odezvu ihned ukonči.
+      // Zachytávání pointeru a původní logika long-press zůstávají stejné.
+      if (odezvaTlacitko699K) {
+        const hit = document.elementFromPoint?.(event.clientX, event.clientY);
+        if (hit && !odezvaTlacitko699K.contains(hit)) zrusOdezvu699K();
+      }
       if (!longPressUsed) return;
       event.preventDefault();
       sledujAltPrst(event);
     }, true);
 
     panel.addEventListener("pointerup", (event) => {
+      zrusOdezvu699K();
       stopLongPress();
       stopRepeat();
       if (longPressUsed) {
@@ -3592,6 +3656,7 @@
     }, true);
 
     panel.addEventListener("pointercancel", () => {
+      zrusOdezvu699K();
       stopLongPress();
       stopRepeat();
       zavriAlt();
@@ -4739,6 +4804,9 @@
       return true;
     },
     ziskejLayout: () => layoutId,
+    ziskejOdezvu699K: () => odezvaMs699K,
+    nastavOdezvu699K,
+    ziskejProdukciJazyky699K: () => [...PRODUKCNI_LAYOUTY],
     ziskejZdroj: ziskejZdrojKlavesnice,
     nastavZdroj: nastavZdrojKlavesnice,
     jeOtevrena: () => Boolean(panel && !panel.hidden),

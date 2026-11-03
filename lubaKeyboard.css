@@ -1040,3 +1040,20 @@ body.ln-luba-klavesnice-open.ln-lk-actions-expanded
   padding-bottom: 112px;
   scroll-padding-bottom: 158px;
 }
+
+/* 699K – Gboard: přepínač =\< / ?123 v třetím symbolovém řádku
+   je širší než běžná znaková klávesa (původní pravidlo jej přepisovalo). */
+.ln-lk-body.is-standard-symbols .ln-lk-symbol-gboard-last-699j .ln-lk-key.ln-lk-symbol-side-699j {
+  flex: 0 0 calc(var(--ln-lk-letter-w) * 1.38);
+  width: calc(var(--ln-lk-letter-w) * 1.38);
+  font-size: clamp(.71rem, 3.25vw, .95rem) !important;
+  white-space: nowrap;
+  overflow: hidden;
+  padding-inline: 1px;
+  line-height: 1;
+}
+/* 699K – při rychlém psaní neanimujeme zhasnutí; odezvu řídí JS. */
+.ln-luba-keyboard .ln-lk-key.is-press-feedback { transition: none !important; }
+
+/* 699K – bez dodatečného Android systémového tap highlightu. */
+#lubaKeyboard .ln-lk-key { -webkit-tap-highlight-color: transparent; }

@@ -2944,10 +2944,17 @@ async function zkopirujNavrat685G(tlacitko) {
       <pre class="ln-dh-log">Diagnostika zatím neběží.</pre>
 
       <div class="ln-dh-footer">
+            <details class="ln-dh-key-tuning-699k">
+              <summary>LubaKeyboard – délka odezvy</summary>
+              <label for="lnDhKeyboardFeedback699K">Zvýraznění klávesy: <output data-dh-kb-feedback-value>40 ms</output></label>
+              <input id="lnDhKeyboardFeedback699K" type="range" min="0" max="200" step="5" value="40" data-dh-kb-feedback aria-label="Maximální zvýraznění klávesy v milisekundách">
+              <small>0 ms = bez záblesku. Po uvolnění prstu zhasne ihned při každé hodnotě. Volba se uloží v tomto zařízení.</small>
+            </details>
         <!-- Primary SYNC + reminders report is attached on demand by 691BA. -->
         <details class="ln-dh-report-extras">
           <summary>Další reporty a nástroje</summary>
           <div class="ln-dh-report-extras-inner">
+
             <button type="button" data-dh="copy-alarms-692x">Alarmy Android (692X)</button>
             <button type="button" data-dh="copy-resume">Návrat aplikace (RESUME)</button>
             <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat celý report</button>
@@ -2966,6 +2973,20 @@ async function zkopirujNavrat685G(tlacitko) {
 
     document.body.appendChild(hub);
 
+    // 699K: ladění přímo v Debug Hubu bez dalšího testovacího panelu.
+    const ladeniKlaves699K = hub.querySelector("[data-dh-kb-feedback]");
+    const hodnotaKlaves699K = hub.querySelector("[data-dh-kb-feedback-value]");
+    const nastavZobrazeniKlaves699K = (value) => {
+      const ms = Number(value);
+      if (!Number.isFinite(ms)) return;
+      if (ladeniKlaves699K) ladeniKlaves699K.value = String(ms);
+      if (hodnotaKlaves699K) hodnotaKlaves699K.textContent = `${ms} ms`;
+    };
+    nastavZobrazeniKlaves699K(window.LubaNoteKeyboard?.ziskejOdezvu699K?.() ?? 40);
+    ladeniKlaves699K?.addEventListener("input", () => {
+      const ms = window.LubaNoteKeyboard?.nastavOdezvu699K?.(ladeniKlaves699K.value);
+      if (ms !== undefined) nastavZobrazeniKlaves699K(ms);
+    });
     logEl = hub.querySelector(".ln-dh-log");
     stabilitaPanel = hub.querySelector("[data-ln-stability-panel]");
     summaryEl = hub.querySelector(".ln-dh-summary");
