@@ -2565,7 +2565,14 @@
       event.stopImmediatePropagation();
       core()?.zachytAktualniVyber?.();
       zavriPanelyFormatu();
-      core()?.pridejTodo?.();
+      const prevedeno = core()?.pridejTodo?.() === true;
+      /* 699I – převod TODO oběma směry je bloková akce (stejně jako
+         převod na code block). Po úspěchu uvolníme vlastní mobilní
+         Range/Highlight/handles; jejich staré DOM uzly už neexistují. */
+      if (prevedeno) {
+        zrusV2SelectionScrollStav();
+        skryjV2SelectionMenu();
+      }
       obnovToolbar();
       return;
     }

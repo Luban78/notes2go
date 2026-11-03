@@ -5275,16 +5275,18 @@
     if (endIndex < 0) endIndex = startIndex;
     if (endIndex < startIndex) [startIndex, endIndex] = [endIndex, startIndex];
 
+    /* 699I – úspěšný převod na TODO / zpět je dokončená bloková akce.
+       Původní vícerádkový výběr by po novém renderu nechal mobilní
+       selection úchyty na starých souřadnicích. Zachováme bezpečnou
+       pozici kurzoru na konci původního výběru, ale výběr sbalíme. */
+    const koncovaPozice = {
+      blok: endIndex,
+      offset: Math.min(vyber.konec.offset, textBloku(dokument.bloky[endIndex]).length)
+    };
     const vyberPo = {
-      zacatek: {
-        blok: startIndex,
-        offset: Math.min(vyber.zacatek.offset, textBloku(dokument.bloky[startIndex]).length)
-      },
-      konec: {
-        blok: endIndex,
-        offset: Math.min(vyber.konec.offset, textBloku(dokument.bloky[endIndex]).length)
-      },
-      sbaleny: vyber.sbaleny && startIndex === endIndex && vyber.zacatek.offset === vyber.konec.offset
+      zacatek: { ...koncovaPozice },
+      konec: { ...koncovaPozice },
+      sbaleny: true
     };
 
     posledniVyber = klonVyberu(vyberPo);
