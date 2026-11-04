@@ -37,13 +37,14 @@ final class LubaNoteRecurrence699W {
     cal.clear();cal.set(y,m-1,d);
     return (cal.get(Calendar.DAY_OF_WEEK)+6)%7; // Sunday=0 as in JS Date
   }
+  // 699X: JSON null means an unlimited recurrence, not the text "null".
   static boolean valid(JSONObject rule) {
     if(rule==null || !rule.optBoolean("enabled",false)) return false;
     String type=rule.optString("type","");
     if(!"daily".equals(type) && !"weekly".equals(type) && !"monthly".equals(type)) return false;
     if(rule.optInt("interval",1)<1 || rule.optInt("interval",1)>3660) return false;
     if(date(rule.optString("startDate",""))==null) return false;
-    String end=rule.optString("endDate","");
+    String end=rule.isNull("endDate") ? "" : rule.optString("endDate","");
     if(!end.isEmpty() && date(end)==null) return false;
     if("weekly".equals(type)) {
       JSONArray days=rule.optJSONArray("days");
@@ -83,7 +84,7 @@ final class LubaNoteRecurrence699W {
     if(!valid(rule) || baseAt<=0 || after<=0) return 0L;
     try {
       int[] start=date(rule.optString("startDate",""));
-      int[] end=date(rule.optString("endDate",""));
+      int[] end=date(rule.isNull("endDate") ? "" : rule.optString("endDate",""));
       Calendar base=Calendar.getInstance();base.setTimeInMillis(baseAt);
       int hour=base.get(Calendar.HOUR_OF_DAY),minute=base.get(Calendar.MINUTE);
       Calendar day=Calendar.getInstance();day.setTimeInMillis(after);
