@@ -7,6 +7,8 @@
   "use strict";
   const STYLE_ID = "ln-lk-preview-style-691BJ";
   const PREVIEW_ID = "ln-lk-press-preview-691BJ";
+  // 699R: diagnostika — 0 ms znamená, že se náhled ani nevytvoří.
+  const PREVIEW_SHOW_MS_699R = 0;
 
   const css = `
     #${PREVIEW_ID}[hidden] { display: none !important; }
@@ -103,6 +105,9 @@
       if (!panel || panel.hidden) return;
 
       clearPreview();
+      // 699R: při 0 ms žádné vykreslení ducha ani pressed třídy.
+      // Nespouštíme ani setTimeout(0), který se při zátěži může opozdit.
+      if (PREVIEW_SHOW_MS_699R === 0) return;
       const value = String(key.dataset.lkValue || "");
       if (!value || Array.from(value).length > 2) return;
       const r = key.getBoundingClientRect();
@@ -119,7 +124,7 @@
       bubble.hidden = false;
       // The existing alternate-character popup starts after 420 ms.
       // Hide the simple key preview before that popup is presented.
-      longPressTimer = setTimeout(clearPreview, 390);
+      longPressTimer = setTimeout(clearPreview, PREVIEW_SHOW_MS_699R);
     }, { capture: true, passive: true });
 
     /* 699Q – Android WebView: the preview and pressed background are separate
