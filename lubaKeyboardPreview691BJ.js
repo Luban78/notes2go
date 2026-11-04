@@ -7,8 +7,9 @@
   "use strict";
   const STYLE_ID = "ln-lk-preview-style-691BJ";
   const PREVIEW_ID = "ln-lk-press-preview-691BJ";
-  // 699R: diagnostika — 0 ms znamená, že se náhled ani nevytvoří.
-  const PREVIEW_SHOW_MS_699R = 0;
+  // 699T: náhled svítí jen při fyzickém stisku. Při dlouhém stisku
+  // jej před příchodem nabídky alternativních znaků (420 ms) uklidíme.
+  const LONG_PRESS_PREVIEW_CUTOFF_MS_699T = 390;
 
   const css = `
     #${PREVIEW_ID}[hidden] { display: none !important; }
@@ -105,9 +106,8 @@
       if (!panel || panel.hidden) return;
 
       clearPreview();
-      // 699R: při 0 ms žádné vykreslení ducha ani pressed třídy.
-      // Nespouštíme ani setTimeout(0), který se při zátěži může opozdit.
-      if (PREVIEW_SHOW_MS_699R === 0) return;
+      // 699T: duch a zvýraznění používají jedinou pressed třídu.
+      // Window capture při pointerup ji odstraní ještě před zápisem znaku.
       const value = String(key.dataset.lkValue || "");
       if (!value || Array.from(value).length > 2) return;
       const r = key.getBoundingClientRect();
@@ -124,7 +124,7 @@
       bubble.hidden = false;
       // The existing alternate-character popup starts after 420 ms.
       // Hide the simple key preview before that popup is presented.
-      longPressTimer = setTimeout(clearPreview, PREVIEW_SHOW_MS_699R);
+      longPressTimer = setTimeout(clearPreview, LONG_PRESS_PREVIEW_CUTOFF_MS_699T);
     }, { capture: true, passive: true });
 
     /* 699Q – Android WebView: the preview and pressed background are separate
