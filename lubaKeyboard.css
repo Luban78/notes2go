@@ -293,7 +293,7 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   opacity: .8;
 }
 
-.ln-lk-key.is-press-feedback,
+.ln-lk-key:active,
 .ln-lk-key.is-active {
   background: var(--color-accent, #7444dc);
   background: color-mix(in srgb, var(--color-accent, #7444dc) 58%, var(--color-surface, #222));
@@ -824,7 +824,7 @@ body.ln-lk-old-android-nav .ln-lk-bottom-standard .ln-lk-key:not(.ln-lk-std-spac
   background: var(--color-background, #211a29);
 }
 body.ln-lk-old-android-nav .ln-lk-key.is-active,
-body.ln-lk-old-android-nav .ln-lk-key.is-press-feedback,
+body.ln-lk-old-android-nav .ln-lk-key:active,
 body.ln-lk-old-android-nav .ln-lk-alt.is-active {
   background: var(--color-accent, #7444dc) !important;
   color: #fff !important;
@@ -1052,16 +1052,10 @@ body.ln-luba-klavesnice-open.ln-lk-actions-expanded
   padding-inline: 1px;
   line-height: 1;
 }
-/* 699K – při rychlém psaní neanimujeme zhasnutí; odezvu řídí JS. */
-.ln-luba-keyboard .ln-lk-key.is-press-feedback { transition: none !important; }
-
-/* 699K – bez dodatečného Android systémového tap highlightu. */
-#lubaKeyboard .ln-lk-key { -webkit-tap-highlight-color: transparent; }
-
 /* 699L – přepínač obou symbolových stránek +4 px, horní řada beze změn. */
 .ln-lk-body.is-standard-symbols .ln-lk-symbol-gboard-last-699j .ln-lk-key.ln-lk-symbol-side-699j:first-child {
   flex-basis: calc(var(--ln-lk-letter-w) * 1.38 + 4px);
   width: calc(var(--ln-lk-letter-w) * 1.38 + 4px);
 }
-/* 699L – bez zděděných CSS přechodů, které mohou po puštění prstu doznít. */
-#lubaKeyboard .ln-lk-key { transition: none !important; }
+
+/* 699M: stisk se vykresluje výhradně nativním :active (bez JS timerů). */

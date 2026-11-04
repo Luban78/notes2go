@@ -21,59 +21,6 @@
 
   const ULOZ_LAYOUT = "lubanote_lubakeyboard_layout_v1";
   const ULOZ_REZIM = "lubanote_lubakeyboard_mode_v1";
-  // 699L: skutečně laditelný DOSVIT po puštění prstu (ne čas od pointerdown).
-  // Nový klíč úmyslně ignoruje předchozí nesrovnatelnou hodnotu z 699K.
-  // 0 ms = žádný vizuální záblesk; nastavení nemění vložení znaku ani long-press.
-  const ULOZ_ODEZVA_699K = "lubanote_lubakeyboard_release_afterglow_ms_699l";
-  const VYCHOZI_ODEZVA_699K = 0;
-  function normalizujOdezvu699K(value) {
-    const n = Number(value);
-    return Number.isFinite(n) ? Math.max(0, Math.min(200, Math.round(n / 5) * 5)) : VYCHOZI_ODEZVA_699K;
-  }
-  let odezvaMs699K = (() => {
-    try {
-      const val = localStorage.getItem(ULOZ_ODEZVA_699K);
-      return val === null ? VYCHOZI_ODEZVA_699K : normalizujOdezvu699K(val);
-    } catch (_) { return VYCHOZI_ODEZVA_699K; }
-  })();
-  let odezvaTlacitko699K = null;
-  let odezvaTimer699K = null;
-  let odezvaPrstDole699L = false;
-  let odezvaPointer699L = null;
-  function zrusOdezvu699K() {
-    clearTimeout(odezvaTimer699K);
-    odezvaTimer699K = null;
-    odezvaTlacitko699K?.classList.remove("is-press-feedback");
-    odezvaTlacitko699K = null;
-    odezvaPrstDole699L = false;
-    odezvaPointer699L = null;
-  }
-  function rozsvitOdezvu699K(btn, pointerId = null) {
-    zrusOdezvu699K();
-    if (!btn?.classList || odezvaMs699K === 0) return;
-    if (!btn.classList.contains("ln-lk-key") && !btn.classList.contains("ln-dh-keyboard-preview-699l")) return;
-    odezvaTlacitko699K = btn;
-    odezvaPrstDole699L = true;
-    odezvaPointer699L = pointerId;
-    btn.classList.add("is-press-feedback");
-  }
-  function ukonciOdezvu699L(pointerId = null) {
-    if (!odezvaPrstDole699L) return;
-    if (odezvaPointer699L !== null && pointerId !== null && pointerId !== odezvaPointer699L) return;
-    odezvaPrstDole699L = false;
-    odezvaPointer699L = null;
-    if (!odezvaTlacitko699K || odezvaMs699K === 0) { zrusOdezvu699K(); return; }
-    // První měřitelný okamžik je až uvolnění prstu.
-    clearTimeout(odezvaTimer699K);
-    odezvaTimer699K = setTimeout(zrusOdezvu699K, odezvaMs699K);
-  }
-  function nastavOdezvu699K(value) {
-    odezvaMs699K = normalizujOdezvu699K(value);
-    zrusOdezvu699K();
-    try { localStorage.setItem(ULOZ_ODEZVA_699K, String(odezvaMs699K)); } catch (_) {}
-    return odezvaMs699K;
-  }
-
   const ULOZ_RECENT = "lubanote_lubakeyboard_recent_v1";
   const ULOZ_NAVRHY = "lubanote_lubakeyboard_learned_words_v1";
   const ULOZ_KANDIDATY = "lubanote_lubakeyboard_word_candidates_v1";
@@ -3620,9 +3567,8 @@
       if (!b) return;
       event.preventDefault();
       if (b.dataset.lkAction) {
-        // 699L: záblesk při dotyku; dosvit (pokud jej uživatel vybere)
-        // se měří až po uvolnění prstu.
-        rozsvitOdezvu699K(b, event.pointerId);
+        // 699M: performance rollback – nativní :active bez JS časovačů.
+        // Při uvolnění/odjetí prstu zhasne klávesa přirozeně sama.
         /* Touch pointer si necháme zachycený na původní klávese. Díky
            elementFromPoint() přitom pořád víme, nad kterou variantou je
            fyzicky prst. To je stabilní i na starším Android WebView. */
@@ -3633,19 +3579,12 @@
     }, true);
 
     panel.addEventListener("pointermove", (event) => {
-      // Při odjetí prstem mimo původní klávesu vizuální odezvu ihned ukonči.
-      // Zachytávání pointeru a původní logika long-press zůstávají stejné.
-      if (odezvaTlacitko699K) {
-        const hit = document.elementFromPoint?.(event.clientX, event.clientY);
-        if (hit && !odezvaTlacitko699K.contains(hit)) zrusOdezvu699K();
-      }
       if (!longPressUsed) return;
       event.preventDefault();
       sledujAltPrst(event);
     }, true);
 
     panel.addEventListener("pointerup", (event) => {
-      ukonciOdezvu699L(event.pointerId);
       stopLongPress();
       stopRepeat();
       if (longPressUsed) {
@@ -3673,15 +3612,7 @@
       provedAkci(b.dataset.lkAction, b.dataset.lkValue || "");
     }, true);
 
-    // Pojistka: při uvolnění mimo panel nezůstane viset stav dotyku.
-    document.addEventListener("pointerup", (event) => {
-      if (odezvaTlacitko699K?.classList.contains("ln-lk-key")) ukonciOdezvu699L(event.pointerId);
-    }, true);
-    window.addEventListener("blur", zrusOdezvu699K);
-    document.addEventListener("visibilitychange", () => { if (document.hidden) zrusOdezvu699K(); });
-
     panel.addEventListener("pointercancel", () => {
-      zrusOdezvu699K();
       stopLongPress();
       stopRepeat();
       zavriAlt();
@@ -4829,12 +4760,6 @@
       return true;
     },
     ziskejLayout: () => layoutId,
-    ziskejOdezvu699K: () => odezvaMs699K,
-    nastavOdezvu699K,
-    // Debug Hub může demonstrovat přesně stejný časovač jako skutečná klávesa.
-    zacniNahledOdezvy699L: (btn, pointerId) => rozsvitOdezvu699K(btn, pointerId),
-    ukonciNahledOdezvy699L: (pointerId) => ukonciOdezvu699L(pointerId),
-    zrusNahledOdezvy699L: () => zrusOdezvu699K(),
     ziskejProdukciJazyky699K: () => [...PRODUKCNI_LAYOUTY],
     ziskejZdroj: ziskejZdrojKlavesnice,
     nastavZdroj: nastavZdrojKlavesnice,

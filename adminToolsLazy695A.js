@@ -8,7 +8,7 @@
   const assets = {
     svg: ['adminSvgStudio693R.css?v=696F-object-relief-shading', 'adminSvgStudio693R.js?v=696F-object-relief-shading'],
     visual: ['visualDebug.css?v=658be-global-rem-font-scale', 'visualDebug.js?v=690Q-dock-verification'],
-    hub: ['debugHub.css?v=699L-feedback-release-preview', 'debugHub.js?v=699L-feedback-release-preview']
+    hub: ['debugHub.css?v=699M-feedback-rollback', 'debugHub.js?v=699M-feedback-rollback']
   };
   const jobs = new Map();
 

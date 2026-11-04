@@ -2944,19 +2944,10 @@ async function zkopirujNavrat685G(tlacitko) {
       <pre class="ln-dh-log">Diagnostika zatím neběží.</pre>
 
       <div class="ln-dh-footer">
-            <details class="ln-dh-key-tuning-699k">
-              <summary>LubaKeyboard – doladění odezvy</summary>
-              <label for="lnDhKeyboardFeedback699K">Dosvit po puštění prstu: <output data-dh-kb-feedback-value>0 ms</output></label>
-              <input id="lnDhKeyboardFeedback699K" type="range" min="0" max="200" step="5" value="0" data-dh-kb-feedback aria-label="Dosvit klávesy po uvolnění prstu v milisekundách">
-              <small>0 ms = bez záblesku. Zkus 0, 5, 10, 20 nebo 40 ms; uloženo pouze v tomto zařízení.</small>
-              <button type="button" class="ln-dh-keyboard-preview-699l" data-dh-kb-feedback-preview>Vyzkoušej stisk tady</button>
-              <small data-dh-kb-feedback-status aria-live="polite">Zjišťuji spojení s klávesnicí…</small>
-            </details>
         <!-- Primary SYNC + reminders report is attached on demand by 691BA. -->
         <details class="ln-dh-report-extras">
           <summary>Další reporty a nástroje</summary>
           <div class="ln-dh-report-extras-inner">
-
             <button type="button" data-dh="copy-alarms-692x">Alarmy Android (692X)</button>
             <button type="button" data-dh="copy-resume">Návrat aplikace (RESUME)</button>
             <button type="button" class="ln-dh-copy" data-dh="copy">Kopírovat celý report</button>
@@ -2975,57 +2966,6 @@ async function zkopirujNavrat685G(tlacitko) {
 
     document.body.appendChild(hub);
 
-    // 699L: skutečný dosvit po uvolnění + náhled používající stejnou logiku.
-    const ladeniKlaves699K = hub.querySelector("[data-dh-kb-feedback]");
-    const hodnotaKlaves699K = hub.querySelector("[data-dh-kb-feedback-value]");
-    const stavKlaves699L = hub.querySelector("[data-dh-kb-feedback-status]");
-    const nahledKlaves699L = hub.querySelector("[data-dh-kb-feedback-preview]");
-    const nastavZobrazeniKlaves699K = (value) => {
-      const ms = Number(value);
-      if (!Number.isFinite(ms)) return;
-      if (ladeniKlaves699K) ladeniKlaves699K.value = String(ms);
-      if (hodnotaKlaves699K) hodnotaKlaves699K.textContent = `${ms} ms`;
-    };
-    const nactiStavKlaves699L = () => {
-      const kb = window.LubaNoteKeyboard;
-      if (!kb?.nastavOdezvu699K || !kb?.ziskejOdezvu699K) {
-        if (stavKlaves699L) stavKlaves699L.textContent = "Klávesnice není načtená – nastavení nelze použít.";
-        if (ladeniKlaves699K) ladeniKlaves699K.disabled = true;
-        if (nahledKlaves699L) nahledKlaves699L.disabled = true;
-        return false;
-      }
-      if (ladeniKlaves699K) ladeniKlaves699K.disabled = false;
-      if (nahledKlaves699L) nahledKlaves699L.disabled = false;
-      nastavZobrazeniKlaves699K(kb.ziskejOdezvu699K());
-      if (stavKlaves699L) stavKlaves699L.textContent = "Spojeno – změna se uplatní na další stisk klávesy.";
-      return true;
-    };
-    nactiStavKlaves699L();
-    const aplikujOdezvu699L = () => {
-      const ms = window.LubaNoteKeyboard?.nastavOdezvu699K?.(ladeniKlaves699K?.value);
-      if (!Number.isFinite(ms)) {
-        if (stavKlaves699L) stavKlaves699L.textContent = "Chyba spojení – nastavení nebylo použito.";
-        return;
-      }
-      nastavZobrazeniKlaves699K(ms);
-      if (stavKlaves699L) stavKlaves699L.textContent = `Použito: ${ms} ms. Vyzkoušej tlačítko dole.`;
-    };
-    ladeniKlaves699K?.addEventListener("input", aplikujOdezvu699L);
-    ladeniKlaves699K?.addEventListener("change", aplikujOdezvu699L);
-    nahledKlaves699L?.addEventListener("pointerdown", (event) => {
-      window.LubaNoteKeyboard?.zacniNahledOdezvy699L?.(nahledKlaves699L, event.pointerId);
-      try { nahledKlaves699L.setPointerCapture?.(event.pointerId); } catch (_) {}
-    });
-    nahledKlaves699L?.addEventListener("pointerup", (event) => {
-      window.LubaNoteKeyboard?.ukonciNahledOdezvy699L?.(event.pointerId);
-    });
-    nahledKlaves699L?.addEventListener("pointercancel", () => {
-      window.LubaNoteKeyboard?.zrusNahledOdezvy699L?.();
-    });
-    // Otevření Hubu po změně rozložení znovu načte hodnotu z aktivního modulu.
-    hub.addEventListener("toggle", (event) => {
-      if (event.target?.matches?.(".ln-dh-key-tuning-699k") && event.target.open) nactiStavKlaves699L();
-    }, true);
     logEl = hub.querySelector(".ln-dh-log");
     stabilitaPanel = hub.querySelector("[data-ln-stability-panel]");
     summaryEl = hub.querySelector(".ln-dh-summary");
