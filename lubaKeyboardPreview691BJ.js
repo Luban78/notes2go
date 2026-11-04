@@ -77,6 +77,8 @@
     let pressed = null;
     let pointerId = null;
     let longPressTimer = null;
+    let touchId = null;
+    let bounds = null;
 
     function clearPreview() {
       if (longPressTimer !== null) clearTimeout(longPressTimer);
@@ -84,6 +86,8 @@
       pressed?.classList.remove("ln-lk-preview-pressed");
       pressed = null;
       pointerId = null;
+      touchId = null;
+      bounds = null;
       bubble.hidden = true;
       bubble.textContent = "";
     }
@@ -106,6 +110,7 @@
 
       pressed = key;
       pointerId = event.pointerId;
+      bounds = { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
       bubble.textContent = value;
       bubble.style.width = Math.max(42, Math.min(74, r.width + 15)) + "px";
       bubble.style.left = (r.left + r.width / 2) + "px";
@@ -117,13 +122,62 @@
       longPressTimer = setTimeout(clearPreview, 390);
     }, { capture: true, passive: true });
 
-    // Capture phase precedes LubaKeyboard's own pointerup handler, which
-    // writes the character into the editor. Never show a delayed flash.
-    document.addEventListener("pointerup", event => {
-      if (pointerId === event.pointerId) clearPreview();
+    /* 699Q – Android WebView: the preview and pressed background are separate
+     * from lubaKeyboard.js. Some WebViews miss a document pointerup while a
+     * key has pointer capture. Listen on WINDOW capture (before the editor's
+     * document/panel handlers) and also handle native touchend/touchcancel.
+     * No delayed fade, no timer AFTER release and no editor/backspace changes. */
+    function endPress() {
+      // 699O normally removes this class too. Remove it here as a fallback
+      // when the keyboard's own panel pointerup was swallowed by WebView.
+      pressed?.classList.remove("is-touch-down-699o");
+      clearPreview();
+    }
+    function endPointer(event) {
+      if (pressed && pointerId === event.pointerId) endPress();
+    }
+    window.addEventListener("pointerup", endPointer, true);
+    window.addEventListener("pointercancel", endPointer, true);
+
+    window.addEventListener("touchstart", event => {
+      if (!pressed || touchId !== null) return;
+      for (const t of Array.from(event.changedTouches || [])) {
+        // The event may be retargeted by pointer capture; any touch that
+        // started at the pressed key is sufficient to track its release.
+        if (t.target === pressed || pressed.contains(t.target)) {
+          touchId = t.identifier;
+          break;
+        }
+      }
+    }, { capture: true, passive: true });
+
+    function endTouch(event) {
+      if (!pressed) return;
+      const changed = Array.from(event.changedTouches || []);
+      // Touch identifier is best; zero remaining touches is a safe fallback
+      // for a WebView that fires touchend without a matching touchstart.
+      if ((touchId !== null && changed.some(t => t.identifier === touchId)) ||
+          (event.touches && event.touches.length === 0)) {
+        endPress();
+      }
+    }
+    window.addEventListener("touchend", endTouch, { capture: true, passive: true });
+    window.addEventListener("touchcancel", endTouch, { capture: true, passive: true });
+
+    // Sliding away from the key may keep the pointer captured on the same
+    // DOM button; physical coordinates determine whether the preview remains.
+    window.addEventListener("pointermove", event => {
+      if (!pressed || pointerId !== event.pointerId || !bounds) return;
+      if (event.clientX < bounds.left || event.clientX > bounds.right ||
+          event.clientY < bounds.top || event.clientY > bounds.bottom) {
+        endPress();
+      }
+    }, { capture: true, passive: true });
+    window.addEventListener("lostpointercapture", event => {
+      if (pressed && (event.pointerId === pointerId || event.target === pressed)) endPress();
     }, true);
-    document.addEventListener("pointercancel", event => {
-      if (pointerId === event.pointerId) clearPreview();
+    window.addEventListener("click", event => {
+      if (pressed && (event.target === pressed || pressed.contains(event.target))) endPress();
     }, true);
     window.addEventListener("blur", clearPreview);
     document.addEventListener("visibilitychange", () => {
