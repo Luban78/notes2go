@@ -1074,3 +1074,25 @@ body.ln-luba-klavesnice-open.ln-lk-actions-expanded
 }
 
 /* 699O: vizuální stisk výhradně v .is-touch-down-699o, ne WebView :active. */
+
+/* ==============================================================
+   699S – DIAGNOSTIKA: nulové zvýraznění ZNAKOVÝCH kláves.
+   699R již vypíná ducha v lubaKeyboardPreview691BJ.js. Nyní
+   testujeme druhý nezávislý efekt .is-touch-down-699o i :active.
+   NEJDE o finální interakci. Backspace, Shift a další funkční
+   klávesy se nemění. Bez dalších JS listenerů a timerů.
+   ============================================================== */
+#lubaKeyboard .ln-lk-key[data-lk-action="text"]:is(:active, .is-touch-down-699o):not(.is-active) {
+  background: var(--color-surface, #272130) !important;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--color-surface, #272130) 84%, white 8%),
+    color-mix(in srgb, var(--color-surface, #272130) 96%, #000 4%)) !important;
+  border-color: color-mix(in srgb, var(--color-border, #888) 75%, transparent) !important;
+  box-shadow: inset 0 1px rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.2) !important;
+  color: var(--color-text, #fff) !important;
+  transform: none !important;
+  filter: none !important;
+  opacity: 1 !important;
+  animation: none !important;
+  transition: none !important;
+}
