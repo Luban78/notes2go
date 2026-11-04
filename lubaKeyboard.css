@@ -293,16 +293,22 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   opacity: .8;
 }
 
-/* 699N – krátký vizuální tap bez JS časovačů.
-   :active nemění pozadí ani polohu: při vytíženém editoru tak
-   nezůstane svítit původní akcentní barva. Světelný impuls skončí
-   i při stále držené klávese; stav Shift/Caps zůstává nezměněn. */
-@keyframes ln-lk-short-flash-699n {
-  from { filter: brightness(1.30); }
-  to { filter: brightness(1); }
+/* 699O – bez WebView tap highlight, :active animace a dosvitu.
+   Jen okamžitý stav podle skutečného dotyku, řízený pointer událostmi.
+   Žádná CSS animace/transition ani JS časovač. */
+#lubaKeyboard .ln-lk-key,
+#lubaKeyboard .ln-lk-key *,
+.ln-lk-alt-popup .ln-lk-key,
+.ln-lk-alt-popup .ln-lk-key * {
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-user-drag: none;
+  animation: none !important;
+  transition: none !important;
 }
-.ln-lk-key:active:not(.is-active) {
-  animation: ln-lk-short-flash-699n 45ms steps(1, end) both;
+#lubaKeyboard .ln-lk-key.is-touch-down-699o:not(.is-active) {
+  background: var(--color-accent, #7444dc);
+  background: color-mix(in srgb, var(--color-accent, #7444dc) 30%, var(--color-surface, #272130));
+  border-color: var(--color-accent, #7444dc);
 }
 .ln-lk-key.is-active {
   background: var(--color-accent, #7444dc);
@@ -1067,4 +1073,4 @@ body.ln-luba-klavesnice-open.ln-lk-actions-expanded
   width: calc(var(--ln-lk-letter-w) * 1.38 + 4px);
 }
 
-/* 699M: stisk se vykresluje výhradně nativním :active (bez JS timerů). */
+/* 699O: vizuální stisk výhradně v .is-touch-down-699o, ne WebView :active. */

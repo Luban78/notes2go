@@ -3508,6 +3508,17 @@
     if (obnovit && panel && !panel.hidden) queueMicrotask(aktualizujNavrhy);
   }
 
+  let stisknutaKlavesa699O = null;
+  let stisknutyPointer699O = null;
+
+  function ukonciVizualniStiskMimoPanel699O(pointerId = null) {
+    if (!stisknutaKlavesa699O) return;
+    if (pointerId != null && pointerId !== stisknutyPointer699O) return;
+    stisknutaKlavesa699O.classList.remove("is-touch-down-699o");
+    stisknutaKlavesa699O = null;
+    stisknutyPointer699O = null;
+  }
+
   function vytvorPanel() {
     if (panel?.isConnected) return;
 
@@ -3562,13 +3573,26 @@
 
     document.body.append(panel, otevritButton, altPopup);
 
+    // 699O – jediný vizuální stav dotyku (neovlivňuje vkládání ani repeat).
+    // Během držení se rozsvítí; při puštění/cancel se smaže ještě před
+    // provedAkci(), takže editor nemůže dál držet JS třídu stisku.
+    function zacniVizualniStisk699O(b, pointerId) {
+      ukonciVizualniStisk699O();
+      stisknutaKlavesa699O = b;
+      stisknutyPointer699O = pointerId;
+      b.classList.add("is-touch-down-699o");
+    }
+
+    function ukonciVizualniStisk699O(pointerId = null) {
+      ukonciVizualniStiskMimoPanel699O(pointerId);
+    }
+
     panel.addEventListener("pointerdown", (event) => {
       const b = event.target.closest("button");
       if (!b) return;
       event.preventDefault();
       if (b.dataset.lkAction) {
-        // 699M: performance rollback – nativní :active bez JS časovačů.
-        // Při uvolnění/odjetí prstu zhasne klávesa přirozeně sama.
+        zacniVizualniStisk699O(b, event.pointerId);
         /* Touch pointer si necháme zachycený na původní klávese. Díky
            elementFromPoint() přitom pořád víme, nad kterou variantou je
            fyzicky prst. To je stabilní i na starším Android WebView. */
@@ -3579,12 +3603,21 @@
     }, true);
 
     panel.addEventListener("pointermove", (event) => {
+      // Capture směruje pohyb na původní tlačítko, i když prst již odjel.
+      // Barvu určuje skutečná poloha prstu, ne zachycený DOM target.
+      if (stisknutaKlavesa699O && stisknutyPointer699O === event.pointerId) {
+        const r = stisknutaKlavesa699O.getBoundingClientRect();
+        const nad = event.clientX >= r.left && event.clientX <= r.right &&
+                    event.clientY >= r.top && event.clientY <= r.bottom;
+        stisknutaKlavesa699O.classList.toggle("is-touch-down-699o", nad);
+      }
       if (!longPressUsed) return;
       event.preventDefault();
       sledujAltPrst(event);
     }, true);
 
     panel.addEventListener("pointerup", (event) => {
+      ukonciVizualniStisk699O(event.pointerId);
       stopLongPress();
       stopRepeat();
       if (longPressUsed) {
@@ -3612,12 +3645,18 @@
       provedAkci(b.dataset.lkAction, b.dataset.lkValue || "");
     }, true);
 
-    panel.addEventListener("pointercancel", () => {
+    panel.addEventListener("pointercancel", (event) => {
+      ukonciVizualniStisk699O(event.pointerId);
       stopLongPress();
       stopRepeat();
       zavriAlt();
       longPressUsed = false;
       longPressPointerId = null;
+    }, true);
+
+    // WebView může zrušit pointer capture mimo klávesnici.
+    panel.addEventListener("lostpointercapture", (event) => {
+      ukonciVizualniStisk699O(event.pointerId);
     }, true);
 
     panel.addEventListener("click", (event) => event.preventDefault(), true);
@@ -3898,6 +3937,7 @@
   }
 
   function skryj() {
+    ukonciVizualniStiskMimoPanel699O();
     /* Ruční/API hide je stabilní stav. Samotný stále aktivní contenteditable
        jej nesmí hned přebít focusin událostí. */
     potlacAutomatickeOtevreni = true;
@@ -4477,13 +4517,20 @@
   /* PATCH 467 – blur okna přichází na Androidu typicky dřív než
      visibilitychange=hidden. Tohle je klíčové: InputConnection odpojíme
      ještě během odchodu Activity, ne až při jejím pozdějším uspání. */
+  // 699O – mimo panel (např. při ztraceném capture) musí dotyk také zhasnout.
+  // O(1) kontrola jediného aktivního pointeru; bez timeoutů a bez renderu editoru.
+  document.addEventListener("pointerup", (event) => ukonciVizualniStiskMimoPanel699O(event.pointerId), true);
+  document.addEventListener("pointercancel", (event) => ukonciVizualniStiskMimoPanel699O(event.pointerId), true);
+
   window.addEventListener("blur", () => {
+    ukonciVizualniStiskMimoPanel699O();
     if (ziskejZdrojKlavesnice() === "system") return;
     if (jeStaryAndroidWebView()) ulozLubaStavPredBackgroundem();
     else zapisStabilituKlavesnice("WINDOW BLUR", "modern-no-focus-reset");
   }, true);
 
   document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") ukonciVizualniStiskMimoPanel699O();
     if (!jeStaryAndroidWebView()) {
       zapisStabilituKlavesnice(`VISIBILITY ${document.visibilityState}`, "modern-no-focus-reset");
       /* Na moderním WebView při background/resume už NIKDY nerušíme focus.
