@@ -1,7 +1,7 @@
 BEGIN;
 SET LOCAL lock_timeout='3s';
 SET LOCAL statement_timeout='45s';
--- Baseline CRUD privileges for each role+table (effective, not just direct).
+-- Baseline CRUD privileg es for each role+table (effective, not just direct).
 CREATE TEMP TABLE acl_dml_before ON COMMIT DROP AS
 SELECT c.oid AS table_oid, roles.role, p.priv,
        has_table_privilege(roles.role,c.oid,p.priv) AS granted
