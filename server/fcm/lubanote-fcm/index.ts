@@ -138,11 +138,27 @@ Deno.serve(async (req: Request) => {
       const cancel = body?.cancel;
       const title = body?.title;
       const preview = body?.preview;
+      const repeat = body?.repeat;
+      const baseAt = body?.baseAt;
       if (deviceId && !/^[\w:-]{8,128}$/.test(deviceId)) return json(req,400,{ok:false,error:'BAD_DEVICE'});
       if (!/^[\w:-]{1,128}$/.test(noteId) || !Number.isSafeInteger(revision) || revision<=0 ||
           !Array.isArray(times) || times.length>48 || !Array.isArray(cancel) || cancel.length>128 ||
           typeof title !== 'string' || title.length>120 || typeof preview !== 'string' || preview.length>160)
         return json(req,400,{ok:false,error:'BAD_ALARM_DATA'});
+      // 699W: only a validated, short recurrence rule can reach native Android.
+      const isRecurring = repeat != null;
+      if (isRecurring && (
+        typeof repeat !== 'object' || Array.isArray(repeat) || repeat.enabled !== true ||
+        !['daily','weekly','monthly'].includes(repeat.type) ||
+        !Number.isInteger(Number(repeat.interval || 1)) ||
+        Number(repeat.interval || 1)<1 || Number(repeat.interval || 1)>3660 ||
+        typeof repeat.startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(repeat.startDate) ||
+        (repeat.endDate != null && (typeof repeat.endDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(repeat.endDate))) ||
+        (repeat.type === 'weekly' && (!Array.isArray(repeat.days) || !repeat.days.length ||
+          repeat.days.length>7 || !repeat.days.every((d: unknown)=>typeof d==='number' && Number.isInteger(d) && d>=0 && d<=6))) ||
+        !Number.isSafeInteger(baseAt) || baseAt<=0 ||
+        JSON.stringify(repeat).length>480
+      )) return json(req,400,{ok:false,error:'BAD_RECURRENCE_RULE'});
       const now = Date.now();
       if (Math.abs(revision-now)>7*24*3600*1000 ||
           !times.every((t: unknown) => typeof t === 'number' && Number.isSafeInteger(t) && t>now && t<now+366*24*3600*1000) ||
@@ -151,7 +167,10 @@ Deno.serve(async (req: Request) => {
       const payload = {
         kind:'lubanote_alarm_update_692O',v:'1',owner:await ownerHash(userId),
         noteId,revision:String(revision),at:JSON.stringify(times),cancel:JSON.stringify(cancel),
-        title,preview
+        title,preview,
+        // Missing repeat is intentional when a reminder was cancelled/changed.
+        repeat:isRecurring ? JSON.stringify(repeat) : '',
+        baseAt:isRecurring ? String(baseAt) : ''
       };
       if (Object.values(payload).reduce((sum,value)=>sum+value.length,0)>3300)
         return json(req,413,{ok:false,error:'ALARM_PAYLOAD_TOO_LARGE'});

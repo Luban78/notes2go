@@ -191,32 +191,93 @@ final class LubaNoteRemoteAlarm692O {
     if (notifications != null) notifications.cancel(requestId(id,at));
   }
 
-  private static void schedule(Context ctx, String id, long at) {
+  // 699W: all callers see an ordinary failure, NEVER a process-killing
+  // IllegalStateException from AlarmManager's per-UID 500-alarm limit.
+  private static boolean schedule(Context ctx, String id, long at) {
     if (at <= System.currentTimeMillis() + 500L || at > System.currentTimeMillis() + MAX_FUTURE) {
       diag692X(ctx,"REMOTE_ARM_SKIPPED",id,at,"outside_future_window");
-      return;
+      return false;
     }
-    AlarmManager manager = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
-    if (manager == null) return;
-    PendingIntent pi = intent(ctx,id,at,PendingIntent.FLAG_UPDATE_CURRENT);
-    String method="";
-    if (Build.VERSION.SDK_INT >= 23) {
-      if (Build.VERSION.SDK_INT >= 31 && !manager.canScheduleExactAlarms()) {
-        manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi);
-        method="INEXACT_IDLE_PERMISSION";
-      } else {
-        try {manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi);method="EXACT_ALLOW_IDLE";}
-        catch (SecurityException ex) {manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi);method="INEXACT_SECURITY_FALLBACK";}
+    try {
+      AlarmManager manager=(AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+      if (manager==null) return false;
+      PendingIntent pi=intent(ctx,id,at,PendingIntent.FLAG_UPDATE_CURRENT);
+      String method="";
+      if(Build.VERSION.SDK_INT>=23) {
+        if(Build.VERSION.SDK_INT>=31 && !manager.canScheduleExactAlarms()) {
+          manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi);
+          method="INEXACT_IDLE_PERMISSION";
+        } else {
+          try {manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi); method="EXACT_ALLOW_IDLE";}
+          catch(SecurityException ex) {manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi);method="INEXACT_SECURITY_FALLBACK";}
+        }
+      } else if(Build.VERSION.SDK_INT>=19) {
+        manager.setExact(AlarmManager.RTC_WAKEUP,at,pi);method="EXACT_PRE23";
+      } else {manager.set(AlarmManager.RTC_WAKEUP,at,pi);method="LEGACY";}
+      diag692X(ctx,"REMOTE_ARM",id,at,method);
+      diag696Z(ctx,"ARM",id,at,"method="+method);
+      return true;
+    } catch(RuntimeException ex) {
+      diag692X(ctx,"REMOTE_ARM_BLOCKED_699W",id,at,
+        ex instanceof IllegalStateException ? "android_alarm_limit_or_state" : "native_schedule_exception");
+      return false;
+    }
+  }
+
+  // One physical AlarmManager slot per note, even when FCM gives multiple
+  // Planner timestamps. The rest are saved as metadata, NOT Android alarms.
+  private static long earliest(JSONObject row,long now) {
+    JSONArray arr=row==null?null:row.optJSONArray("times");
+    long min=Long.MAX_VALUE;
+    if(arr!=null) for(int i=0;i<arr.length();i++) {
+      long at=arr.optLong(i,0L);
+      if(at>now+500 && at<min) min=at;
+    }
+    return min==Long.MAX_VALUE?0L:min;
+  }
+  private static boolean armHead(Context ctx,String id,JSONObject row) {
+    long at=earliest(row,System.currentTimeMillis());
+    return at==0L || schedule(ctx,id,at);
+  }
+
+  // 699W – locally owned recurring note. The rule is saved in private native
+  // preferences, not in AlarmManager. Each delivery arms exactly one successor.
+  static synchronized boolean scheduleLocalRecurring699W(Context ctx,String id,int localId,
+      long at,long baseAt,JSONObject rule,String title,String preview,String proof) {
+    if(!validNote692V(id) || !validLocalId692V(localId) ||
+       !LubaNoteRecurrence699W.valid(rule) || baseAt<=0 ||
+       at<=System.currentTimeMillis()+500L || at>System.currentTimeMillis()+MAX_FUTURE ||
+       LubaNoteRecurrence699W.next(baseAt,rule,System.currentTimeMillis()-1000L)!=at) return false;
+    try {
+      JSONObject records=load(ctx);
+      JSONObject row=records.optJSONObject(id);
+      if(row==null) row=new JSONObject();
+      // Migration: delete the 32/48 OLD remote slots for THIS note only.
+      JSONArray old=row.optJSONArray("times");
+      if(old!=null) for(int i=0;i<old.length();i++) {
+        long oldAt=old.optLong(i,0);
+        if(oldAt>System.currentTimeMillis() && oldAt!=at)
+          cancel(ctx,id,oldAt,"699W_RECURRING_MIGRATION");
       }
-    } else if (Build.VERSION.SDK_INT >= 19) {
-      manager.setExact(AlarmManager.RTC_WAKEUP,at,pi);
-      method="EXACT_PRE23";
-    } else {
-      manager.set(AlarmManager.RTC_WAKEUP,at,pi);
-      method="LEGACY";
+      JSONArray times=new JSONArray(); times.put(at);
+      row.put("times",times);
+      row.put("localAt692Z",at);
+      row.put("localId692Z",localId);
+      row.put("recurringNextAt699W",at);
+      row.put("recurringBaseAt699W",baseAt);
+      row.put("recurringRule699W",new JSONObject(rule.toString()));
+      row.put("recurringProof699W",proof==null?"":proof);
+      row.put("title",title==null||title.isEmpty()?"LubaNote":title);
+      row.put("preview",preview==null||preview.isEmpty()?"Máš naplánovanou připomínku.":preview);
+      records.put(id,row);
+      save(ctx,records);
+      boolean armed=armHead(ctx,id,row);
+      diag692X(ctx,"RECURRING_699W_LOCAL",id,at,armed?"single_slot_armed":"native_schedule_blocked");
+      return armed;
+    } catch(Exception e) {
+      diag692X(ctx,"RECURRING_699W_ERROR",id,at,"native_recurrence_error");
+      return false;
     }
-    diag692X(ctx,"REMOTE_ARM",id,at,method);
-    diag696Z(ctx,"ARM",id,at,"method="+method);
   }
 
   /* 692V: APK-local alarm index. The browser's numeric notification IDs are
@@ -410,10 +471,11 @@ final class LubaNoteRemoteAlarm692O {
       // Persist BEFORE arming. Never clear the previous row on failure.
       records.put(id,row);
       save(ctx,records);
-      schedule(ctx,id,at);
-      diag692X(ctx,"UNIFIED_LOCAL_ARM_692Z",id,at,"localId="+localId+" sharedNativePI=true");
-      diag696Z(ctx,"LOCAL_SHARED_SLOT",id,at,"localId="+localId+" sharedNativePI=true");
-      return intent(ctx,id,at,PendingIntent.FLAG_NO_CREATE)!=null;
+      // 699W: creating a PendingIntent is NOT proof AlarmManager accepted it.
+      boolean armed=schedule(ctx,id,at);
+      diag692X(ctx,"UNIFIED_LOCAL_ARM_692Z",id,at,"localId="+localId+" armed="+armed);
+      diag696Z(ctx,"LOCAL_SHARED_SLOT",id,at,"localId="+localId+" armed="+armed);
+      return armed;
     } catch(Exception e) {
       diag692X(ctx,"UNIFIED_LOCAL_ERROR_692Z",id,at,"native_schedule_failed");
       return false;
@@ -451,6 +513,10 @@ final class LubaNoteRemoteAlarm692O {
         row.put("delivered",keptDelivered);
         row.remove("localAt692Z");
         row.remove("localId692Z");
+        row.remove("recurringNextAt699W");
+        row.remove("recurringBaseAt699W");
+        row.remove("recurringRule699W");
+        row.remove("recurringProof699W");
         records.put(id,row);
         changed=true;
         diag692X(ctx,"UNIFIED_LOCAL_CANCEL_692Z",id,at,"localId="+localId);
@@ -485,6 +551,10 @@ final class LubaNoteRemoteAlarm692O {
         JSONObject extra=new JSONObject();
         extra.put("lubanoteType","note");
         extra.put("taskId",id);
+        if(row.optJSONObject("recurringRule699W")!=null && row.optLong("recurringNextAt699W",0)==at) {
+          extra.put("recurring",true);
+          extra.put("lubanoteRecurringProof691AX",row.optString("recurringProof699W",""));
+        }
         item.put("extra",extra);
         JSONObject schedule=new JSONObject();
         schedule.put("at",at);
@@ -527,7 +597,16 @@ final class LubaNoteRemoteAlarm692O {
           cancelledCount696Z++;
         }
       }
-      try { row.put("times",kept); records.put(id,row); } catch(Exception ignored) {}
+      try {
+        row.put("times",kept);
+        if(row.optLong("localAt692Z",0L)<=0L) {
+          row.remove("recurringRule699W");
+          row.remove("recurringNextAt699W");
+          row.remove("recurringBaseAt699W");
+          row.remove("recurringProof699W");
+        }
+        records.put(id,row);
+      } catch(Exception ignored) {}
     }
     save(ctx, records);
     diag692X(ctx,"FOREGROUND_SYNC_HANDOFF",null,0,"remote_future_alarms_cleared");
@@ -603,14 +682,58 @@ final class LubaNoteRemoteAlarm692O {
       // First arm the remote alarm; only then remove matching local alarms.
       // The normal foreground sync rebuilds local alarms and acknowledges the
       // handoff by clearing the future remote alarms.
+      // FCM 699W: reserve ONE physical alarm. Remaining Planner dates stay
+      // in the private JSON queue and are armed by the alarm receiver.
+      JSONObject recurrence=null;
+      long recurrenceBase=0L, recurrenceNext=0L;
+      try {
+        String text=data.get("repeat");
+        if(text!=null && !text.isEmpty()) {
+          JSONObject parsed=new JSONObject(text);
+          long base=Long.parseLong(data.get("baseAt"));
+          if(LubaNoteRecurrence699W.valid(parsed) && base>0L) {
+            recurrence=parsed;
+            recurrenceBase=base;
+            recurrenceNext=LubaNoteRecurrence699W.next(base,parsed,now);
+            if(recurrenceNext>now+500L && recurrenceNext<=now+MAX_FUTURE)
+              requested.add(recurrenceNext);
+            else recurrence=null;
+          }
+        }
+      } catch(Exception ignored) {recurrence=null;}
+      java.util.ArrayList<Long> sorted=new java.util.ArrayList<>(requested);
+      java.util.Collections.sort(sorted);
       JSONArray safe=new JSONArray();
-      for (Long at:requested) {
-        safe.put(at);
-        schedule(ctx,id,at);
+      for(Long t:sorted) safe.put(t);
+      JSONObject fresh=new JSONObject();
+      fresh.put("revision",revision);
+      // Keep the APK-owned ordinary note in the SAME PendingIntent slot.
+      // Remote changes supersede a previous local timestamp; a subsequent
+      // foreground reconcile can set the new local timestamp.
+      long localAt=existing==null?0L:existing.optLong("localAt692Z",0L);
+      if(localAt>now && requested.contains(localAt)) {
+        fresh.put("localAt692Z",localAt);
+        fresh.put("localId692Z",existing.optInt("localId692Z",0));
       }
+      fresh.put("times",safe);
+      if(recurrence!=null) {
+        fresh.put("recurringRule699W",recurrence);
+        fresh.put("recurringBaseAt699W",recurrenceBase);
+        fresh.put("recurringNextAt699W",recurrenceNext);
+      }
+      // Preview is bound to the authenticated account's FCM projection.
+      fresh.put("title",data.get("title") == null ? "" : data.get("title"));
+      fresh.put("preview",data.get("preview") == null ? "" : data.get("preview"));
+      records.put(id,fresh);
+      // Synchronous persistence so an app kill or reboot cannot discard alarms.
+      pref.edit().putString(OWNER,owner).putString(RECORDS,records.toString()).commit();
+      boolean armed=armHead(ctx,id,fresh);
+      // 699W: preserve old route if the new OS alarm could NOT be armed.
+      // Local Capacitor alarms must never be cancelled before native success.
+      boolean localChanged=false;
+      if(armed) {
       JSONObject local=localIndex692V(ctx);
       JSONArray localKeys=local.names();
-      boolean localChanged=false;
       if(localKeys!=null) for(int i=0;i<localKeys.length();i++) {
         String key=localKeys.optString(i,"");
         JSONObject entry=local.optJSONObject(key);
@@ -626,40 +749,86 @@ final class LubaNoteRemoteAlarm692O {
         }
       }
       if(localChanged) saveLocalIndex692V(ctx,local);
-      JSONObject fresh=new JSONObject();
-      fresh.put("revision",revision);
-      // Keep the APK-owned ordinary note in the SAME PendingIntent slot.
-      // Remote changes supersede a previous local timestamp; a subsequent
-      // foreground reconcile can set the new local timestamp.
-      long localAt=existing==null?0L:existing.optLong("localAt692Z",0L);
-      if(localAt>now && requested.contains(localAt)) {
-        fresh.put("localAt692Z",localAt);
-        fresh.put("localId692Z",existing.optInt("localId692Z",0));
       }
-      fresh.put("times",safe);
-      // Preview is bound to the authenticated account's FCM projection.
-      fresh.put("title",data.get("title") == null ? "" : data.get("title"));
-      fresh.put("preview",data.get("preview") == null ? "" : data.get("preview"));
-      records.put(id,fresh);
-      // Synchronous persistence so an app kill or reboot cannot discard alarms.
-      pref.edit().putString(OWNER,owner).putString(RECORDS,records.toString()).commit();
-      diag692X(ctx,"FCM_UPDATE_ACCEPTED",id,0,"scheduled="+safe.length()+" localCancelled="+localChanged);
+      diag692X(ctx,"FCM_UPDATE_ACCEPTED",id,0,
+          "queued="+safe.length()+" armedOne="+armed+" localCancelled="+localChanged);
       diag696Z(ctx,"FCM_UPDATE",id,0,"scheduled="+safe.length()+" localCancelled="+localChanged);
     } catch (Exception ignored) { /* malformed FCM data must never crash app */ }
+  }
+
+  /** 699W one-time / idempotent upgrade cleanup. Old 692O may have
+   * 32-48 alarm slots for a single note. Keep the saved JSON queue (so no
+   * dates are lost) but physically cancel all except the nearest one.
+   * Never touch delivered notifications or the separate Capacitor route. */
+  static synchronized void compactLegacyRemote699W(Context ctx) {
+    JSONObject records=load(ctx);
+    JSONArray keys=records.names();
+    if(keys==null) return;
+    long now=System.currentTimeMillis();
+    int removed=0, preserved=0;
+    for(int i=0;i<keys.length();i++) {
+      String id=keys.optString(i,"");
+      if(!validNote692V(id)) continue;
+      JSONObject row=records.optJSONObject(id);
+      if(row==null) continue;
+      long head=earliest(row,now);
+      JSONArray times=row.optJSONArray("times");
+      if(times!=null) for(int j=0;j<times.length();j++) {
+        long at=times.optLong(j,0L);
+        if(at>now && at!=head) {
+          // No disk writes or notification deletion per item during startup.
+          // Only a future remote PendingIntent is removed. JSON remains.
+          try {
+            PendingIntent pi=intent(ctx,id,at,PendingIntent.FLAG_NO_CREATE);
+            if(pi!=null) {
+              AlarmManager manager=(AlarmManager)ctx.getSystemService(Context.ALARM_SERVICE);
+              if(manager!=null) manager.cancel(pi);
+              pi.cancel();
+              removed++;
+            }
+          } catch(RuntimeException ignored) { /* best-effort cleanup */ }
+        }
+      }
+      if(head>0) {
+        armHead(ctx,id,row);
+        preserved++;
+      }
+    }
+    diag692X(ctx,"699W_LEGACY_COMPACT",null,0,
+      "cancelledExtra="+removed+" nearestNotes="+preserved);
   }
 
   static synchronized void restoreOnBoot(Context ctx) {
     JSONObject records=load(ctx);
     JSONArray keys=records.names();
-    if (keys==null) return;
+    if(keys==null) return;
+    long now=System.currentTimeMillis();
     for(int i=0;i<keys.length();i++) {
       String id=keys.optString(i,"");
-      if (!id.matches("[a-zA-Z0-9_:-]{1,128}")) continue;
+      if(!validNote692V(id)) continue;
       JSONObject row=records.optJSONObject(id);
-      JSONArray times=row==null?null:row.optJSONArray("times");
-      if(times==null) continue;
-      for(int j=0;j<times.length();j++) schedule(ctx,id,times.optLong(j,0));
+      if(row==null) continue;
+      JSONObject rule=row.optJSONObject("recurringRule699W");
+      long oldNext=row.optLong("recurringNextAt699W",0L);
+      if(LubaNoteRecurrence699W.valid(rule) && oldNext<=now) {
+        long next=LubaNoteRecurrence699W.next(row.optLong("recurringBaseAt699W",0L),rule,now);
+        JSONArray previous=row.optJSONArray("times");
+        JSONArray future=new JSONArray();
+        if(previous!=null) for(int j=0;j<previous.length();j++) {
+          long t=previous.optLong(j,0L);
+          if(t>now && t!=oldNext) future.put(t);
+        }
+        if(next>now) future.put(next);
+        try {
+          row.put("times",future);
+          row.put("recurringNextAt699W",next);
+          if(row.has("localAt692Z")) row.put("localAt692Z",next);
+          records.put(id,row);
+        } catch(Exception ignored) {}
+      }
+      armHead(ctx,id,row);
     }
+    save(ctx,records);
   }
 
   static synchronized void fire(Context ctx, String id, long at) {
@@ -707,10 +876,27 @@ final class LubaNoteRemoteAlarm692O {
       JSONArray delivered=row.optJSONArray("delivered");
       if (delivered==null) delivered=new JSONArray();
       delivered.put(at);
+      // Only the recurrence's current occurrence advances the native chain.
+      // A Planner alert on the same parent note is not a repeat event.
+      JSONObject rule=row.optJSONObject("recurringRule699W");
+      if(at==row.optLong("recurringNextAt699W",0L) &&
+         LubaNoteRecurrence699W.valid(rule)) {
+        long next=LubaNoteRecurrence699W.next(
+          row.optLong("recurringBaseAt699W",0L),rule,Math.max(at,System.currentTimeMillis()));
+        if(next>System.currentTimeMillis()+500L && next<=System.currentTimeMillis()+MAX_FUTURE) {
+          boolean exists=false;
+          for(int j=0;j<rest.length();j++) if(rest.optLong(j,0L)==next) exists=true;
+          if(!exists) rest.put(next);
+        }
+        row.put("recurringNextAt699W",next);
+        if(row.has("localAt692Z")) row.put("localAt692Z",next);
+      }
       row.put("times",rest);
       row.put("delivered",delivered);
       records.put(id,row);
       save(ctx,records);
+      // Fire-and-arm the NEXT only. The rest stays as native metadata.
+      armHead(ctx,id,row);
     } catch(Exception ignored) {}
     if(Build.VERSION.SDK_INT>=33 && ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) return;
     NotificationManager manager=(NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);

@@ -225,7 +225,8 @@
     if (note.reminder === true && note.date) {
       if (note.repeat?.enabled === true && window.LubaNoteRecurring?.vypocitejBudouciTerminy) {
         try {
-          for (const date of window.LubaNoteRecurring.vypocitejBudouciTerminy(note.date,note.repeat,32,new Date()) || []) {
+          // 699W: one next recurring occurrence; Android receiver chains the rest.
+          for (const date of window.LubaNoteRecurring.vypocitejBudouciTerminy(note.date,note.repeat,1,new Date()) || []) {
             const at = futureTime(date);
             if (at) items.push(at);
           }
@@ -267,6 +268,13 @@
         const response = await invoke({
           action:'alarm_update',deviceId:deviceId() || '',noteId:id,
           revision:nextRevision(id),at:alarmProjection(note),
+          // Rule is metadata only (no note body). Android can rearm offline
+          // for months/years without keeping 32 future OS alarm slots.
+          repeat: note?.isSecret!==true && note?.completed!==true &&
+            note?.reminder===true && note?.repeat?.enabled===true
+            ? (window.LubaNoteRecurring?.kopirujRepeat?.(note.repeat) || note.repeat) : null,
+          baseAt: note?.date && note?.repeat?.enabled===true
+            ? new Date(note.date).getTime() : null,
           // Only ordinary notes. E2E content is intentionally disclosed as a
           // short notification preview to the user's own FCM devices.
           title: note && note.isSecret !== true ? String(note.title || 'LubaNote').slice(0,120) : '',

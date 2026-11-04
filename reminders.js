@@ -316,10 +316,18 @@ async function scheduleNotification(
           catch (_) {}
           return;
         }
-        // Original scheduler below remains the emergency fallback.
-
+        // Old Capacitor route may still be present if cancellation failed.
+        // Do not force a second native alarm after the shared arm succeeded.
+        return;
       }
-    } catch (_) { /* keep original scheduler as fallback */ }
+      // 699W: when AlarmManager refuses the shared slot, immediately trying
+      // Capacitor cannot create capacity and risks a second native crash.
+      window.LubaNoteStartupDiag?.zapis?.('REM-ERROR','699W ordinary note native scheduling blocked');
+      return;
+    } catch (_) {
+      window.LubaNoteStartupDiag?.zapis?.('REM-ERROR','699W ordinary note native scheduling exception');
+      return;
+    }
   }
 
   await LocalNotifications.schedule({
@@ -533,40 +541,52 @@ async function naplanujOpakovaneNotifikacePoznamky(note) {
     return;
   }
 
-  const terminy =
-    window.LubaNoteRecurring
-      .vypocitejBudouciTerminy(
-        note.date,
-        note.repeat,
-        32,
-        new Date()
-      );
-
+  // 699W: Only the NEXT date is an Android alarm. The native receiver
+  // calculates and arms its successor even with the APK closed and offline.
+  const termin = window.LubaNoteRecurring.vypocitejPristiTermin(
+    note.date, note.repeat, new Date()
+  );
+  if (!(termin instanceof Date) || !Number.isFinite(termin.getTime())) return;
+  const notificationId = note.notificationId ||
+    vytvorIdOpakovaneNotifikace(note.id, '699W-recurrence');
   const dokaz691AX = await vytvorOtiskOpakovanehoAlarmu691AX(note);
-
-  for (let index = 0; index < terminy.length; index++) {
-    const termin = terminy[index];
-    const notificationId =
-      index === 0 && note.notificationId
-        ? note.notificationId
-        : vytvorIdOpakovaneNotifikace(
-            note.id,
-            termin.toISOString()
-          );
-
-    await scheduleNotification(
-      notificationId,
-      note.title,
-      termin,
-      note.note,
-      {
-        lubanoteType: "note",
-        taskId: note.id,
-        recurring: true,
-        ...(dokaz691AX ? { lubanoteRecurringProof691AX: dokaz691AX } : {})
-      }
-    );
+  const clean = String(note.note || '').replace(/\s+/g, ' ').trim();
+  const shortText = clean.length > 140 ? clean.slice(0,140) + '…' : clean;
+  const native = window.Capacitor?.isNativePlatform?.()
+    ? window.Capacitor?.Plugins?.LubaNoteFcmToken : null;
+  if (typeof native?.scheduleLocalRecurring699W === 'function') {
+    let ok = false;
+    try {
+      const result = await native.scheduleLocalRecurring699W({
+        noteId: String(note.id), id: Number(notificationId),
+        at: String(termin.getTime()), baseAt: String(new Date(note.date).getTime()),
+        repeat: note.repeat, title: note.title || 'LubaNote',
+        preview: shortText || 'Máš naplánovanou připomínku.',
+        proof: dokaz691AX || ''
+      });
+      ok = result?.ok === true;
+    } catch (error) {console.error('699W native recurring:',error);}
+    if (!ok) {
+      window.LubaNoteStartupDiag?.zapis?.('REM-ERROR','699W recurring native scheduling FAILED');
+      // Never invoke a second scheduler after native AlarmManager refused.
+      return;
+    }
+    // The newly armed native slot is independent of Capacitor's legacy PI.
+    // Remove a stale Capacitor copy of the SAME numeric ID, if present.
+    try {
+      await window.Capacitor?.Plugins?.LocalNotifications?.cancel?.({
+        notifications: [{id: Number(notificationId)}]
+      });
+    } catch (_) { /* old legacy cleanup can be retried at next reconcile */ }
+    return;
   }
+  // Older APK only: do not create 32 alarms. Explicit degraded mode; the
+  // next occurrence needs an app resync until the matching APK is installed.
+  window.LubaNoteStartupDiag?.zapis?.('REM-WARN','699W native repeating unavailable; one-shot fallback');
+  await scheduleNotification(notificationId, note.title, termin, note.note, {
+    lubanoteType:'note',taskId:note.id,recurring:true,
+    ...(dokaz691AX ? {lubanoteRecurringProof691AX:dokaz691AX}: {})
+  });
 }
 
 
@@ -874,9 +894,9 @@ async function overCekajiciOpakovaneAlarmy691AW(note, pending, ted) {
     return { ok: false, reason: "scope-or-planner" };
   }
   const terminy = window.LubaNoteRecurring.vypocitejBudouciTerminy(
-    note.date, note.repeat, 32, ted
+    note.date, note.repeat, 1, ted
   );
-  if (!Array.isArray(terminy) || !terminy.length || terminy.length > 32) {
+  if (!Array.isArray(terminy) || !terminy.length || terminy.length > 1) {
     return { ok: false, reason: "no-future-terms" };
   }
   const vlastni = pending.filter((item) =>
@@ -901,7 +921,7 @@ async function overCekajiciOpakovaneAlarmy691AW(note, pending, ted) {
     const when = termin instanceof Date ? termin.getTime() : NaN;
     const id = i === 0 && note.notificationId
       ? Number(note.notificationId)
-      : vytvorIdOpakovaneNotifikace(note.id, termin.toISOString());
+      : vytvorIdOpakovaneNotifikace(note.id, "699W-recurrence");
     const item = byId.get(id);
     if (!item || !Number.isFinite(when) || when <= ted.getTime())
       return { ok: false, reason: "id-or-term-missing" };
@@ -937,7 +957,7 @@ function spocitejOpakovaneAlarmy691AY(note, pending, ted) {
       typeof window.LubaNoteRecurring?.vypocitejBudouciTerminy !== "function") return null;
   let terminy;
   try {
-    terminy = window.LubaNoteRecurring.vypocitejBudouciTerminy(note.date, note.repeat, 32, ted);
+    terminy = window.LubaNoteRecurring.vypocitejBudouciTerminy(note.date, note.repeat, 1, ted);
   } catch (_) { return null; }
   if (!Array.isArray(terminy)) return null;
   const vlastni = pending.filter(n => n?.extra?.recurring === true && n?.extra?.taskId === note.id);
@@ -948,7 +968,7 @@ function spocitejOpakovaneAlarmy691AY(note, pending, ted) {
     const t = terminy[i];
     if (!(t instanceof Date) || !Number.isFinite(t.getTime())) return null;
     expected.add(Number(i === 0 && note.notificationId
-      ? note.notificationId : vytvorIdOpakovaneNotifikace(note.id, t.toISOString())));
+      ? note.notificationId : vytvorIdOpakovaneNotifikace(note.id, "699W-recurrence")));
   }
   const nativeIds = new Set(normalizovane.map(n => Number(n.id)));
   const overlap = [...expected].filter(id => nativeIds.has(id)).length;
@@ -986,7 +1006,7 @@ async function obnovNotifikaceOpakovanychPoznamek() {
   const plugin = window.Capacitor?.Plugins?.LocalNotifications;
   if (typeof plugin?.getPending === "function") {
     try {
-      const odpoved = await plugin.getPending();
+      const odpoved = await nactiCekajiciSNative692Z(plugin);
       if (Array.isArray(odpoved?.notifications)) pending = odpoved.notifications;
     } catch (_error) {
       // Native read failure must NEVER stop the established restore path.

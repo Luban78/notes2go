@@ -17,6 +17,29 @@ if not manager.is_file():
     raise SystemExit(f"683AU: plugin source missing: {manager}")
 source = manager.read_text(encoding="utf-8")
 
+# 699W: AlarmManager may throw IllegalStateException when the device UID has
+# reached its native alarm quota (500 on the affected Xiaomi). The original
+# Capacitor plugin lets that exception escape its bridge thread and kill APK.
+# Convert a failed schedule into a rejected Promise; JS can report it safely.
+plugin_java = root / "node_modules/@capacitor/local-notifications/android/src/main/java/com/capacitorjs/plugins/localnotifications/LocalNotificationsPlugin.java"
+if not plugin_java.is_file():
+    raise SystemExit(f"699W: plugin file missing: {plugin_java}")
+plugin_source = plugin_java.read_text(encoding="utf-8")
+needle_699w = 'JSONArray ids = manager.schedule(call, localNotifications);'
+if 'LUBANOTE_NATIVE_ALARM_SCHEDULE_FAILED_699W' not in plugin_source:
+    if plugin_source.count(needle_699w) != 1:
+        raise SystemExit('699W: expected one Capacitor schedule call; refusing unsafe patch')
+    plugin_source = plugin_source.replace(needle_699w, """JSONArray ids;
+        try {
+            ids = manager.schedule(call, localNotifications);
+        } catch (RuntimeException error) {
+            // 699W: do not terminate the Android process at AlarmManager quota.
+            call.reject("LUBANOTE_NATIVE_ALARM_SCHEDULE_FAILED_699W");
+            return;
+        }""", 1)
+    plugin_java.write_text(plugin_source, encoding="utf-8")
+
+
 
 def kompatibilita_hodinek_683AZ(kod):
     """Preserve 683AU/683AX protection when the first alert is not ongoing.

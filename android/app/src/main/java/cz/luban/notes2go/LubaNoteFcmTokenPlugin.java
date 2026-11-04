@@ -16,6 +16,20 @@ import com.google.firebase.messaging.FirebaseMessaging;
 
 @CapacitorPlugin(name = "LubaNoteFcmToken")
 public class LubaNoteFcmTokenPlugin extends Plugin {
+  // 699W: before the web starts scheduling, release obsolete 32x remote
+  // AlarmManager registrations while keeping their future dates in prefs.
+  @Override public void load() {
+    super.load();
+    // Potentially hundreds of legacy PIs: NEVER block the WebView/main thread.
+    final Context app=getContext().getApplicationContext();
+    Thread cleanup=new Thread(() -> {
+      try {LubaNoteRemoteAlarm692O.compactLegacyRemote699W(app);}
+      catch(RuntimeException ignored) { /* never block APK startup */ }
+    },"LubaNote-699W-alarm-compact");
+    cleanup.setDaemon(true);
+    cleanup.start();
+  }
+
   // 692R: The existing 692O scheduler already uses setExactAndAllowWhileIdle
   // when permitted. Surface a missing Android permission instead of silently
   // relying on its inexact fallback. Never modify the reminder data or FCM.
@@ -245,6 +259,25 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
         call.getString("preview",""));
     } catch(Exception ignored) { /* old proven Capacitor scheduler is fallback */ }
     JSObject result=new JSObject(); result.put("ok",ok); call.resolve(result);
+  }
+  // 699W: store one recurring note schedule natively for offline/closed APK.
+  @PluginMethod public void scheduleLocalRecurring699W(PluginCall call) {
+    JSObject result=new JSObject();
+    boolean ok=false;
+    try {
+      Integer id=call.getInt("id");
+      String noteId=call.getString("noteId","");
+      org.json.JSONObject repeat=call.getObject("repeat");
+      if(id!=null && repeat!=null) {
+        long at=Long.parseLong(call.getString("at",""));
+        long base=Long.parseLong(call.getString("baseAt",""));
+        ok=LubaNoteRemoteAlarm692O.scheduleLocalRecurring699W(getContext(),
+          noteId,id,at,base,repeat,call.getString("title","LubaNote"),
+          call.getString("preview",""),call.getString("proof",""));
+      }
+    } catch(Exception ignored) { /* never crash the Capacitor bridge */ }
+    result.put("ok",ok);
+    call.resolve(result);
   }
   @PluginMethod public void cancelLocalNote692Z(PluginCall call) {
     Integer id=call.getInt("id");
