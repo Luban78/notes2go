@@ -293,7 +293,17 @@ body.ln-luba-klavesnice-open.ln-lk-actions-collapsed
   opacity: .8;
 }
 
-.ln-lk-key:active,
+/* 699N – krátký vizuální tap bez JS časovačů.
+   :active nemění pozadí ani polohu: při vytíženém editoru tak
+   nezůstane svítit původní akcentní barva. Světelný impuls skončí
+   i při stále držené klávese; stav Shift/Caps zůstává nezměněn. */
+@keyframes ln-lk-short-flash-699n {
+  from { filter: brightness(1.30); }
+  to { filter: brightness(1); }
+}
+.ln-lk-key:active:not(.is-active) {
+  animation: ln-lk-short-flash-699n 45ms steps(1, end) both;
+}
 .ln-lk-key.is-active {
   background: var(--color-accent, #7444dc);
   background: color-mix(in srgb, var(--color-accent, #7444dc) 58%, var(--color-surface, #222));
@@ -824,7 +834,6 @@ body.ln-lk-old-android-nav .ln-lk-bottom-standard .ln-lk-key:not(.ln-lk-std-spac
   background: var(--color-background, #211a29);
 }
 body.ln-lk-old-android-nav .ln-lk-key.is-active,
-body.ln-lk-old-android-nav .ln-lk-key:active,
 body.ln-lk-old-android-nav .ln-lk-alt.is-active {
   background: var(--color-accent, #7444dc) !important;
   color: #fff !important;
