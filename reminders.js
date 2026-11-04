@@ -1822,6 +1822,40 @@ function getPlannedItemById(itemId) {
    KLIK NA SYSTÉMOVOU ANDROID NOTIFIKACI
 ================================================== */
 
+/* 699Y: Po ULOZENI akce nesmi opozeny callback stejneho systemoveho
+ * oznameni znovu otevrit Odlozit. Nevztahuje se na rucni otevreni
+ * pripominky ani na dalsi termin opakovani (jiny timestamp).
+ * Stary lokalni notification ID chranime jen kratce: nove ID/termin
+ * po odlozeni je vzdy samostatna udalost. */
+const vyrizeneKlikyNotifikaci699Y = new Map();
+const platnostVyrizenehoKliknuti699Y = 3 * 60 * 1000;
+function vycistiVyrizeneKliky699Y() {
+  const now = Date.now();
+  for (const [key, recorded] of vyrizeneKlikyNotifikaci699Y) {
+    if (now - recorded > platnostVyrizenehoKliknuti699Y) {
+      vyrizeneKlikyNotifikaci699Y.delete(key);
+    }
+  }
+}
+function oznacVyrizeneKliknuti699Y(noteId, at, localId = null) {
+  vycistiVyrizeneKliky699Y();
+  const now = Date.now();
+  if (/^[\w:-]{1,128}$/.test(String(noteId || '')) &&
+      Number.isSafeInteger(at) && at > 0) {
+    vyrizeneKlikyNotifikaci699Y.set(`remote:${noteId}:${at}`, now);
+  }
+  if (Number.isInteger(Number(localId)) && Number(localId) > 0) {
+    vyrizeneKlikyNotifikaci699Y.set(`local:${Number(localId)}`, now);
+  }
+}
+function byloVyrizeneKliknuti699Y(noteId, at, localId = null) {
+  vycistiVyrizeneKliky699Y();
+  return (Number.isSafeInteger(at) && at > 0 &&
+    vyrizeneKlikyNotifikaci699Y.has(`remote:${noteId}:${at}`)) ||
+    (Number.isInteger(Number(localId)) && Number(localId) > 0 &&
+    vyrizeneKlikyNotifikaci699Y.has(`local:${Number(localId)}`));
+}
+
 function openReminderCenterEntry(entry) {
   if (!entry) {
     return false;
@@ -1878,9 +1912,16 @@ function handleNotificationOpen(notification) {
   const notificationId =
     Number(notification.id) || null;
 
+  // 699Y: Stary Capacitor callback muze dobehnout az po odlozeni/hotovo.
+  if (byloVyrizeneKliknuti699Y('', 0, notificationId)) {
+    window.LubaNoteStartupDiag?.zapis?.('REM-TAP', '699Y LATE LOCAL TAP SKIPPED');
+    return;
+  }
+
   let attempts = 0;
 
   const tryOpen = () => {
+    if (byloVyrizeneKliknuti699Y('', 0, notificationId)) return;
     let entry = null;
 
     if (
@@ -1954,16 +1995,39 @@ registerNotificationOpenHandler();
    Note and Planner alarms share one remote noteId, so disambiguate by the
    exact scheduled timestamp; do not guess the Planner item from its title. */
 const zpracovavaneRemoteKliky692T = new Set();
+const uspesneOtevreneRemoteTokeny699Y = new Set();
+function oznacVyrizenyRemoteToken699Y(token) {
+  uspesneOtevreneRemoteTokeny699Y.add(token);
+  // Kazde skutecne nove klepnuti dostava od Androidu novy UUID token.
+  // Limit pameti, ne casovy limit: stary token se nesmi vratit po 30 s.
+  if (uspesneOtevreneRemoteTokeny699Y.size > 128) {
+    uspesneOtevreneRemoteTokeny699Y.delete(
+      uspesneOtevreneRemoteTokeny699Y.values().next().value
+    );
+  }
+}
 window.addEventListener('lubanote:remote-reminder-open', (event) => {
   const data = event?.detail || {};
   const noteId = String(data.noteId || '');
   const at = Number(data.at);
   const token = String(data.token || '');
   if (!/^[\w:-]{1,128}$/.test(noteId) || !Number.isSafeInteger(at) || at <= 0 ||
-      !/^[\w-]{8,80}$/.test(token) || zpracovavaneRemoteKliky692T.has(token)) return;
+      !/^[\w-]{8,80}$/.test(token) || zpracovavaneRemoteKliky692T.has(token) ||
+      uspesneOtevreneRemoteTokeny699Y.has(token)) return;
   zpracovavaneRemoteKliky692T.add(token);
   let attempts = 0;
   const openWhenReady = async () => {
+    // 699Y: Uspesne vyreseny termin nesmi znovu otevrit modal.
+    // Native pending tap presto ACKneme, aby po dalsim startu necekal.
+    if (byloVyrizeneKliknuti699Y(noteId, at)) {
+      oznacVyrizenyRemoteToken699Y(token);
+      zpracovavaneRemoteKliky692T.delete(token);
+      try {
+        await window.Capacitor?.Plugins?.LubaNoteFcmToken?.ackRemoteOpen?.({token});
+      } catch (_) {}
+      window.LubaNoteStartupDiag?.zapis?.('REM-TAP', '699Y LATE REMOTE TAP SKIPPED');
+      return;
+    }
     let entry = null;
     try {
       const note = getReminderEntry('note', noteId);
@@ -1984,9 +2048,12 @@ window.addEventListener('lubanote:remote-reminder-open', (event) => {
     try { if (entry) opened = openReminderCenterEntry(entry); } catch { /* retry after UI init */ }
     if (opened) {
       remoteQuickMenu692T = {kind: entry.kind, id: entry.id, noteId, at};
+      // 699Y: Smazat jen in-flight, ne historii uspesneho tokenu.
+      // Jinak muze checkRemoteOpen692T po 30 s otevrit stejny modal znovu.
+      oznacVyrizenyRemoteToken699Y(token);
       try {
         await window.Capacitor?.Plugins?.LubaNoteFcmToken?.ackRemoteOpen?.({token});
-      } catch { /* still stored in native prefs, next resume can retry */ }
+      } catch { /* still stored in native prefs; same token is idempotent */ }
       zpracovavaneRemoteKliky692T.delete(token);
       return;
     }
@@ -2627,6 +2694,9 @@ function resolveRemoteAfterSave692T(entry) {
     opened.kind === entry.kind && String(opened.id) === String(entry.id);
   const at = matchingOpen ? opened.at : new Date(entry.date).getTime();
   if (!Number.isSafeInteger(at) || at <= 0) return;
+  // 699Y: Akce jiz uspesne ulozena, oznac tento doruceny vyskyt a puvodni
+  // lokalni ID. Nasledujici odlozeny/denni termin ma novy timestamp.
+  oznacVyrizeneKliknuti699Y(noteId, at, entry?.notificationId);
   // Never block the existing save/navigation flow on a native UI cleanup.
   try {
     Promise.resolve(plugin.resolveRemoteAlarm({noteId, at:String(at)})).catch(() => {});
@@ -2660,6 +2730,11 @@ function openReminderQuickMenu(
     return;
   }
 
+  // 699Y: Dvojita udalost pro JIZ otevreny modal nesmi vymazat
+  // remoteQuickMenu692T (originalni timestamp pro resolveDelivered).
+  if (reminderQuickMenu.hidden === false &&
+      selectedReminderEntry?.kind === entry.kind &&
+      String(selectedReminderEntry.id) === String(entry.id)) return;
   remoteQuickMenu692T = null;
   selectedReminderEntry = {
     kind: entry.kind,
@@ -3131,7 +3206,7 @@ async function saveReminderDate(
   }
 
   ukonciCekani();
-  resolveRemoteAfterSave692T({kind:'note', id:taskId, sourceNoteId:taskId, date:currentTask.date});
+  resolveRemoteAfterSave692T({kind:'note', id:taskId, sourceNoteId:taskId, date:currentTask.date, notificationId:oldNotificationId});
 
   /*
    * UI se vrátí okamžitě. Android alarm a cloud se dorovnají
@@ -3265,7 +3340,7 @@ async function savePlannedReminderDate(itemId, newDate) {
   }
 
   ukonciCekani();
-  resolveRemoteAfterSave692T({kind:'planned', id:itemId, sourceNoteId:item.sourceNoteId, date:item.plannedAt});
+  resolveRemoteAfterSave692T({kind:'planned', id:itemId, sourceNoteId:item.sourceNoteId, date:item.plannedAt, notificationId:oldNotificationId});
   closeReminderQuickMenu();
 
   if (typeof renderCalendar === "function") {
@@ -4503,7 +4578,13 @@ function otevriPotvrzeniDokonceniOpakovanePoznamky(
   cekajiciDokonceniOpakovanePoznamky = {
     noteId: note.id,
     context: selectedReminderContext,
-    dateOverride: entry.date || note.date
+    dateOverride: entry.date || note.date,
+    // 699Y: Mezidialog Hotovo nesmi zahodit Android targetMs
+    // prave doruceneho vyskytu opakovani.
+    nativeOpen699Y: remoteQuickMenu692T?.noteId === String(note.id) &&
+      remoteQuickMenu692T?.kind === entry.kind &&
+      String(remoteQuickMenu692T?.id) === String(entry.id)
+        ? {...remoteQuickMenu692T} : null
   };
 
   if (recurringCompleteConfirmText) {
@@ -4599,6 +4680,10 @@ confirmRecurringCompleteButton?.addEventListener(
       context,
       dateOverride
     );
+    // 699Y: Obnov presny native target pouze pro tento potvrzovany vyskyt.
+    if (cekajici.nativeOpen699Y) {
+      remoteQuickMenu692T = cekajici.nativeOpen699Y;
+    }
 
     /* Jediný potvrzený průchod použije stávající Hotovo logiku. */
     preskocitPotvrzeniOpakovanehoDokonceniJednou = true;
@@ -5901,6 +5986,9 @@ completeReminderButton?.addEventListener(
       }
 
       ukonciCekani();
+      // 699Y: Hotovo u poznamky drive nevolalo resolveRemoteAlarm.
+      // Dorucene Android oznameni proto zustavalo aktivni.
+      resolveRemoteAfterSave692T(entry);
       closeReminderQuickMenu();
 
       if (typeof renderCalendar === "function") {
