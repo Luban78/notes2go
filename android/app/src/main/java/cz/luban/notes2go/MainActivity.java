@@ -494,17 +494,23 @@ public class MainActivity extends BridgeActivity {
    * Only the marker crosses this bridge; the native pending record retains
    * noteId/at/token and is acknowledged by reminders.js after successful UI. */
   private void predejKlikNaPripominku696X() {
-    handler685Q.postDelayed(() -> {
-      try {
-        if (getBridge() == null || getBridge().getWebView() == null) return;
-        getBridge().getWebView().evaluateJavascript(
-          "window.dispatchEvent(new Event('lubanote:native-reminder-tap-693G'));",
-          null
-        );
-      } catch (RuntimeException ignored) {
-        // Native pending record stays saved; JS will retry on focus/resume.
-      }
-    }, 80L);
+    // 699Z: After a notification tap the existing WebView can still be paused
+    // while Android is closing the notification shade / returning focus.
+    // A single evaluateJavascript after 80 ms can be lost. Retry only the
+    // signal, never the alarm or notification. 699Y makes the token idempotent.
+    for (long delay699Z : new long[]{80L, 500L, 1500L}) {
+      handler685Q.postDelayed(() -> {
+        try {
+          if (getBridge() == null || getBridge().getWebView() == null) return;
+          getBridge().getWebView().evaluateJavascript(
+            "window.dispatchEvent(new Event('lubanote:native-reminder-tap-693G'));",
+            null
+          );
+        } catch (RuntimeException ignored) {
+          // Native pending token survives; the later pulses can retry.
+        }
+      }, delay699Z);
+    }
   }
 
   @Override
@@ -553,6 +559,15 @@ public class MainActivity extends BridgeActivity {
     super.onResume();
     zobrazPrekrytiPriNavratu685Q();
     ohlasZivotniCyklus685F("ON_RESUME");
+    // 699Z: Also recover an already persisted native tap on Activity resume.
+    // Handles cold starts and warm returns where onNewIntent's early JS event
+    // fired while WebView was paused. Never reopens an acknowledged token.
+    String pendingTap699Z = getSharedPreferences(
+      LubaNoteRemoteOpen692T.PREF, Context.MODE_PRIVATE)
+        .getString(LubaNoteRemoteOpen692T.TOKEN, "");
+    if (pendingTap699Z != null && !pendingTap699Z.isEmpty()) {
+      predejKlikNaPripominku696X();
+    }
     schovejSystemovouImeProLubaKeyboard(false);
     naplanujModerniLubaImeHidePoNavratu();
     // 685H: onResume uz neprovadi vynuceny fullscreen relayout.

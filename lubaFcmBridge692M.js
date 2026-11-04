@@ -145,12 +145,23 @@
       window.dispatchEvent(new CustomEvent('lubanote:remote-reminder-open', {detail: tap}));
     } catch { /* available after native app init */ }
   }
-  // 693G: Immediate native handoff for taps while APK is already running.
-  // The ordinary focus/pageshow fallback remains for cold starts.
+  // 699Z: The warm Activity can resume before WebView is ready to invoke
+  // the Capacitor bridge. Retry ONLY reading the persisted tap token.
+  // 699Y owns idempotence and successful ACK; this never schedules alarms.
+  let generaceKontrolyKliknuti699Z = 0;
+  function proverKlikPoNavratu699Z() {
+    const generace = ++generaceKontrolyKliknuti699Z;
+    for (const delay of [0, 250, 750, 1800]) {
+      setTimeout(() => {
+        if (generace !== generaceKontrolyKliknuti699Z) return;
+        void checkRemoteOpen692T(true);
+      }, delay);
+    }
+  }
+  // 693G/696X: Direct onNewIntent -> WebView signal for a warm Android tap.
   window.addEventListener('lubanote:native-reminder-tap-693G', () => {
-    // 696X: Direct onNewIntent -> WebView signal for a warm Android tap.
-    window.LubaNoteStartupDiag?.zapis?.('REM-TAP', '696X NATIVE TAP SIGNAL');
-    void checkRemoteOpen692T(true);
+    window.LubaNoteStartupDiag?.zapis?.('REM-TAP', '699Z NATIVE TAP SIGNAL');
+    proverKlikPoNavratu699Z();
   });
   // 696X: Backup when Android restores focus after the notification shade.
   // Does not start sync, reschedule alarms, or touch the current note.
