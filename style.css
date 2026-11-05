@@ -4810,6 +4810,15 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   overflow-wrap: break-word;
 }
 
+/* 699AG – jen potvrzení obnovy: popis zarovnaný doleva,
+ * bez duplicitního křížku (dole je výslovné tlačítko Zrušit). */
+.choiceDialogBackupRestore699AG .choiceDialogDescription699AF {
+  text-align: left;
+}
+.choiceDialogBackupRestore699AG .choiceDialogClose {
+  display: none !important;
+}
+
 .choiceDialogOptions {
   display: flex;
   flex-direction: column;

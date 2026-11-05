@@ -5657,6 +5657,7 @@ async function importTasksApk() {
   ) {
     window.otevriVyberovyModal({
       nadpis: "Obnovit kompletní zálohu?",
+      bezKrizku699AG: true,
       popis: `${souhrnZalohy699AF} Cloudové poznámky se po obnově znovu nahrají na server, LOCAL poznámky zůstanou jen v tomto zařízení.`,
       moznosti: [
         {
@@ -5708,6 +5709,7 @@ function importTasks(file) {
         ) {
           window.otevriVyberovyModal({
             nadpis: "Obnovit kompletní zálohu?",
+            bezKrizku699AG: true,
             popis: `${vytvorSouhrnObsahuZalohy699AF(imported)} Cloudové poznámky se po obnově znovu nahrají na server, LOCAL poznámky zůstanou jen v tomto zařízení.`,
             moznosti: [
               {

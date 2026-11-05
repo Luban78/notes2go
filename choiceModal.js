@@ -97,6 +97,8 @@
     moznostiElement.replaceChildren();
     dialog.querySelector(".choiceDialogDescription699AF")?.remove();
     dialog.classList.remove("choiceDialogWithDescription699AF");
+    dialog.classList.remove("choiceDialogBackupRestore699AG");
+    if (zavritTlacitko) zavritTlacitko.hidden = false;
     
     if (
       predchoziFokus &&
@@ -117,6 +119,7 @@
   function otevriVyberovyModal({
     nadpis = choiceT("choice.selectOption", "Vyberte možnost"),
     popis = "",
+    bezKrizku699AG = false,
     moznosti = [],
     vybranaHodnota = null,
     poVyberu = null,
@@ -127,6 +130,10 @@
     predchoziFokus = document.activeElement;
     nadpisElement.textContent = nadpis;
     moznostiElement.replaceChildren();
+    // 699AG: potvrzení obnovy má vlastní Zrušit a nepotřebuje druhé zavření.
+    // Všechny ostatní choice dialogy si zachovají stávající křížek.
+    zavritTlacitko.hidden = bezKrizku699AG === true;
+    dialog.classList.toggle("choiceDialogBackupRestore699AG", bezKrizku699AG === true);
     // 699AF: dlouhý obsah zálohy patří pod hlavičku, nikoli vedle křížku.
     dialog.querySelector(".choiceDialogDescription699AF")?.remove();
     dialog.classList.remove("choiceDialogWithDescription699AF");
