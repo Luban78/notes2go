@@ -6385,6 +6385,9 @@ async function provedJednorazovouOpravu699AK(puvodni) {
 function nastavTlacitkoOpravy699AK() {
   const tlacitko = document.getElementById("settingsRepairRestore699AK");
   if (!tlacitko) return;
+  if (localStorage.getItem(OBNOVA_699AK_KONTROLNI_BOD)) {
+    tlacitko.textContent = "Prověřit / dokončit opravu 699AK";
+  }
   let probiha = false;
   const zprava = (obsah) => {
     if (typeof zobrazZpravuAplikace === "function")
@@ -6396,6 +6399,12 @@ function nastavTlacitkoOpravy699AK() {
     probiha = true;
     tlacitko.disabled = true;
     try {
+      // 699AL: po úspěšné 699AK už nikdy nevytvářet další ID.
+      // Nejdřív čtecí diagnostika konkrétního ID z chybového logu.
+      if (localStorage.getItem(OBNOVA_699AK_KONTROLNI_BOD)) {
+        await spustKontroluDokonceni699AL(zprava);
+        return;
+      }
       const plan = await zkontrolujStareObnoveni699AK();
       if (typeof window.otevriVyberovyModal !== "function")
         throw chybaObnovy699AK("Potvrzovací okno není dostupné.");
@@ -6430,4 +6439,248 @@ if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", nastavTlacitkoOpravy699AK, { once: true });
 } else {
   nastavTlacitkoOpravy699AK();
+}
+
+
+/*
+ * 699AL – CÍLENÁ DIAGNOSTIKA A PŘÍPADNÉ DOKONČENÍ 699AK.
+ * ---------------------------------------------------------
+ * Z provozního logu je prokázáno, že nové ID se uložilo, ale původní
+ * ID 0e2545c9-... se stále objevuje v Existing Reconcile. Stejná chyba
+ * 688U může znamenat tombstone, Secret i neplatný formát. Nic NEHÁDAT.
+ * Po původní 699AK kontrolní kopii už nikdy nevytvářet další UUID.
+ * Pouze pokud server i obě lokální kopie přesně odpovídají původní
+ * 699AK kontrolní kopii, může uživatel potvrdit odebrání staré
+ * (prokazatelně duplicitní) lokální kopie; jinak jen read-only report.
+ * Bez úprav sync.js, serveru, E2E guardů, kryptografie, nebo LOCAL notes.
+ */
+const OBNOVA_699AL_BLOKOVANE_ID = "0e2545c9-cf7a-4a54-a901-805d26147055";
+const OBNOVA_699AL_DOKONCENO_KEY = "lubanote699ALRecoveryFinishedV1";
+
+function souhrnOpravy699AL(stav) {
+  const znacka = (c) => c ? "Y" : "N";
+  const podoby = `regularOld=${stav.regularOld} regularNew=${stav.regularNew} ` +
+    `rawOld=${stav.rawOld} legacySecretOld=${stav.legacyOld} ` +
+    `encryptedOld=${stav.encryptedOld} decryptedOld=${stav.decryptedOld} ` +
+    `localVaultOld=${stav.vaultOld}`;
+  const server = `serverOld=${stav.serverOld} serverNew=${stav.serverNew} ` +
+    `metaOld=${stav.metaOld} checkpointMatch=${znacka(stav.checkpointMatch)}`;
+  return `699AL INSPECT | ${server} | ${podoby} | safe=${znacka(stav.ready)}`;
+}
+
+function pridejOdkazy699AL(poznamka, stare, nove) {
+  const vysledek = JSON.parse(JSON.stringify(poznamka));
+  vysledek.id = nove;
+  const html = (s) => typeof s === "string"
+    ? s.replace(/(\bdata-note-id\s*=\s*)(["'])([^"']+)\2/gi,
+      (all, p, q, id) => id === stare ? `${p}${q}${nove}${q}` : all)
+    : s;
+  const plan = (item) => item && item.sourceNoteId === stare
+    ? { ...item, sourceNoteId: nove } : item;
+  if (typeof vysledek.richContent === "string") vysledek.richContent = html(vysledek.richContent);
+  if (Array.isArray(vysledek.todos)) vysledek.todos = vysledek.todos.map(t =>
+    ({ ...t, html: html(t?.html) }));
+  if (Array.isArray(vysledek.plannedItems)) {
+    vysledek.plannedItems = vysledek.plannedItems.map(plan);
+  }
+  return vysledek;
+}
+
+async function overDokonceni699AL() {
+  const zaznam = localStorage.getItem(OBNOVA_699AK_KONTROLNI_BOD);
+  let checkpoint;
+  try { checkpoint = zaznam && JSON.parse(zaznam); } catch (_) {}
+  if (!checkpoint || !checkpoint.oldId || !checkpoint.newId || !checkpoint.note) {
+    throw new Error("Kontrolní kopie 699AK není dostupná. Není co bezpečně dokončit.");
+  }
+  if (!navigator.onLine || typeof getCurrentUser !== "function" ||
+      typeof nactiSafeBootstrapManifestV2 !== "function" ||
+      typeof supabaseClient?.rpc !== "function") {
+    throw new Error("Pro diagnostiku je nutné připojení k LubaServeru.");
+  }
+  if (window.LubaNoteRegularNotesStore?.chybiPlnaCacheProSync?.() === true) {
+    throw new Error("Plná cache není připravená. Nesmíme ji přepsat.");
+  }
+  await window.LubaNoteRegularNotesStore?.cekejNaUlozeni?.();
+  const uzivatel = await getCurrentUser();
+  if (!uzivatel?.id || String(checkpoint.userId) !== String(uzivatel.id)) {
+    throw new Error("Kontrolní kopie patří jinému účtu nebo uživatel není přihlášen.");
+  }
+  const stare = String(checkpoint.oldId), nove = String(checkpoint.newId);
+  const stav = {
+    id: stare, nove, checkpointMatch: stare === OBNOVA_699AL_BLOKOVANE_ID,
+    ready: false, regularOld: 0, regularNew: 0, rawOld: 0,
+    legacyOld: 0, encryptedOld: 0, decryptedOld: 0, vaultOld: 0,
+    serverOld: "unknown", serverNew: "unknown", metaOld: "-"
+  };
+  const regular = nactiBeznePoznamkyZUloziste();
+  const starePoznamky = regular.filter(n => String(n?.id) === stare);
+  const novePoznamky = regular.filter(n => String(n?.id) === nove);
+  stav.regularOld = starePoznamky.length;
+  stav.regularNew = novePoznamky.length;
+  stav.rawOld = nactiPoleZLocalStorage(REGULAR_TASK_STORAGE_KEY)
+    .filter(n => String(n?.id) === stare).length;
+  stav.legacyOld = nactiStarePlaintextTajnePoznamky()
+    .filter(n => String(n?.id) === stare).length;
+  stav.encryptedOld = nactiSifrovaneTajneZaznamy()
+    .filter(n => String(n?.id) === stare).length;
+  stav.decryptedOld = getDesifrovaneTajnePoznamky()
+    .filter(n => String(n?.id) === stare).length;
+  stav.vaultOld = (window.LubaNoteLocalVault697M?.snapshot?.() || [])
+    .filter(n => String(n?.id) === stare).length;
+  let meta = null;
+  const rawMeta = localStorage.getItem(BACKUP_CLOUD_META_STORAGE_KEY);
+  try { meta = JSON.parse(rawMeta || "{}"); } catch (_) { meta = null; }
+  stav.metaOld = meta?.[stare]?.revision ?? "-";
+  const manifest = await nactiSafeBootstrapManifestV2();
+  if (!Array.isArray(manifest)) throw new Error("Serverový manifest není dostupný.");
+  const radky = new Map(manifest.map(r => [String(r?.id), r]));
+  const old = radky.get(stare), neu = radky.get(nove);
+  stav.serverOld = old?.deleted_at ? `deleted/rev${old.revision}` :
+    old ? `active/rev${old.revision}` : "missing";
+  stav.serverNew = neu?.deleted_at ? `deleted/rev${neu.revision}` :
+    neu ? `active/rev${neu.revision}` : "missing";
+  const odpoved = await supabaseClient.rpc("lubanote_get_notes_by_ids_safe",
+    { p_note_ids: [stare, nove] });
+  if (odpoved?.error || !Array.isArray(odpoved?.data)) {
+    throw new Error("Autoritativní kontrola obou serverových řádků selhala.");
+  }
+  const autoritativni = new Map(odpoved.data.map(r => [String(r?.id), r]));
+  const serverOld = autoritativni.get(stare);
+  const serverNew = autoritativni.get(nove);
+  const byloSmazano = Boolean(old?.deleted_at && serverOld?.deleted_at &&
+    Number(old.revision) === Number(serverOld.revision));
+  const noveNaServeru = Boolean(neu && !neu.deleted_at &&
+    serverNew && !serverNew.deleted_at &&
+    Number(neu.revision) === Number(serverNew.revision) &&
+    Number(neu.revision) >= 1 &&
+    serverNew.data?.__lubanoteE2ENote === true &&
+    serverNew.is_secret !== true &&
+    (serverNew.user_id == null || String(serverNew.user_id) === String(uzivatel.id)));
+  const bezSecret = serverOld?.is_secret !== true &&
+    serverOld?.data?.__lubanoteSecret !== true &&
+    serverOld?.data?.isSecret !== true &&
+    (!serverOld?.user_id || String(serverOld.user_id) === String(uzivatel.id)) &&
+    ![stav.legacyOld, stav.encryptedOld, stav.decryptedOld, stav.vaultOld].some(Boolean);
+  const obsahStare = stav.regularOld === 1 &&
+    JSON.stringify(starePoznamky[0]) === JSON.stringify(checkpoint.note);
+  const obsahNove = stav.regularNew === 1 &&
+    JSON.stringify(novePoznamky[0]) === JSON.stringify(
+      pridejOdkazy699AL(checkpoint.note, stare, nove));
+  const bezVazeb = !regular.some(n => String(n?.id) !== stare &&
+    String(n?.id) !== nove && JSON.stringify(n).includes(stare));
+  const plan = localStorage.getItem("plannedItems");
+  let bezStarehoPlanu = false;
+  try {
+    const polozky = plan ? JSON.parse(plan) : [];
+    bezStarehoPlanu = Array.isArray(polozky) &&
+      !polozky.some(p => String(p?.sourceNoteId) === stare);
+  } catch (_) {}
+  stav.ready = Boolean(stav.checkpointMatch && byloSmazano && noveNaServeru &&
+    bezSecret && obsahStare && obsahNove && bezVazeb && bezStarehoPlanu &&
+    meta && typeof meta === "object" && !Array.isArray(meta) &&
+    !localStorage.getItem(OBNOVA_699AL_DOKONCENO_KEY) &&
+    document.getElementById("taskModal")?.hidden !== false);
+  stav.reason = !stav.checkpointMatch ? "699AK přemapoval jiné ID než to, které blokuje sync." :
+    !byloSmazano ? "Původní ID není prokazatelný serverový tombstone." :
+    !noveNaServeru ? "Nová E2E poznámka není serverem jednoznačně potvrzena." :
+    !bezSecret ? "Původní ID se nachází v Secret/LOCAL nebo je nejednoznačné." :
+    !obsahStare ? "Lokální původní poznámka není přesnou kopií kontrolního bodu 699AK." :
+    !obsahNove ? "Nová lokální poznámka se liší od původní (nelze smazat kopii)." :
+    !bezVazeb || !bezStarehoPlanu ? "Existují nevyřešené odkazy nebo položky Plánu." :
+    !meta || typeof meta !== "object" || Array.isArray(meta)
+      ? "Sync metadata nejsou validní." :
+    localStorage.getItem(OBNOVA_699AL_DOKONCENO_KEY) ? "699AL už proběhl; opakování zakázáno." :
+    document.getElementById("taskModal")?.hidden === false ? "Zavři editor." :
+    "Staré ID je ověřená duplicitní lokální kopie; lze dokončit odebrání.";
+  const vystup = souhrnOpravy699AL(stav);
+  window.LubaNoteStartupDiag?.zapis?.("BACKUP", vystup);
+  window.LubaNoteStartupDiag?.zapis?.("BACKUP", `699AL REASON | ${stav.reason}`);
+  return { ...stav, regular, oldNote: starePoznamky[0], newNote: novePoznamky[0],
+    previousMeta: rawMeta, meta, vystup };
+}
+
+async function dokonciObnovu699AL(pred) {
+  // Recheck před zápisem: server, data, sync meta, účet, vazby, kopie.
+  const aktualni = await overDokonceni699AL();
+  if (!aktualni.ready || !pred.ready || pred.id !== aktualni.id ||
+      pred.nove !== aktualni.nove ||
+      JSON.stringify(pred.oldNote) !== JSON.stringify(aktualni.oldNote) ||
+      JSON.stringify(pred.newNote) !== JSON.stringify(aktualni.newNote)) {
+    throw new Error("Stav se změnil. Oprava nebyla provedena; zkopíruj diagnostiku.");
+  }
+  const puvodni = JSON.stringify(aktualni.regular);
+  const pokracovani = aktualni.regular.filter(n => String(n?.id) !== aktualni.id);
+  if (pokracovani.length !== aktualni.regular.length - 1) {
+    throw new Error("Počet lokálních poznámek neodpovídá bezpečné opravě.");
+  }
+  // Původní data i původní metadata jsou již uložena v checkpointu 699AK.
+  // Žádné serverové DELETE ani save_note_safe v této cestě nevoláme.
+  zvysReviziLokalnichZmenPoznamek();
+  try {
+    const ok = await ulozBeznePoznamkyPrimo(pokracovani, true, true);
+    if (ok !== true) throw new Error("Uložení běžných poznámek selhalo.");
+    await window.LubaNoteRegularNotesStore?.cekejNaUlozeni?.();
+    if (nactiBeznePoznamkyZUloziste().some(n => String(n?.id) === aktualni.id)) {
+      throw new Error("Staré ID stále existuje po zápisu do cache.");
+    }
+    const metaNyni = localStorage.getItem(BACKUP_CLOUD_META_STORAGE_KEY);
+    if (metaNyni !== aktualni.previousMeta) {
+      throw new Error("Sync metadata se během opravy změnila.");
+    }
+    const novaMeta = { ...aktualni.meta };
+    delete novaMeta[aktualni.id];
+    localStorage.setItem(BACKUP_CLOUD_META_STORAGE_KEY, JSON.stringify(novaMeta));
+    localStorage.setItem(OBNOVA_699AL_DOKONCENO_KEY, JSON.stringify({
+      userId: JSON.parse(localStorage.getItem(OBNOVA_699AK_KONTROLNI_BOD)).userId,
+      oldId: aktualni.id, newId: aktualni.nove, at: new Date().toISOString()
+    }));
+    window.LubaNoteStartupDiag?.zapis?.("BACKUP",
+      `699AL COMMITTED | old=${aktualni.id} new=${aktualni.nove} removed-local=1`);
+    location.reload();
+  } catch (e) {
+    // Lokální rollback. Původní server se nikdy neměnil.
+    try {
+      await ulozBeznePoznamkyPrimo(JSON.parse(puvodni), true, true);
+      if (aktualni.previousMeta === null) {
+        localStorage.removeItem(BACKUP_CLOUD_META_STORAGE_KEY);
+      } else {
+        localStorage.setItem(BACKUP_CLOUD_META_STORAGE_KEY, aktualni.previousMeta);
+      }
+    } catch (err) {
+      console.error("699AL rollback vyžaduje kontrolu:", err);
+    }
+    throw e;
+  }
+}
+
+async function spustKontroluDokonceni699AL(zprava) {
+  let stav;
+  try { stav = await overDokonceni699AL(); }
+  catch (e) { zprava(`699AL čtecí kontrola selhala: ${e?.message || e}`); return; }
+  if (!stav.ready) {
+    zprava(`${stav.reason}\n${stav.vystup}\nNic nebylo změněno.`);
+    return;
+  }
+  if (typeof window.otevriVyberovyModal !== "function") {
+    zprava("Potvrzovací okno není dostupné; nic nebylo změněno.");
+    return;
+  }
+  window.otevriVyberovyModal({
+    nadpis: "Dokončit bezpečnou opravu 699AK?",
+    popis: `Na serveru je nové ID již potvrzené a staré ID je smazané. ` +
+      `V telefonu zůstala ještě přesně shodná původní kopie. ` +
+      `Odebereme pouze tuto duplicitní lokální kopii; kontrolní záloha 699AK zůstane. ` +
+      `Žádná serverová data nezměníme.`,
+    bezKrizku699AG: true,
+    moznosti: [
+      { hodnota: "dokoncit", popisek: "Dokončit 699AL" },
+      { hodnota: "zrusit", popisek: "Zrušit" }
+    ],
+    poVyberu: async (volba) => {
+      if (volba !== "dokoncit") return;
+      try { await dokonciObnovu699AL(stav); }
+      catch (e) { zprava(`699AL zastaveno: ${e?.message || e}\nNic dalšího nemaž ani neimportuj.`); }
+    }
+  });
 }
