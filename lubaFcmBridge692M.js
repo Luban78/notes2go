@@ -68,6 +68,58 @@
   });
 
 
+  /* 699AC: Android may refuse a new alarm when its per-app alarm quota is
+   * exhausted. Only show a LubaNote modal for a CONFIRMED native limit error.
+   * The native timestamp survives a killed APK; UI waits until ready/visible.
+   * Never change or delete reminders automatically. */
+  const LIMIT_SHOWN_KEY_699AC = 'lubanoteAlarmLimitShown699AC';
+  const LIMIT_FAILURE_KEY_699AC = 'lubanoteAlarmLimitFailureShown699AC';
+  let kontrolaLimituBezi699AC = false;
+  async function upozorniNaLimitAlarmu699AC() {
+    if (!isNative || !uiPripravenoProAlarm695Q || document.hidden ||
+        kontrolaLimituBezi699AC ||
+        typeof plugin.getAlarmLimitFailure699AC !== 'function' ||
+        typeof window.otevriPotvrzovaciModalLubaNote !== 'function') return;
+    kontrolaLimituBezi699AC = true;
+    try {
+      const result = await plugin.getAlarmLimitFailure699AC();
+      const failureMs = Number(result?.lastFailureMs || 0);
+      if (!Number.isSafeInteger(failureMs) || failureMs <= 0 ||
+          failureMs > Date.now() + 60000) return;
+      let shownAt = 0;
+      let shownFailure = 0;
+      try {
+        shownAt = Number(localStorage.getItem(LIMIT_SHOWN_KEY_699AC)) || 0;
+        shownFailure = Number(localStorage.getItem(LIMIT_FAILURE_KEY_699AC)) || 0;
+      } catch (_) {}
+      if (failureMs <= shownFailure ||
+          (shownAt > 0 && Date.now() - shownAt < 24 * 60 * 60 * 1000)) return;
+      if (document.hidden || !document.getElementById('remindersModuleButton')) return;
+      const opened = window.otevriPotvrzovaciModalLubaNote({
+        nadpis: 'Limit připomínek Androidu',
+        text: 'Android odmítl naplánovat další připomínku, protože byl dosažen limit současně naplánovaných alarmů (obvykle 500 na aplikaci).\n\n' +
+          'Poznámka zůstává uložená, ale její upozornění nemusí zazvonit. Vypni nebo smaž nepotřebné připomínky a potom plánování zopakuj.',
+        popisekZrusit: 'Rozumím',
+        popisekPotvrdit: 'Otevřít připomínky',
+        poPotvrzeni: () => {
+          document.getElementById('remindersModuleButton')?.click();
+        }
+      });
+      // Save only after the existing LubaNote modal actually opened.
+      if (opened) {
+        try {
+          localStorage.setItem(LIMIT_SHOWN_KEY_699AC, String(Date.now()));
+          localStorage.setItem(LIMIT_FAILURE_KEY_699AC, String(failureMs));
+        } catch (_) {}
+        window.LubaNoteStartupDiag?.zapis?.('REM-LIMIT', '699AC ANDROID LIMIT WARNING SHOWN');
+      }
+    } catch (_) { /* Native bridge may be unavailable during startup. */ }
+    finally { kontrolaLimituBezi699AC = false; }
+  }
+  window.addEventListener('lubanote:splash-ready', () => {
+    setTimeout(() => { void upozorniNaLimitAlarmu699AC(); }, 850);
+  });
+
   function deviceId() {
     try {
       const id = window.LubaNoteSync?.ziskejDeviceId?.() || localStorage.getItem('lubanoteDeviceId');
@@ -176,6 +228,7 @@
     catch (_) { /* native registration remains best effort */ }
     await registerToken();
     void nabidniNastaveniAlarmu695Q();
+    void upozorniNaLimitAlarmu699AC();
     await checkPendingSync();
     void checkRemoteOpen692T();
   }

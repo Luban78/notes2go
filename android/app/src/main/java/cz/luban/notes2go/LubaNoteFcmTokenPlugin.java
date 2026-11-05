@@ -260,6 +260,14 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     } catch(Exception ignored) { /* old proven Capacitor scheduler is fallback */ }
     JSObject result=new JSObject(); result.put("ok",ok); call.resolve(result);
   }
+  // 699AC: Read-only technical failure timestamp; never sends note content.
+  @PluginMethod public void getAlarmLimitFailure699AC(PluginCall call) {
+    JSObject result = new JSObject();
+    result.put("lastFailureMs", Long.toString(
+      LubaNoteRemoteAlarm692O.lastAlarmLimitFailure699AC(getContext())));
+    call.resolve(result);
+  }
+
   // 699W: store one recurring note schedule natively for offline/closed APK.
   @PluginMethod public void scheduleLocalRecurring699W(PluginCall call) {
     JSObject result=new JSObject();

@@ -32,6 +32,29 @@ final class LubaNoteRemoteAlarm692O {
   private static final String CHANNEL = "reminders";
   private static final long MAX_FUTURE = 366L * 24 * 60 * 60 * 1000;
 
+  // 699AC: Keep only the last confirmed Android alarm-limit failure.
+  // Background receivers cannot show UI; the WebView reads this timestamp later.
+  private static final String LIMIT_PREF_699AC = "lubanote_alarm_limit_699AC";
+  private static final String LIMIT_AT_699AC = "lastLimitFailureMs";
+
+  static long lastAlarmLimitFailure699AC(Context ctx) {
+    return ctx.getSharedPreferences(LIMIT_PREF_699AC, Context.MODE_PRIVATE)
+      .getLong(LIMIT_AT_699AC, 0L);
+  }
+
+  private static boolean isAlarmLimitFailure699AC(RuntimeException ex) {
+    if (!(ex instanceof IllegalStateException)) return false;
+    String message = String.valueOf(ex.getMessage()).toLowerCase(java.util.Locale.ROOT);
+    return message.contains("maximum limit of concurrent alarms") ||
+      (message.contains("alarm") &&
+        (message.contains("limit") || message.contains("too many")));
+  }
+
+  private static void rememberAlarmLimitFailure699AC(Context ctx) {
+    ctx.getSharedPreferences(LIMIT_PREF_699AC, Context.MODE_PRIVATE)
+      .edit().putLong(LIMIT_AT_699AC, System.currentTimeMillis()).commit();
+  }
+
   private LubaNoteRemoteAlarm692O() {}
 
   // 692X: read-only delivery forensics, no note text or E2E data. This journal
@@ -218,6 +241,11 @@ final class LubaNoteRemoteAlarm692O {
       diag696Z(ctx,"ARM",id,at,"method="+method);
       return true;
     } catch(RuntimeException ex) {
+      // 699AC: Do not classify every IllegalStateException as the 500-alarm limit.
+      if (isAlarmLimitFailure699AC(ex)) {
+        rememberAlarmLimitFailure699AC(ctx);
+        diag692X(ctx,"REMOTE_ARM_LIMIT_699AC",id,at,"android_alarm_limit");
+      }
       diag692X(ctx,"REMOTE_ARM_BLOCKED_699W",id,at,
         ex instanceof IllegalStateException ? "android_alarm_limit_or_state" : "native_schedule_exception");
       return false;
