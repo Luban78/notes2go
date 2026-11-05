@@ -3977,6 +3977,31 @@ async function vytvorKompletniZalohu(moznosti = {}) {
 }
 
 
+/* 699AF – Stručný a ověřitelný souhrn skutečně uložených dat.
+ * Počet příloh z interního archivního formátu nepatří do hlavní zprávy:
+ * u většiny záloh je nula a nepopisuje uživatelský obsah LubaNote.
+ * Funguje i pro starší platné kompletní JSON zálohy V3. */
+function vytvorSouhrnObsahuZalohy699AF(zaloha) {
+  const bezne = Array.isArray(zaloha?.notes) ? zaloha.notes : [];
+  const secret = Array.isArray(zaloha?.secretNotes) ? zaloha.secretNotes : [];
+  const cloudBezne = bezne.filter((note) => !jePoznamkaPouzeLokalni(note)).length;
+  const cloudSecret = secret.filter((note) => note?.storageScope !== NOTE_STORAGE_SCOPE_LOCAL).length;
+  const cloud = cloudBezne + cloudSecret;
+  const local = bezne.length + secret.length - cloud;
+  const verejneStitky = Array.isArray(zaloha?.publicTags) ? zaloha.publicTags.length : 0;
+  const secretStitky = Array.isArray(zaloha?.secretTagRecords)
+    ? zaloha.secretTagRecords.length
+    : Math.max(0, Number(zaloha?.manifest?.secretTagCount) || 0);
+  const localStitky =
+    (Array.isArray(zaloha?.localTags) ? zaloha.localTags.length : 0) +
+    (Array.isArray(zaloha?.localSecretTagRecords) ? zaloha.localSecretTagRecords.length : 0);
+  const plan = Array.isArray(zaloha?.plannedItems) ? zaloha.plannedItems.length : 0;
+  return `Poznámky: ${bezne.length + secret.length} (běžné ${bezne.length}, Secret ${secret.length}; cloud ${cloud}, LOCAL ${local}). ` +
+    `Štítky: ${verejneStitky + secretStitky + localStitky}. Plán: ${plan} položek. ` +
+    "Součástí zálohy jsou také uložená nastavení.";
+}
+
+
 function zacniPrubehKompletniZalohy(text) {
   const modal =
     document.getElementById(
@@ -4145,16 +4170,9 @@ async function pripravAProvedExportZalohy(
         typeof zobrazZpravuAplikace ===
         "function"
       ) {
-        const cloudPrilohy = Number(
-          vysledek?.manifest?.cloudAttachmentCount || 0
-        );
-        const localPrilohy = Number(
-          vysledek?.manifest?.localAttachmentCount || 0
-        );
-
         zobrazZpravuAplikace(
           "Kompletní záloha",
-          `Kompletní záloha byla uložena. Archiv obsahuje ${cloudPrilohy} cloudových a ${localPrilohy} LOCAL příloh.`
+          `Záloha byla uložena. ${vytvorSouhrnObsahuZalohy699AF(backup)}`
         );
       }
     } else {
@@ -5586,12 +5604,7 @@ async function importTasksApk() {
 
   ukonciKontrolu();
 
-  const poctyPriloh =
-    spocitejPrilohyPodleRozsahu(
-      manifest,
-      imported
-    );
-
+  const souhrnZalohy699AF = vytvorSouhrnObsahuZalohy699AF(imported);
   const importedAt = new Date().toISOString();
   const provedObnovu = async () => {
     try {
@@ -5643,8 +5656,8 @@ async function importTasksApk() {
     "function"
   ) {
     window.otevriVyberovyModal({
-      nadpis:
-        `Obnovit kompletní zálohu V4? Archiv obsahuje ${poctyPriloh.cloud} cloudových a ${poctyPriloh.local} LOCAL příloh. Cloudová data se obnoví do cloudu, LOCAL data zůstanou pouze v zařízení.`,
+      nadpis: "Obnovit kompletní zálohu?",
+      popis: `${souhrnZalohy699AF} Cloudové poznámky se po obnově znovu nahrají na server, LOCAL poznámky zůstanou jen v tomto zařízení.`,
       moznosti: [
         {
           hodnota: "obnovit",
@@ -5694,8 +5707,8 @@ function importTasks(file) {
           "function"
         ) {
           window.otevriVyberovyModal({
-            nadpis:
-              "Obnovit kompletní zálohu? Cloudová data se obnoví do cloudu, LOCAL data zůstanou pouze v zařízení.",
+            nadpis: "Obnovit kompletní zálohu?",
+            popis: `${vytvorSouhrnObsahuZalohy699AF(imported)} Cloudové poznámky se po obnově znovu nahrají na server, LOCAL poznámky zůstanou jen v tomto zařízení.`,
             moznosti: [
               {
                 hodnota: "obnovit",

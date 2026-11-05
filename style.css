@@ -4787,6 +4787,29 @@ body.authPending.demoExpiredReadOnly > #appMessageModal {
   cursor: pointer;
 }
 
+/* 699AF – popis zálohy mimo titul, zavírací křížek vždy vpravo nahoře.
+ * Omezeno na choiceModal s volitelným popisem; ostatní dialogy beze změny. */
+.choiceDialogWithDescription699AF .choiceDialogHeader {
+  align-items: flex-start;
+}
+.choiceDialogWithDescription699AF .choiceDialogTitle {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.choiceDialogWithDescription699AF .choiceDialogClose {
+  flex: 0 0 48px;
+  align-self: flex-start;
+  margin-left: auto;
+}
+.choiceDialogDescription699AF {
+  margin: 0 0 18px;
+  color: var(--color-text-secondary, var(--color-text));
+  line-height: 1.5;
+  font-size: 0.98rem;
+  overflow-wrap: break-word;
+}
+
 .choiceDialogOptions {
   display: flex;
   flex-direction: column;

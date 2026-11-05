@@ -95,6 +95,8 @@
     
     modal.hidden = true;
     moznostiElement.replaceChildren();
+    dialog.querySelector(".choiceDialogDescription699AF")?.remove();
+    dialog.classList.remove("choiceDialogWithDescription699AF");
     
     if (
       predchoziFokus &&
@@ -114,6 +116,7 @@
   
   function otevriVyberovyModal({
     nadpis = choiceT("choice.selectOption", "Vyberte možnost"),
+    popis = "",
     moznosti = [],
     vybranaHodnota = null,
     poVyberu = null,
@@ -124,6 +127,16 @@
     predchoziFokus = document.activeElement;
     nadpisElement.textContent = nadpis;
     moznostiElement.replaceChildren();
+    // 699AF: dlouhý obsah zálohy patří pod hlavičku, nikoli vedle křížku.
+    dialog.querySelector(".choiceDialogDescription699AF")?.remove();
+    dialog.classList.remove("choiceDialogWithDescription699AF");
+    if (typeof popis === "string" && popis.trim()) {
+      const popisElement = document.createElement("p");
+      popisElement.className = "choiceDialogDescription699AF";
+      popisElement.textContent = popis.trim();
+      dialog.insertBefore(popisElement, moznostiElement);
+      dialog.classList.add("choiceDialogWithDescription699AF");
+    }
     
     moznosti.forEach((moznost) => {
       const tlacitko = document.createElement("button");
