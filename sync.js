@@ -5310,9 +5310,6 @@ async function spustExistingClientReconcileV2(
         await aplikujSafeBootstrapRadky(cloudApplyRows);
       }
 
-      // 699AG: průběh hromadné obnovy. Pouze diagnostika, žádný limit
-      // nebo odklad zápisů. Počítá skutečně potvrzené uploady.
-      let potvrzeneUploady699AG = 0;
       for (const id of localUploadIds) {
         if (
           pouzeLokalniIds695M.has(String(id)) ||
@@ -5395,36 +5392,7 @@ async function spustExistingClientReconcileV2(
           oznacUnresolved(id, "upload-failed");
           break;
         }
-        potvrzeneUploady699AG += 1;
-        // Ověříme jedinou zásadní podmínku: serverem potvrzený zápis
-        // si uložil stejný lokální updatedAt jako právě vítězná poznámka.
-        // Nic neopravujeme naslepo, nesaháme do obsahu ani revizí.
-        const poZapisu699AG = lokalni.winners.get(id);
-        const metaPoZapisu699AG = ziskejCloudSyncMeta(id);
-        if (
-          poZapisu699AG && metaPoZapisu699AG &&
-          !jsouStejneCasoveZnacky(
-            poZapisu699AG.updatedAt,
-            metaPoZapisu699AG.localUpdatedAt
-          )
-        ) {
-          window.LubaNoteStartupDiag?.zapis?.(
-            "V2", `699AG RESTORE STAMP MISMATCH | id=${id} | cloudRev=${metaPoZapisu699AG.revision}`
-          );
-        }
-        if (
-          potvrzeneUploady699AG % 10 === 0 ||
-          potvrzeneUploady699AG === localUploadIds.size
-        ) {
-          window.LubaNoteStartupDiag?.zapis?.(
-            "V2", `699AG RECONCILE PROGRESS | sent=${potvrzeneUploady699AG}/${localUploadIds.size}`
-          );
-        }
       }
-
-      window.LubaNoteStartupDiag?.zapis?.(
-        "V2", `699AG RECONCILE UPLOAD PHASE END | sent=${potvrzeneUploady699AG}/${localUploadIds.size} | unresolved=${unresolvedIds.size}`
-      );
 
       if (unresolvedIds.size > 0) {
         window.LubaNoteStartupDiag?.zapis?.(
