@@ -4517,10 +4517,17 @@
   /* PATCH 467 – blur okna přichází na Androidu typicky dřív než
      visibilitychange=hidden. Tohle je klíčové: InputConnection odpojíme
      ještě během odchodu Activity, ne až při jejím pozdějším uspání. */
-  // 699O – mimo panel (např. při ztraceném capture) musí dotyk také zhasnout.
-  // O(1) kontrola jediného aktivního pointeru; bez timeoutů a bez renderu editoru.
-  document.addEventListener("pointerup", (event) => ukonciVizualniStiskMimoPanel699O(event.pointerId), true);
-  document.addEventListener("pointercancel", (event) => ukonciVizualniStiskMimoPanel699O(event.pointerId), true);
+  // 699AD – jediný stav barevného stisku. Window capture čistí třídu
+  // ještě před akcí klávesy, i když WebView přesměruje pointer capture.
+  // Záložní touchend/touchcancel jen při zvednutí posledního prstu.
+  // Žádný nový časovač, žádný zásah do repeat, long-press ani editoru.
+  window.addEventListener("pointerup", (event) => ukonciVizualniStiskMimoPanel699O(event.pointerId), true);
+  window.addEventListener("pointercancel", (event) => ukonciVizualniStiskMimoPanel699O(event.pointerId), true);
+  const ukonciStiskPoTouch699AD = (event) => {
+    if (event.touches && event.touches.length === 0) ukonciVizualniStiskMimoPanel699O();
+  };
+  window.addEventListener("touchend", ukonciStiskPoTouch699AD, { capture: true, passive: true });
+  window.addEventListener("touchcancel", ukonciStiskPoTouch699AD, { capture: true, passive: true });
 
   window.addEventListener("blur", () => {
     ukonciVizualniStiskMimoPanel699O();

@@ -46,22 +46,8 @@
       border-radius: 1px;
     }
 
-    /* The original :active may linger after pointerup in Android WebView.
-       For text keys, use our synchronous pressed class instead. */
-    #lubaKeyboard .ln-lk-key[data-lk-action="text"]:active:not(.ln-lk-preview-pressed) {
-      background: var(--color-surface, #272130) !important;
-      background: linear-gradient(180deg,
-        color-mix(in srgb, var(--color-surface, #272130) 84%, white 8%),
-        color-mix(in srgb, var(--color-surface, #272130) 96%, #000 4%)) !important;
-      color: var(--color-text, #fff) !important;
-      transform: none !important;
-    }
-    #lubaKeyboard .ln-lk-key[data-lk-action="text"].ln-lk-preview-pressed {
-      background: var(--color-accent, #7444dc) !important;
-      background: color-mix(in srgb, var(--color-accent, #7444dc) 58%, var(--color-surface, #222)) !important;
-      color: #fff !important;
-      transform: translateY(1px);
-    }
+    /* 699AD: barvu klávesy řídí pouze is-touch-down-699o v lubaKeyboard.css.
+       Tento skript vykresluje jen bublinu, nevkládá vlastní pressed CSS. */
   `;
 
   function init() {
@@ -86,7 +72,6 @@
     function clearPreview() {
       if (longPressTimer !== null) clearTimeout(longPressTimer);
       longPressTimer = null;
-      pressed?.classList.remove("ln-lk-preview-pressed");
       pressed = null;
       pointerId = null;
       touchId = null;
@@ -106,8 +91,7 @@
       if (!panel || panel.hidden) return;
 
       clearPreview();
-      // 699T: duch a zvýraznění používají jedinou pressed třídu.
-      // Window capture při pointerup ji odstraní ještě před zápisem znaku.
+      // 699AD: náhled bubliny je oddělený od jediného stavu barvy v lubaKeyboard.js.
       const value = String(key.dataset.lkValue || "");
       if (!value || Array.from(value).length > 2) return;
       const r = key.getBoundingClientRect();
@@ -120,22 +104,15 @@
       bubble.style.width = Math.max(42, Math.min(74, r.width + 15)) + "px";
       bubble.style.left = (r.left + r.width / 2) + "px";
       bubble.style.top = Math.max(65, r.top - 8) + "px";
-      key.classList.add("ln-lk-preview-pressed");
       bubble.hidden = false;
       // The existing alternate-character popup starts after 420 ms.
       // Hide the simple key preview before that popup is presented.
       longPressTimer = setTimeout(clearPreview, LONG_PRESS_PREVIEW_CUTOFF_MS_699T);
     }, { capture: true, passive: true });
 
-    /* 699Q – Android WebView: the preview and pressed background are separate
-     * from lubaKeyboard.js. Some WebViews miss a document pointerup while a
-     * key has pointer capture. Listen on WINDOW capture (before the editor's
-     * document/panel handlers) and also handle native touchend/touchcancel.
-     * No delayed fade, no timer AFTER release and no editor/backspace changes. */
+    /* 699AD: bublina se zavírá nezávisle. Třídu stisku klávesy uklízí
+       výhradně lubaKeyboard.js (window pointer/touch capture). */
     function endPress() {
-      // 699O normally removes this class too. Remove it here as a fallback
-      // when the keyboard's own panel pointerup was swallowed by WebView.
-      pressed?.classList.remove("is-touch-down-699o");
       clearPreview();
     }
     function endPointer(event) {

@@ -1073,17 +1073,13 @@ body.ln-luba-klavesnice-open.ln-lk-actions-expanded
   width: calc(var(--ln-lk-letter-w) * 1.38 + 4px);
 }
 
-/* 699O: vizuální stisk výhradně v .is-touch-down-699o, ne WebView :active. */
-
 /* ==============================================================
-   699T – odezva pouze během skutečného dotyku.
-   Při .ln-lk-preview-pressed se uplatní vizuál náhledu 691BJ.
-   Jakmile prst pustí, 691BJ okamžitě uklidí svou třídu i bublinu.
-   Toto pravidlo blokuje opožděné WebView :active / 699O pressed,
-   aby klávesa po uvolnění nezablikala znovu.
-   Bez animací/dosvitu; funkční klávesy ani Backspace neměníme.
+   699AD – jediný zdroj barvy textové klávesy: is-touch-down-699o
+   (výše na řádku 308). Případné doznívající WebView :active nesmí
+   po uvolnění prstu znovu rozsvítit klávesu. Zároveň nesmí přebít
+   skutečně držený is-touch-down-699o. Bublina má vlastní DOM overlay.
    ============================================================== */
-#lubaKeyboard .ln-lk-key[data-lk-action="text"]:is(:active, .is-touch-down-699o):not(.is-active):not(.ln-lk-preview-pressed) {
+#lubaKeyboard .ln-lk-key[data-lk-action="text"]:active:not(.is-touch-down-699o):not(.is-active) {
   background: var(--color-surface, #272130) !important;
   background: linear-gradient(180deg,
     color-mix(in srgb, var(--color-surface, #272130) 84%, white 8%),
