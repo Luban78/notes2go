@@ -4547,9 +4547,75 @@ function nactiObjektZLocalStorageProObnovu(
 }
 
 
+/*
+ * 699AI – OBNOVA BEZ ZBYTEČNÉHO RE-UPLOADU.
+ *
+ * Tohle je čistě importní kontrola, NEMĚNÍ sync.js.
+ * Přeskočit restore-pending smíme pouze u ID, jehož archivní
+ * záznam je bajtově shodný se současným lokálním JSON záznamem.
+ * Serverovou revizi a metadata ještě nezávisle ověří plán níže.
+ * Nejednoznačná/duplicitní ID nikdy neoptimalizujeme.
+ */
+function najdiNezmeneneCloudZaznamyObnovy699AI(
+  obnoveneBezne,
+  obnoveneSecret
+) {
+  const puvodni = new Map();
+  const nejednoznacnaId = new Set();
+  const ulozDoMapy = (mapa, zaznam, secret) => {
+    const id = String(zaznam?.id || "");
+    if (!id) return;
+    if (mapa.has(id)) {
+      nejednoznacnaId.add(id);
+      return;
+    }
+    mapa.set(id, { zaznam, secret });
+  };
+
+  for (const zaznam of nactiBeznePoznamkyZUloziste()) {
+    ulozDoMapy(puvodni, zaznam, false);
+  }
+  for (const zaznam of nactiSifrovaneTajneZaznamy()) {
+    ulozDoMapy(puvodni, zaznam, true);
+  }
+
+  const obnovene = new Map();
+  for (const zaznam of obnoveneBezne) {
+    ulozDoMapy(obnovene, zaznam, false);
+  }
+  for (const zaznam of obnoveneSecret) {
+    ulozDoMapy(obnovene, zaznam, true);
+  }
+
+  const shodne = new Map();
+  for (const [id, archivni] of obnovene) {
+    if (nejednoznacnaId.has(id)) continue;
+    const lokalni = puvodni.get(id);
+    if (!lokalni || lokalni.secret !== archivni.secret) continue;
+    if (
+      jePoznamkaPouzeLokalni(lokalni.zaznam) ||
+      jePoznamkaPouzeLokalni(archivni.zaznam)
+    ) continue;
+    const updatedAt = archivni.zaznam.updatedAt;
+    if (!updatedAt || String(lokalni.zaznam.updatedAt || "") !== String(updatedAt)) {
+      continue;
+    }
+    // JSON porovnání je záměrně přísné: neshoda => původní bezpečný restore.
+    if (JSON.stringify(lokalni.zaznam) !== JSON.stringify(archivni.zaznam)) {
+      continue;
+    }
+    shodne.set(id, {
+      updatedAt: String(updatedAt),
+      isSecret: archivni.secret
+    });
+  }
+  return shodne;
+}
+
 async function vytvorPlanCloudoveSynchronizacePoObnove(
   obnovovanaId,
-  importedAt
+  importedAt,
+  shodneSeStavajicim699AI = new Map()
 ) {
   if (
     !navigator.onLine ||
@@ -4614,6 +4680,7 @@ async function vytvorPlanCloudoveSynchronizacePoObnove(
 
   const znackaObnovy =
     `restore-pending:${importedAt}`;
+  let preskocenoZbytecnychUploadu699AI = 0;
 
   obnovovanaIdSet.forEach((id) => {
     const cloudRow = cloudPodleId.get(id);
@@ -4635,9 +4702,32 @@ async function vytvorPlanCloudoveSynchronizacePoObnove(
     }
 
     /*
-     * Serverovou revizi známe, ale lokální čas záměrně označíme
-     * jinak. Bezpečný sync tak pozná výslovně obnovenou lokální
-     * verzi a nahraje ji i přes novější cloudový tombstone.
+     * 699AI: totožný archivní a aktuální lokální záznam se NESMÍ
+     * znovu odeslat, pokud server zároveň potvrzuje stejnou revizi,
+     * updated_at i typ a lokální metadata značí dokončený sync.
+     * Jakákoli nejistota => ponechat původní restore-pending.
+     */
+    const stejny = shodneSeStavajicim699AI.get(id);
+    const dosavadniMeta = meta?.[id];
+    const necekaSmazani = !(Array.isArray(cekajiciSmazani) &&
+      cekajiciSmazani.some((zaznam) => String(zaznam?.id || "") === id));
+    if (
+      stejny && necekaSmazani && !cloudRow.deleted_at &&
+      cloudRow.is_secret === stejny.isSecret &&
+      dosavadniMeta &&
+      Number.isFinite(Number(dosavadniMeta.revision)) &&
+      Number(dosavadniMeta.revision) === revision &&
+      dosavadniMeta.serverUpdatedAt && cloudRow.updated_at &&
+      String(dosavadniMeta.serverUpdatedAt) === String(cloudRow.updated_at) &&
+      String(dosavadniMeta.localUpdatedAt || "") === stejny.updatedAt
+    ) {
+      preskocenoZbytecnychUploadu699AI += 1;
+      return; // Meta zůstávají potvrzená, žádný umělý nový upload.
+    }
+
+    /*
+     * Pro skutečně obnovenou / změněnou / neověřenou poznámku
+     * zachovat beze změny dosavadní bezpečný restore mechanismus.
      */
     novaMeta[id] = {
       revision,
@@ -4646,6 +4736,11 @@ async function vytvorPlanCloudoveSynchronizacePoObnove(
         cloudRow.updated_at || null
     };
   });
+
+  window.LubaNoteStartupDiag?.zapis?.(
+    "BACKUP",
+    `699AI RESTORE PREFLIGHT | unchanged=${preskocenoZbytecnychUploadu699AI} upload=${obnovovanaIdSet.size - preskocenoZbytecnychUploadu699AI}`
+  );
 
   return {
     user,
@@ -4779,10 +4874,23 @@ async function obnovKompletniZalohu(
 
   nastavFaziObnovy598("02 · příprava cloud sync plánu");
 
+  // Pouze čtecí porovnání lokálního stavu před přepsáním obnovou.
+  // Selhání optimalizace NESMÍ zabránit původní bezpečné obnově.
+  let shodneSeStavajicim699AI = new Map();
+  try {
+    shodneSeStavajicim699AI = najdiNezmeneneCloudZaznamyObnovy699AI(
+      cloudRegularNotes,
+      cloudSecretNotes
+    );
+  } catch (error) {
+    console.warn("699AI: porovnání zálohy nebylo dostupné, použije se původní obnova.", error);
+  }
+
   const plan =
     await vytvorPlanCloudoveSynchronizacePoObnove(
       obnovovanaId,
-      importedAt
+      importedAt,
+      shodneSeStavajicim699AI
     );
 
   const localRestoreIds = new Set([
@@ -5658,7 +5766,7 @@ async function importTasksApk() {
     window.otevriVyberovyModal({
       nadpis: "Obnovit kompletní zálohu?",
       bezKrizku699AG: true,
-      popis: `${souhrnZalohy699AF} Cloudové poznámky se po obnově znovu nahrají na server, LOCAL poznámky zůstanou jen v tomto zařízení.`,
+      popis: `${souhrnZalohy699AF} Ověřeně nezměněné cloudové poznámky se znovu neodesílají. Ostatní se obnoví na server. LOCAL poznámky zůstanou pouze v tomto zařízení.`,
       moznosti: [
         {
           hodnota: "obnovit",
@@ -5710,7 +5818,7 @@ function importTasks(file) {
           window.otevriVyberovyModal({
             nadpis: "Obnovit kompletní zálohu?",
             bezKrizku699AG: true,
-            popis: `${vytvorSouhrnObsahuZalohy699AF(imported)} Cloudové poznámky se po obnově znovu nahrají na server, LOCAL poznámky zůstanou jen v tomto zařízení.`,
+            popis: `${vytvorSouhrnObsahuZalohy699AF(imported)} Ověřeně nezměněné cloudové poznámky se znovu neodesílají. Ostatní se obnoví na server. LOCAL poznámky zůstanou pouze v tomto zařízení.`,
             moznosti: [
               {
                 hodnota: "obnovit",
