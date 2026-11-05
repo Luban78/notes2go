@@ -1698,10 +1698,16 @@
   }
 
   function ulozRecent(text) {
+    // 699AE – neblokovat vykreslení po uvolnění klávesy zbytečným
+    // synchronním zápisem do localStorage. Běžná ASCII písmena
+    // seznam nemění, takže není co ukládat.
+    let ulozit = false;
     for (const znak of Array.from(String(text || ""))) {
       if (!znak.trim() || /^[\x20-\x7E]$/.test(znak)) continue;
       recent = [znak, ...recent.filter((x) => x !== znak)].slice(0, 24);
+      ulozit = true;
     }
+    if (!ulozit) return;
     try { localStorage.setItem(ULOZ_RECENT, JSON.stringify(recent)); } catch (_error) {}
   }
 
