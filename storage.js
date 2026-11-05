@@ -4560,7 +4560,7 @@ function nactiObjektZLocalStorageProObnovu(
 async function pripravNavratSmazanychPoznamek699AJ({
   cloudRows, beznePoznamky, cloudBeznePoznamky = beznePoznamky,
   secretZaznamy, planovanePolozky,
-  uzivatelId, prilohyArchivu = []
+  uzivatelId, prilohyArchivu = [], cilovaId699AK = null
 }) {
   const radky = new Map(
     (Array.isArray(cloudRows) ? cloudRows : [])
@@ -4580,7 +4580,8 @@ async function pripravNavratSmazanychPoznamek699AJ({
     zdrojovaId.add(id);
   }
   const kObnove = vsechnyZaznamy.filter((zaznam) =>
-    radky.get(String(zaznam?.id || ""))?.deleted_at
+    radky.get(String(zaznam?.id || ""))?.deleted_at &&
+    (cilovaId699AK == null || String(zaznam?.id) === String(cilovaId699AK))
   );
   if (kObnove.length === 0) return new Map();
 
@@ -6166,4 +6167,267 @@ function importTasks(file) {
   };
 
   reader.readAsText(file);
+}
+
+
+/*
+ * 699AK – JEDNORÁZOVÁ LOKÁLNÍ OPRAVA STARŠÍ OBNOVY.
+ * Neprovádí se při startu a NEMĚNÍ sync.js. Pouze na výslovné kliknutí
+ * uživatele po read-only ověření skutečného serverového tombstonu.
+ * Není-li bezpečně ověřitelné ID, závislosti, účet či snapshot, STOP.
+ */
+const OBNOVA_699AK_KONTROLNI_BOD = "lubanote699AKRecoveryCheckpointV1";
+
+function chybaObnovy699AK(text) {
+  return new Error(text);
+}
+
+function snapshotZalohy699AK() {
+  const raw = localStorage.getItem("plannedItems");
+  let planovane;
+  try {
+    planovane = raw ? JSON.parse(raw) : [];
+  } catch (_) {
+    throw chybaObnovy699AK("Plán nelze bezpečně přečíst. Nic se nezměnilo.");
+  }
+  if (!Array.isArray(planovane)) {
+    throw chybaObnovy699AK("Plán nemá očekávaný formát. Nic se nezměnilo.");
+  }
+  const metaRaw = localStorage.getItem(BACKUP_CLOUD_META_STORAGE_KEY);
+  const pendingRaw = localStorage.getItem(BACKUP_PENDING_DELETE_STORAGE_KEY);
+  let meta, pending;
+  try {
+    meta = metaRaw ? JSON.parse(metaRaw) : {};
+    pending = pendingRaw ? JSON.parse(pendingRaw) : [];
+  } catch (_) {
+    throw chybaObnovy699AK("Sync metadata nelze bezpečně přečíst. Nic se nezměnilo.");
+  }
+  if (!meta || typeof meta !== "object" || Array.isArray(meta) ||
+      !Array.isArray(pending)) {
+    throw chybaObnovy699AK("Sync metadata nemají očekávaný formát.");
+  }
+  return { raw, planovane, metaRaw, meta, pendingRaw, pending };
+}
+
+async function zkontrolujStareObnoveni699AK() {
+  if (!navigator.onLine ||
+      typeof getCurrentUser !== "function" ||
+      typeof nactiSafeBootstrapManifestV2 !== "function" ||
+      (typeof supabaseClient === "undefined" || typeof supabaseClient?.rpc !== "function")) {
+    throw chybaObnovy699AK("Pro bezpečné ověření je potřeba připojený LubaServer.");
+  }
+  if (window.LubaNoteRegularNotesStore?.chybiPlnaCacheProSync?.() === true) {
+    throw chybaObnovy699AK("Plná cache poznámek není připravena. Nic neměň.");
+  }
+  await window.LubaNoteRegularNotesStore?.cekejNaUlozeni?.();
+  const uzivatel = await getCurrentUser();
+  if (!uzivatel?.id) throw chybaObnovy699AK("Nejdřív se přihlas.");
+  const vlastnik = localStorage.getItem(REGULAR_TASK_OWNER_KEY);
+  if (vlastnik && vlastnik !== String(uzivatel.id)) {
+    throw chybaObnovy699AK("Lokální data nejsou bezpečně přiřazena k přihlášenému účtu.");
+  }
+  if (document.getElementById("taskModal")?.hidden === false) {
+    throw chybaObnovy699AK("Nejdříve zavři editor poznámky. Oprava neproběhla.");
+  }
+  const manifest = await nactiSafeBootstrapManifestV2();
+  if (!Array.isArray(manifest)) throw chybaObnovy699AK("Serverový manifest není dostupný.");
+  const cloudPodleId = new Map(manifest.map((row) => [String(row.id), row]));
+  const vsechny = nactiBeznePoznamkyZUloziste();
+  const stav = snapshotZalohy699AK();
+  const tajnaId = new Set(nactiSifrovaneTajneZaznamy().map((z) => String(z.id)));
+  const kandidati = vsechny.filter((note) => {
+    const id = String(note?.id || "");
+    const server = cloudPodleId.get(id);
+    const meta = stav.meta[id];
+    return id && note.isSecret !== true && !jePoznamkaPouzeLokalni(note) &&
+      !jePoznamkaVKosi(note) && server?.deleted_at &&
+      meta && Number.isFinite(Number(meta.revision)) &&
+      Number(meta.revision) === Number(server.revision) &&
+      String(meta.localUpdatedAt || "") !== String(note.updatedAt || "") &&
+      !stav.pending.some((d) => String(d?.id) === id);
+  });
+  if (kandidati.length !== 1) {
+    throw chybaObnovy699AK(kandidati.length === 0
+      ? "Nenalezena jedna jednoznačná starší obnova blokovaná tombstonem. Oprava nebyla provedena."
+      : "Nalezeno více nejednoznačných obnov. Automatická oprava je z bezpečnostních důvodů zakázaná.");
+  }
+  const note = kandidati[0];
+  const id = String(note.id);
+  const server = cloudPodleId.get(id);
+  if (vsechny.filter((p) => String(p?.id) === id).length !== 1 ||
+      tajnaId.has(id) || server?.is_secret === true || note.syncConflict) {
+    throw chybaObnovy699AK("Poznámka má nejednoznačný typ nebo duplicitní ID.");
+  }
+  // Přesměrování stávajících odkazů v JINÝCH cloudových poznámkách by
+  // vyžadovalo jejich nové serverové revize. Tady žádné nevytváříme.
+  if (vsechny.some((p) => p !== note && JSON.stringify(p).includes(id))) {
+    throw chybaObnovy699AK("Na poznámku odkazuje jiná poznámka. Vyžaduje samostatnou opravu vazeb.");
+  }
+  const html = [note.richContent, ...(note.todos || []).map((t) => t?.html)]
+    .filter((s) => typeof s === "string");
+  const idsPriloh = ziskejAttachmentIdsPoznamkyProZalohu(note);
+  if (html.some((s) => /data:image\/|data-lubanote-idb-image|data-attachment-id/i.test(s)) ||
+      (idsPriloh?.size || idsPriloh?.length || 0) > 0 ||
+      note.reminder === true ||
+      (Array.isArray(note.plannedItems) && note.plannedItems.some((p) =>
+        p?.reminder === true)) ||
+      stav.planovane.some((p) => p?.sourceNoteId === id && p?.reminder === true)) {
+    throw chybaObnovy699AK("Poznámka obsahuje obrázek, přílohu nebo aktivní připomínku. Ruční bezpečná obnova je nutná.");
+  }
+  // Nejdřív autoritativně ověřit CELÝ serverový řádek. Samotný manifest
+  // nestačí pro změnu identity a nesmí maskovat E2E/Secret nesoulad.
+  const odpoved = await supabaseClient.rpc("lubanote_get_notes_by_ids_safe", {
+    p_note_ids: [id]
+  });
+  const radek = !odpoved?.error && Array.isArray(odpoved?.data) &&
+    odpoved.data.length === 1 ? odpoved.data[0] : null;
+  if (!radek || String(radek.id) !== id || !radek.deleted_at ||
+      Number(radek.revision) !== Number(server.revision) ||
+      radek.is_secret === true || radek.data?.__lubanoteSecret === true ||
+      radek.data?.isSecret === true ||
+      (radek.user_id != null && String(radek.user_id) !== String(uzivatel.id))) {
+    throw chybaObnovy699AK("Server nepotvrdil smazanou běžnou poznámku. Nic se nezměnilo.");
+  }
+  if (!crypto?.subtle?.digest) {
+    throw chybaObnovy699AK("Bez kryptografického rozhraní nelze vytvořit nové ID.");
+  }
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(
+    `LubaNote:restore-deleted:v1:${uzivatel.id}:${id}:1`
+  ));
+  const noveId = formatLegacyHashJakoUuid(Array.from(new Uint8Array(hash).slice(0,16),
+    (b) => b.toString(16).padStart(2,"0")).join(""));
+  if (cloudPodleId.has(noveId) || stav.meta[noveId] ||
+      vsechny.some((p) => String(p?.id) === noveId) || tajnaId.has(noveId)) {
+    throw chybaObnovy699AK("Náhradní ID je již obsazené. Zabráněno vytvoření duplicit.");
+  }
+  return { id, noveId, userId: String(uzivatel.id), note,
+    revize: Number(server.revision), vsechny, manifest, stav };
+}
+
+async function provedJednorazovouOpravu699AK(puvodni) {
+  // Znovu kontrolovat server a paměť po potvrzovacím dialogu.
+  const plan = await zkontrolujStareObnoveni699AK();
+  if (plan.id !== puvodni.id || plan.noveId !== puvodni.noveId ||
+      JSON.stringify(plan.note) !== JSON.stringify(puvodni.note)) {
+    throw chybaObnovy699AK("Stav se při potvrzování změnil. Opravu opakuj až po kontrole.");
+  }
+  if (localStorage.getItem(OBNOVA_699AK_KONTROLNI_BOD)) {
+    throw chybaObnovy699AK("Kontrolní kopie předchozí opravy už existuje. Další automatickou opravu nespouštíme.");
+  }
+  const pred = JSON.stringify(plan.vsechny);
+  const pravidelne = JSON.parse(pred);
+  const planovane = JSON.parse(JSON.stringify(plan.stav.planovane));
+  const secret = nactiSifrovaneTajneZaznamy().map((r) => ({ ...r }));
+  const mapa = await pripravNavratSmazanychPoznamek699AJ({
+    cloudRows: plan.manifest, beznePoznamky: pravidelne,
+    cloudBeznePoznamky: pravidelne.filter((n) => !jePoznamkaPouzeLokalni(n)),
+    secretZaznamy: secret, planovanePolozky: planovane,
+    uzivatelId: plan.userId, cilovaId699AK: plan.id
+  });
+  if (mapa.size !== 1 || mapa.get(plan.id) !== plan.noveId) {
+    throw chybaObnovy699AK("Přemapování nebylo jednoznačné. Nic se nezměnilo.");
+  }
+  // Zejména po async digest nikdy nepřepisovat pozdější editace.
+  await window.LubaNoteRegularNotesStore?.cekejNaUlozeni?.();
+  if (JSON.stringify(nactiBeznePoznamkyZUloziste()) !== pred ||
+      localStorage.getItem("plannedItems") !== plan.stav.raw ||
+      localStorage.getItem(BACKUP_CLOUD_META_STORAGE_KEY) !== plan.stav.metaRaw ||
+      localStorage.getItem(BACKUP_PENDING_DELETE_STORAGE_KEY) !== plan.stav.pendingRaw) {
+    throw chybaObnovy699AK("Během přípravy se data změnila. Oprava byla bezpečně zastavena.");
+  }
+  // Uložit pouze dotčené původní poznámky jako lokální kontrolní kopii.
+  const zmenene = plan.vsechny.filter((z, i) =>
+    JSON.stringify(z) !== JSON.stringify(pravidelne[i]));
+  if (zmenene.length !== 1 || zmenene[0].id !== plan.id) {
+    throw chybaObnovy699AK("Změna zasahuje více poznámek. Automatická oprava zakázaná.");
+  }
+  const original = {
+    version: 1, at: new Date().toISOString(), userId: plan.userId,
+    oldId: plan.id, newId: plan.noveId, note: zmenene[0],
+    plannedItemsRaw: plan.stav.raw,
+    oldMeta: plan.stav.meta[plan.id]
+  };
+  // Nedostatek prostoru = STOP ještě před editací poznámek.
+  try {
+    localStorage.setItem(OBNOVA_699AK_KONTROLNI_BOD, JSON.stringify(original));
+  } catch (_) {
+    throw chybaObnovy699AK("Nelze uložit ochrannou kopii. Žádná data nebyla změněna.");
+  }
+  const novaMeta = { ...plan.stav.meta };
+  delete novaMeta[plan.id];
+  delete novaMeta[plan.noveId];
+  try {
+    zvysReviziLokalnichZmenPoznamek();
+    const ok = await ulozBeznePoznamkyPrimo(pravidelne, true, true);
+    if (ok !== true) throw new Error("regular save failed");
+    if (plan.stav.raw != null) {
+      localStorage.setItem("plannedItems", JSON.stringify(planovane));
+    }
+    localStorage.setItem(BACKUP_CLOUD_META_STORAGE_KEY, JSON.stringify(novaMeta));
+    window.LubaNoteStartupDiag?.zapis?.("BACKUP",
+      `699AK RECOVERY COMMITTED | remapped=1 old=${plan.id} new=${plan.noveId}`);
+    location.reload(); // Původní sync.js sám zahájí přenos nové poznámky.
+  } catch (error) {
+    // Rollback lokálních změn (server jsme vůbec nezapisovali).
+    try {
+      await ulozBeznePoznamkyPrimo(plan.vsechny, true, true);
+      if (plan.stav.raw == null) localStorage.removeItem("plannedItems");
+      else localStorage.setItem("plannedItems", plan.stav.raw);
+      if (plan.stav.metaRaw == null) localStorage.removeItem(BACKUP_CLOUD_META_STORAGE_KEY);
+      else localStorage.setItem(BACKUP_CLOUD_META_STORAGE_KEY, plan.stav.metaRaw);
+    } catch (rollbackError) {
+      console.error("699AK – návrat lokálních dat vyžaduje kontrolu:", rollbackError);
+    }
+    throw chybaObnovy699AK("Uložení opravy selhalo. Zůstala uložená ochranná kopie; znovu import neprováděj.");
+  }
+}
+
+function nastavTlacitkoOpravy699AK() {
+  const tlacitko = document.getElementById("settingsRepairRestore699AK");
+  if (!tlacitko) return;
+  let probiha = false;
+  const zprava = (obsah) => {
+    if (typeof zobrazZpravuAplikace === "function")
+      zobrazZpravuAplikace("Oprava obnovy", obsah);
+    else console.warn("699AK:", obsah);
+  };
+  tlacitko.addEventListener("click", async () => {
+    if (probiha) return;
+    probiha = true;
+    tlacitko.disabled = true;
+    try {
+      const plan = await zkontrolujStareObnoveni699AK();
+      if (typeof window.otevriVyberovyModal !== "function")
+        throw chybaObnovy699AK("Potvrzovací okno není dostupné.");
+      window.otevriVyberovyModal({
+        nadpis: "Opravit obnovu poznámky?",
+        popis: `Server eviduje poznámku „${String(plan.note.title || "Bez názvu").slice(0, 90)}“ jako smazanou. Oprava jí přiřadí nové ID a zachová obsah. Původní smazaný záznam na serveru zůstane nedotčený.`,
+        bezKrizku699AG: true,
+        moznosti: [
+          { hodnota: "opravit", popisek: "Opravit poznámku" },
+          { hodnota: "zrusit", popisek: "Zrušit" }
+        ],
+        poVyberu: async (volba) => {
+          if (volba !== "opravit") return;
+          try {
+            await provedJednorazovouOpravu699AK(plan);
+          } catch (error) {
+            console.error("699AK – oprava odmítnuta:", error);
+            zprava(error?.message || "Opravu nelze bezpečně dokončit.");
+          }
+        }
+      });
+    } catch (error) {
+      console.warn("699AK – kontrola bez změny dat:", error);
+      zprava(error?.message || "Oprava nebyla provedena.");
+    } finally {
+      probiha = false;
+      tlacitko.disabled = false;
+    }
+  });
+}
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", nastavTlacitkoOpravy699AK, { once: true });
+} else {
+  nastavTlacitkoOpravy699AK();
 }
