@@ -4548,6 +4548,204 @@ function nactiObjektZLocalStorageProObnovu(
 
 
 /*
+ * 699AJ – ŘÍZENÉ OBNOVENÍ POZNÁMKY SMAZANÉ NA SERVERU.
+ * ----------------------------------------------------
+ * Nevstupujeme do sync.js ani do serverových guardů. Tombstone se nikdy
+ * nepřepisuje. Staré ID obnovíme jako NOVOU cloudovou poznámku se stabilním
+ * náhradním UUID. Opakovaný import téhož archivu používá totéž UUID.
+ * Nejdřív validujeme a připravíme změny V PAMĚTI, teprve potom je aplikujeme.
+ * Bez dostupného Secret klíče nebo při nejasné vazbě na přílohu STOP před
+ * jakýmkoli lokálním zápisem. Původní záloha zůstává nedotčená.
+ */
+async function pripravNavratSmazanychPoznamek699AJ({
+  cloudRows, beznePoznamky, cloudBeznePoznamky = beznePoznamky,
+  secretZaznamy, planovanePolozky,
+  uzivatelId, prilohyArchivu = []
+}) {
+  const radky = new Map(
+    (Array.isArray(cloudRows) ? cloudRows : [])
+      .filter((row) => row?.id)
+      .map((row) => [String(row.id), row])
+  );
+  const vsechnyZaznamy = [
+    ...(Array.isArray(cloudBeznePoznamky) ? cloudBeznePoznamky : []),
+    ...(Array.isArray(secretZaznamy) ? secretZaznamy : [])
+  ];
+  const zdrojovaId = new Set();
+  const zdvojenaId = new Set();
+  for (const zaznam of vsechnyZaznamy) {
+    const id = String(zaznam?.id || "");
+    if (!id) continue;
+    if (zdrojovaId.has(id)) zdvojenaId.add(id);
+    zdrojovaId.add(id);
+  }
+  const kObnove = vsechnyZaznamy.filter((zaznam) =>
+    radky.get(String(zaznam?.id || ""))?.deleted_at
+  );
+  if (kObnove.length === 0) return new Map();
+
+  // Stejné ID jako LOCAL a cloudová smazaná poznámka by bylo nejednoznačné.
+  // Raději STOP, než automaticky přepsat lokální identitu.
+  for (const lokalni of beznePoznamky) {
+    if (cloudBeznePoznamky.includes(lokalni)) continue;
+    if (kObnove.some((item) => String(item.id) === String(lokalni?.id || ""))) {
+      throw vytvorChybuZalohy(
+        "Záloha má kolidující LOCAL a cloudové ID.",
+        "Obnova byla zastavena před změnou dat."
+      );
+    }
+  }
+
+  if (!uzivatelId || !crypto?.subtle?.digest) {
+    throw vytvorChybuZalohy(
+      "Obnovu smazaných poznámek nelze bezpečně připravit.",
+      "Chybí ověřená identita uživatele nebo šifrovací rozhraní. Data nebyla změněna."
+    );
+  }
+
+  for (const polozka of kObnove) {
+    if (zdvojenaId.has(String(polozka.id))) {
+      throw vytvorChybuZalohy(
+        "Záloha obsahuje duplicitní ID smazané poznámky.",
+        "Obnova byla zastavena, aby nevznikly kolize nebo duplicitní poznámky."
+      );
+    }
+    /* Nelze připojit původní binární přílohu k novému noteId bez opravy
+       cloudového objektu a jeho metadata. Místo tiché ztráty STOP. */
+    const prilohy = (Array.isArray(prilohyArchivu) ? prilohyArchivu : [])
+      .some((priloha) => String(priloha?.noteId || "") === String(polozka.id));
+    const jeBezna = cloudBeznePoznamky.includes(polozka);
+    const mediaIds = jeBezna && typeof ziskejAttachmentIdsPoznamkyProZalohu === "function"
+      ? ziskejAttachmentIdsPoznamkyProZalohu(polozka)
+      : [];
+    if (prilohy || (mediaIds?.size || mediaIds?.length || 0) > 0) {
+      throw vytvorChybuZalohy(
+        "Smazaná poznámka obsahuje přílohu.",
+        "Obnova této poznámky vyžaduje bezpečné přemapování přílohy. Žádná data nebyla importována."
+      );
+    }
+  }
+
+  const presmerovani = new Map();
+  const vyhrazenaId = new Set(zdrojovaId);
+  for (const zaznam of kObnove) {
+    const puvodniId = String(zaznam.id);
+    let noveId = null;
+    for (let pokus = 1; pokus <= 16; pokus += 1) {
+      const zaklad = `LubaNote:restore-deleted:v1:${uzivatelId}:${puvodniId}:${pokus}`;
+      const digest = new Uint8Array(await crypto.subtle.digest(
+        "SHA-256", new TextEncoder().encode(zaklad)
+      ));
+      const kandidat = formatLegacyHashJakoUuid(
+        [...digest.slice(0, 16)]
+          .map((cislo) => cislo.toString(16).padStart(2, "0"))
+          .join("")
+      );
+      if (vyhrazenaId.has(kandidat) || radky.get(kandidat)?.deleted_at) continue;
+      noveId = kandidat;
+      break;
+    }
+    if (!noveId) {
+      throw vytvorChybuZalohy(
+        "Nelze vytvořit bezpečné ID obnovené poznámky.",
+        "Obnova byla zastavena před změnou dat."
+      );
+    }
+    presmerovani.set(puvodniId, noveId);
+    vyhrazenaId.add(noveId);
+  }
+
+  const prevedOdkazy = (html) => {
+    if (typeof html !== "string" || !html.includes("data-note-id")) return html;
+    return html.replace(/(\bdata-note-id\s*=\s*)(["'])([^"']+)\2/gi,
+      (cely, prefix, uvozovka, id) => {
+        const noveId = presmerovani.get(id);
+        return noveId ? `${prefix}${uvozovka}${noveId}${uvozovka}` : cely;
+      });
+  };
+
+
+  // Vytvořit všechny nové šifrované Secret obálky ještě PŘED mutací polí.
+  // AES-GCM používá noteId jako AAD; samotná změna ID by data znečitelnila.
+  const noveSecret = new Map();
+  for (const zaznam of secretZaznamy) {
+    const noveId = presmerovani.get(String(zaznam?.id || ""));
+    if (!noveId) continue;
+    if (typeof desifrujTajnouPoznamku !== "function" ||
+        typeof zasifrujTajnouPoznamku !== "function") {
+      throw vytvorChybuZalohy(
+        "Secret poznámku nelze bezpečně znovu zašifrovat.",
+        "Odemkni Secret režim a obnovu zopakuj. Data nebyla změněna."
+      );
+    }
+    try {
+      const obsah = await desifrujTajnouPoznamku(zaznam.encrypted, zaznam.id);
+      if (String(obsah?.id || "") !== String(zaznam.id)) throw new Error("Secret ID mismatch");
+      const zmenenyObsah = {
+        ...obsah,
+        id: noveId,
+        richContent: prevedOdkazy(obsah.richContent),
+        todos: Array.isArray(obsah.todos)
+          ? obsah.todos.map((todo) => ({ ...todo, html: prevedOdkazy(todo?.html) }))
+          : obsah.todos,
+        plannedItems: Array.isArray(obsah.plannedItems)
+          ? obsah.plannedItems.map((item) => ({
+              ...item,
+              sourceNoteId: presmerovani.get(String(item?.sourceNoteId || "")) || item?.sourceNoteId
+            }))
+          : obsah.plannedItems
+      };
+      const encrypted = await zasifrujTajnouPoznamku(zmenenyObsah);
+      // Ověřit nové AAD ihned v paměti, ne až po reloadu.
+      const kontrola = await desifrujTajnouPoznamku(encrypted, noveId);
+      if (String(kontrola?.id || "") !== noveId) throw new Error("Secret roundtrip failed");
+      noveSecret.set(zaznam, { id: noveId, encrypted });
+    } catch (_error) {
+      throw vytvorChybuZalohy(
+        "Secret poznámku nelze bezpečně obnovit pod novým ID.",
+        "Odemkni Secret trezor a zkontroluj heslo zálohy. Žádná data nebyla importována."
+      );
+    }
+  }
+
+  const prevedPlan = (polozka) => {
+    const sourceNoteId = presmerovani.get(String(polozka?.sourceNoteId || ""));
+    return sourceNoteId ? { ...polozka, sourceNoteId } : polozka;
+  };
+
+  // Teprve nyní jsou všechny rizikové kroky ověřené; měníme jen pracovní
+  // kopie zálohy v RAM. Persistenci provede běžný import až později.
+  for (const zaznam of beznePoznamky) {
+    const noveId = cloudBeznePoznamky.includes(zaznam)
+      ? presmerovani.get(String(zaznam?.id || "")) : null;
+    if (noveId) zaznam.id = noveId;
+    if (Array.isArray(zaznam.plannedItems)) {
+      zaznam.plannedItems = zaznam.plannedItems.map(prevedPlan);
+    }
+    if (typeof zaznam.richContent === "string") {
+      zaznam.richContent = prevedOdkazy(zaznam.richContent);
+    }
+    if (Array.isArray(zaznam.todos)) {
+      zaznam.todos = zaznam.todos.map((todo) => ({
+        ...todo,
+        html: prevedOdkazy(todo?.html)
+      }));
+    }
+  }
+  for (const zaznam of secretZaznamy) {
+    const nove = noveSecret.get(zaznam);
+    if (nove) Object.assign(zaznam, nove);
+  }
+  for (let i = 0; i < planovanePolozky.length; i += 1) {
+    planovanePolozky[i] = prevedPlan(planovanePolozky[i]);
+  }
+  window.LubaNoteStartupDiag?.zapis?.(
+    "BACKUP", `699AJ TOMBSTONE RESTORE | remapped=${presmerovani.size} reused-deterministic-id=Y`
+  );
+  return presmerovani;
+}
+
+/*
  * 699AI – OBNOVA BEZ ZBYTEČNÉHO RE-UPLOADU.
  *
  * Tohle je čistě importní kontrola, NEMĚNÍ sync.js.
@@ -4615,7 +4813,8 @@ function najdiNezmeneneCloudZaznamyObnovy699AI(
 async function vytvorPlanCloudoveSynchronizacePoObnove(
   obnovovanaId,
   importedAt,
-  shodneSeStavajicim699AI = new Map()
+  shodneSeStavajicim699AI = new Map(),
+  overenyManifest699AJ = null
 ) {
   if (
     !navigator.onLine ||
@@ -4646,8 +4845,9 @@ async function vytvorPlanCloudoveSynchronizacePoObnove(
    * JSONB. Zachováme bezpečný restore-pending mechanismus, ale bez
    * drahého full snapshotu. Tento blok nevracet na getCloudNotesForSync().
    */
-  const cloudRows =
-    await nactiSafeBootstrapManifestV2();
+  const cloudRows = Array.isArray(overenyManifest699AJ)
+    ? overenyManifest699AJ
+    : await nactiSafeBootstrapManifestV2();
 
   const cloudPodleId = new Map(
     (Array.isArray(cloudRows) ? cloudRows : [])
@@ -4849,16 +5049,52 @@ async function obnovKompletniZalohu(
   const localRegularNotes = regularNotes.filter(
     jePoznamkaPouzeLokalni
   );
-  const cloudSecretNotes = imported.secretNotes.filter(
+  // 699AJ: pracovní kopie. Neměníme načtenou zálohu ani její manifest.
+  const secretZaznamyProObnovu699AJ = imported.secretNotes.map((record) => ({ ...record }));
+  const planovanePolozkyProObnovu699AJ = imported.plannedItems.map((item) => ({ ...item }));
+  const cloudSecretNotes = secretZaznamyProObnovu699AJ.filter(
     (record) =>
       record?.storageScope !==
         NOTE_STORAGE_SCOPE_LOCAL
   );
-  const localSecretNotes = imported.secretNotes.filter(
+  const localSecretNotes = secretZaznamyProObnovu699AJ.filter(
     (record) =>
       record?.storageScope ===
         NOTE_STORAGE_SCOPE_LOCAL
   );
+
+  // Serverový manifest načteme JEDNOU a použijeme i v dosavadním 699AI
+  // plánu. Žádné změny v sync.js ani žádné nové serverové zápisy.
+  if (!navigator.onLine || typeof nactiSafeBootstrapManifestV2 !== "function" ||
+      typeof getCurrentUser !== "function") {
+    throw vytvorChybuZalohy(
+      "Cloud není dostupný pro bezpečnou obnovu.",
+      "Připoj LubaNote k internetu. Žádná data nebyla importována."
+    );
+  }
+  const uzivatel699AJ = await getCurrentUser();
+  if (!uzivatel699AJ?.id) {
+    throw vytvorChybuZalohy("Uživatel není přihlášený.",
+      "Před obnovou se přihlas. Žádná data nebyla importována.");
+  }
+  if (imported?.owner?.userId && imported.owner.userId !== uzivatel699AJ.id) {
+    throw vytvorChybuZalohy("Záloha patří jinému účtu.",
+      "Obnova byla bezpečně zastavena před změnou dat.");
+  }
+  const manifestPoznamek699AJ = await nactiSafeBootstrapManifestV2();
+  if (!Array.isArray(manifestPoznamek699AJ)) {
+    throw vytvorChybuZalohy("Serverový manifest nelze ověřit.",
+      "Obnova byla bezpečně zastavena před změnou dat.");
+  }
+  const presmerovaniSmazanych699AJ = await pripravNavratSmazanychPoznamek699AJ({
+    cloudRows: manifestPoznamek699AJ,
+    beznePoznamky: regularNotes,
+    cloudBeznePoznamky: cloudRegularNotes,
+    secretZaznamy: cloudSecretNotes,
+    planovanePolozky: planovanePolozkyProObnovu699AJ,
+    uzivatelId: uzivatel699AJ.id,
+    prilohyArchivu: moznosti?.backupManifestV4?.attachments || []
+  });
 
   /*
    * PATCH 597: cloudový restore plán smí obsahovat pouze cloudová ID.
@@ -4890,8 +5126,20 @@ async function obnovKompletniZalohu(
     await vytvorPlanCloudoveSynchronizacePoObnove(
       obnovovanaId,
       importedAt,
-      shodneSeStavajicim699AI
+      shodneSeStavajicim699AI,
+      manifestPoznamek699AJ
     );
+
+  // Původní tombstone ID už NEPATŘÍ do obnovené lokální sady.
+  // Stará revizní metadata ani čekající lokální DELETE nesmějí přežít
+  // remapování, jinak by další synchronizace mohla znovu oživit staré ID.
+  for (const puvodniId of presmerovaniSmazanych699AJ.keys()) {
+    delete plan.meta?.[puvodniId];
+  }
+  plan.cekajiciSmazani = (Array.isArray(plan.cekajiciSmazani)
+    ? plan.cekajiciSmazani : []).filter((zaznam) =>
+    !presmerovaniSmazanych699AJ.has(String(zaznam?.id || ""))
+  );
 
   const localRestoreIds = new Set([
     ...localRegularNotes.map((note) => note.id),
@@ -5060,14 +5308,14 @@ async function obnovKompletniZalohu(
   nastavFaziObnovy598("11 · uložení Secret poznámek");
 
   ulozSifrovaneTajneZaznamy(
-    imported.secretNotes
+    secretZaznamyProObnovu699AJ
   );
 
   nastavFaziObnovy598("12 · uložení Plánu a nastavení");
 
   localStorage.setItem(
     "plannedItems",
-    JSON.stringify(imported.plannedItems)
+    JSON.stringify(planovanePolozkyProObnovu699AJ)
   );
 
   obnovNastaveniZKompletniZalohy(
@@ -5720,6 +5968,7 @@ async function importTasksApk() {
         imported,
         importedAt,
         {
+          backupManifestV4: manifest,
           predObnovou: async ({
             aktualizujPrubeh
           }) => {
