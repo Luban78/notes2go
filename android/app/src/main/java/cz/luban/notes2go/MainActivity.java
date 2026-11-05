@@ -262,6 +262,12 @@ public class MainActivity extends BridgeActivity {
 
     super.onCreate(savedInstanceState);
 
+    // 699AB: Cold start from a native reminder. Save the tap before WebView
+    // scripts boot; the existing FCM bridge will consume the pending record.
+    if (prijmiPriamyKlikPripominky699AB(getIntent())) {
+      predejKlikNaPripominku696X();
+    }
+
     nastavFullscreen();
 
     getWindow().setNavigationBarColor(Color.TRANSPARENT);
@@ -513,15 +519,47 @@ public class MainActivity extends BridgeActivity {
     }
   }
 
+  // 699AB: The notification now opens the already-running singleTask
+  // MainActivity directly. Persist the same 692T pending payload as the
+  // original non-exported trampoline; no note content or E2E data crosses.
+  // Consume the marker once so an ordinary resume cannot replay the tap.
+  private boolean prijmiPriamyKlikPripominky699AB(Intent intent) {
+    if (intent == null ||
+        !intent.getBooleanExtra("lubanote_remote_direct_tap_699AB",false)) return false;
+    intent.removeExtra("lubanote_remote_direct_tap_699AB");
+    String noteId=intent.getStringExtra(LubaNoteRemoteOpen692T.NOTE);
+    long at=intent.getLongExtra(LubaNoteRemoteOpen692T.AT,0L);
+    intent.removeExtra(LubaNoteRemoteOpen692T.NOTE);
+    intent.removeExtra(LubaNoteRemoteOpen692T.AT);
+    if (noteId == null || !noteId.matches("[a-zA-Z0-9_:-]{1,128}") || at <= 0L)
+      return false;
+    // The exported launcher Activity must not accept fabricated reminder IDs.
+    if (!LubaNoteRemoteAlarm692O.isDeliveredTap699AB(this,noteId,at)) {
+      LubaNoteRemoteAlarm692O.diag692X(this,"REMOTE_TAP_REJECTED_699AB",noteId,at,
+          "no_delivered_occurrence");
+      return false;
+    }
+    boolean saved=getSharedPreferences(LubaNoteRemoteOpen692T.PREF,Context.MODE_PRIVATE)
+        .edit()
+        .putString(LubaNoteRemoteOpen692T.NOTE,noteId)
+        .putLong(LubaNoteRemoteOpen692T.AT,at)
+        .putString(LubaNoteRemoteOpen692T.TOKEN,java.util.UUID.randomUUID().toString())
+        .commit();
+    LubaNoteRemoteAlarm692O.diag692X(this,"REMOTE_TAP_699AB",noteId,at,
+        saved?"direct_main_saved":"pending_save_failed");
+    return saved;
+  }
+
   @Override
   protected void onNewIntent(Intent intent) {
     super.onNewIntent(intent);
     setIntent(intent);
-    if (intent != null &&
-        intent.getBooleanExtra("lubanote_remote_notification_tap_693G", false)) {
-      intent.removeExtra("lubanote_remote_notification_tap_693G");
-      predejKlikNaPripominku696X();
-    }
+    // 693G: Retain compatibility with notifications already posted by old APKs.
+    boolean previousTap=intent != null &&
+        intent.getBooleanExtra("lubanote_remote_notification_tap_693G",false);
+    if (previousTap) intent.removeExtra("lubanote_remote_notification_tap_693G");
+    boolean directTap=prijmiPriamyKlikPripominky699AB(intent);
+    if (previousTap || directTap) predejKlikNaPripominku696X();
   }
 
   @Override

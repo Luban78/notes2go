@@ -616,6 +616,19 @@ final class LubaNoteRemoteAlarm692O {
 
   // Remove only the delivered instance the user acted on (Planner and note
   // alarms can coexist under one parent note). Must run AFTER a successful save.
+  // 699AB: MainActivity is exported for Android launcher intents. Only accept
+  // direct notification taps for an occurrence that the native receiver
+  // actually delivered. Prevent arbitrary external intents opening a note.
+  static synchronized boolean isDeliveredTap699AB(Context ctx,String id,long at) {
+    JSONObject row=load(ctx).optJSONObject(id);
+    JSONArray delivered=row==null?null:row.optJSONArray("delivered");
+    if(delivered==null) return false;
+    for(int i=0;i<delivered.length();i++) {
+      if(delivered.optLong(i,0L)==at) return true;
+    }
+    return false;
+  }
+
   static synchronized void resolveDelivered(Context ctx,String id,long at) {
     JSONObject records=load(ctx);
     JSONObject row=records.optJSONObject(id);
@@ -905,10 +918,17 @@ final class LubaNoteRemoteAlarm692O {
       NotificationChannel channel=new NotificationChannel(CHANNEL,"Připomínky",NotificationManager.IMPORTANCE_HIGH);
       manager.createNotificationChannel(channel);
     }
-    // The internal trampoline records this tap even if WebView is not running.
-    Intent open=new Intent(ctx,LubaNoteRemoteOpen692T.class);
-    open.putExtra("noteId",id);
-    open.putExtra("at",at);
+    // 699AB: Open MainActivity directly for newly posted native reminders.
+    // The previous noHistory trampoline could return to a warm APK without
+    // delivering its tap marker to the existing WebView. MainActivity saves
+    // the identifiers BEFORE dispatching the same 692T/699Y JS workflow.
+    // Keep LubaNoteRemoteOpen692T installed for older posted notifications.
+    Intent open=new Intent(ctx,MainActivity.class);
+    open.putExtra("lubanote_remote_direct_tap_699AB",true);
+    open.putExtra(LubaNoteRemoteOpen692T.NOTE,id);
+    open.putExtra(LubaNoteRemoteOpen692T.AT,at);
+    open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
+        Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
     int flags=PendingIntent.FLAG_UPDATE_CURRENT|(Build.VERSION.SDK_INT>=23?PendingIntent.FLAG_IMMUTABLE:0);
     PendingIntent tap=PendingIntent.getActivity(ctx,requestId(id,at),open,flags);
     // Exactly the same 683AZ first-delivery contract as local notifications:
