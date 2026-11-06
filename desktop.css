@@ -2978,3 +2978,53 @@
     pointer-events: none;
   }
 }
+
+/* 699AO – PC aktivni hledani: konec na prave hrane druheho modulu Plan.
+ * 693C: moduly tvori 3 stejne sloupce v 100% sirce s gap=14px.
+ * Pravy okraj druheho = (2/3 * sirka) - (14px/3).
+ * Nemenime velikost neaktivniho hledani ani layout mobilu.
+ * Po dobu hledani vedle pole zustanou 4 uzitecne filtry.
+ */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  body.desktopNotesToolbarA .searchRow.searchExpanded {
+    --ln-699ao-plan-right: calc(66.666667% - 4.666667px);
+  }
+  body.desktopNotesToolbarA .searchRow.searchExpanded .searchBox {
+    width: var(--ln-699ao-plan-right) !important;
+    max-width: var(--ln-699ao-plan-right) !important;
+  }
+  body.desktopNotesToolbarA .searchRow.searchExpanded .desktopCategoryActions {
+    position: absolute !important;
+    z-index: 61;
+    top: 0;
+    left: calc(66.666667% + 3.333333px);
+    right: 0;
+    height: var(--ln-dnv-layout-toolbarVyska, 50px) !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+  body.desktopNotesToolbarA .searchRow.searchExpanded .desktopCategoryActions > * {
+    display: none !important;
+  }
+  body.desktopNotesToolbarA .searchRow.searchExpanded .desktopCategoryActions > :is(
+    [data-area-filter="all"],
+    [data-area-filter="work"],
+    [data-area-filter="private"],
+    #favoriteFilterButton
+  ) {
+    display: inline-flex !important;
+    flex: 1 1 50px !important;
+    width: auto !important;
+    min-width: 36px !important;
+    max-width: 65px !important;
+    height: var(--ln-dnv-layout-toolbarVyska, 50px) !important;
+  }
+  body.desktopNotesToolbarA .searchRow.searchExpanded .desktopCategoryActions > [data-area-filter="all"] { order: 1; }
+  body.desktopNotesToolbarA .searchRow.searchExpanded .desktopCategoryActions > [data-area-filter="work"] { order: 2; }
+  body.desktopNotesToolbarA .searchRow.searchExpanded .desktopCategoryActions > [data-area-filter="private"] { order: 3; }
+  body.desktopNotesToolbarA .searchRow.searchExpanded .desktopCategoryActions > #favoriteFilterButton { order: 4; }
+}
