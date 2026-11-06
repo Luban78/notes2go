@@ -737,7 +737,10 @@
     }
 
     const listMode = localStorage.getItem("cardView") === "list";
-    const desktopGrid = window.matchMedia("(min-width: 900px)").matches && !listMode;
+    const desktopFull = window.matchMedia("(min-width: 1100px) and (hover: hover) and (pointer: fine)").matches;
+    const pocetDesktopSloupcu699AQ = !listMode && window.matchMedia("(min-width: 900px)").matches
+      ? 4 : (listMode && desktopFull ? 3 : 0);
+    const desktopGrid = pocetDesktopSloupcu699AQ > 0;
 
     /* 691CJ: do not detach/append EVERY card on drop (it repaints everything).
        Backward keyed insertion changes only genuinely out-of-place siblings. */
@@ -753,14 +756,14 @@
     };
     if (desktopGrid) {
       let sloupce = [...left.querySelectorAll(":scope > .desktopMasonryColumn")];
-      while (sloupce.length < 4) {
+      while (sloupce.length < pocetDesktopSloupcu699AQ) {
         const sloupec = document.createElement("div");
         sloupec.className = "desktopMasonryColumn";
         left.append(sloupec);
         sloupce.push(sloupec);
       }
       sloupce.forEach((sloupec, col) => minimalniPoradi(sloupec,
-        prvky.filter((_, index) => index % 4 === col)));
+        prvky.filter((_, index) => index % pocetDesktopSloupcu699AQ === col)));
     } else if (listMode) {
       minimalniPoradi(left, prvky);
     } else {
@@ -1724,7 +1727,9 @@
       card: zkratKlic(novyKlic),
       index: puvodniIndexSkupiny,
       slots: stav.sloty.length,
-      columns: localStorage.getItem("cardView") === "list" ? 1 : (window.innerWidth >= 900 ? 4 : 2),
+      columns: localStorage.getItem("cardView") === "list"
+        ? (window.matchMedia("(min-width: 1100px) and (hover: hover) and (pointer: fine)").matches ? 3 : 1)
+        : (window.innerWidth >= 900 ? 4 : 2),
       pinned: pripnuta,
       x: Math.round(startX),
       y: Math.round(startY),

@@ -5710,6 +5710,12 @@ function renderTasks() {
   const praveKarty696V = document.createDocumentFragment();
   const rezimSeznamu696V = localStorage.getItem("cardView") === "list";
   const desktopKarty696V = window.matchMedia("(min-width: 900px)").matches;
+  /* 699AQ: na PC maji 3 i 4 sloupce stejny masonry DOM.
+     Puvodni dvojity seznam mezi 900–1099 px zustava beze zmeny. */
+  const pocetMasonrySloupcu699AQ = desktopKarty696V
+    ? (!rezimSeznamu696V ? 4 :
+      (window.matchMedia("(min-width: 1100px) and (hover: hover) and (pointer: fine)").matches ? 3 : 0))
+    : 0;
   let desktopSloupce696V = null;
   let pocetKaret696V = 0;
 
@@ -6050,17 +6056,17 @@ function renderTasks() {
      * Sloupce i karty se nejdřív skládají v DocumentFragment, takže
      * uvnitř každé iterace nevzniká práce s živým layoutem stránky.
      */
-    if (desktopKarty696V && !rezimSeznamu696V) {
+    if (pocetMasonrySloupcu699AQ > 0) {
       if (!desktopSloupce696V) {
         desktopSloupce696V = [];
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < pocetMasonrySloupcu699AQ; i++) {
           const sloupec = document.createElement("div");
           sloupec.className = "desktopMasonryColumn";
           desktopSloupce696V.push(sloupec);
           leveKarty696V.append(sloupec);
         }
       }
-      desktopSloupce696V[pocetKaret696V % 4].append(loadedCard);
+      desktopSloupce696V[pocetKaret696V % pocetMasonrySloupcu699AQ].append(loadedCard);
     } else if (rezimSeznamu696V || pocetKaret696V % 2 === 0) {
       leveKarty696V.append(loadedCard);
     } else {

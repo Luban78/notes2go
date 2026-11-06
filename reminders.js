@@ -1457,8 +1457,14 @@ function updateReminderButton(enabled) {
     return;
   }
 
-  button.hidden = !enabled;
-  button.classList.toggle("active", enabled);
+  /* 699AQ: viditelna pripominka = cisty zvonek; vypnuta = preskrtnuty.
+     Tajne poznamky zachovavaji puvodni tichy rezim bez notifikaci. */
+  const tajnaPoznamka = typeof secretTaskEnabled !== "undefined" && secretTaskEnabled === true;
+  button.hidden = tajnaPoznamka;
+  button.classList.toggle("active", enabled === true && !tajnaPoznamka);
+  button.setAttribute("aria-label", enabled ? "Připomínka aktivní" : "Připomínka vypnutá");
+  button.setAttribute("aria-pressed", enabled ? "true" : "false");
+  button.title = enabled ? "Připomínka aktivní" : "Připomínka vypnutá";
 }
 
 

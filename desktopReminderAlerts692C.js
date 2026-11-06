@@ -60,6 +60,29 @@
     </div>`;
   document.body.append(center, toast, permissionPrompt);
 
+  /* 699AQ: novou poznamku (+) drzet nad skutecnou vyskou PC toastu.
+     V klidu se pozice + vraci na puvodni hodnoty z desktop.css. */
+  function srovnejPlusNadOznameni699AQ() {
+    const zobrazeno = desktop.matches && !toast.hidden;
+    document.body.classList.toggle("lnPcReminderToastVisible699AQ", zobrazeno);
+    if (!zobrazeno) {
+      document.documentElement.style.removeProperty("--ln-pc-toast-fab-bottom-699AQ");
+      return;
+    }
+    const rect = toast.getBoundingClientRect();
+    if (rect.height > 0) {
+      const vyskaOdSpodu = Math.ceil(window.innerHeight - rect.top + 12);
+      document.documentElement.style.setProperty(
+        "--ln-pc-toast-fab-bottom-699AQ", `${vyskaOdSpodu}px`
+      );
+    }
+  }
+  if (typeof ResizeObserver === "function") {
+    new ResizeObserver(srovnejPlusNadOznameni699AQ).observe(toast);
+  }
+  window.addEventListener("resize", srovnejPlusNadOznameni699AQ);
+  desktop.addEventListener?.("change", srovnejPlusNadOznameni699AQ);
+
   const centerList = center.querySelector(".lnPcReminderList692C");
   const centerCount = center.querySelector("#lnPcReminderCenterCount692C");
   const permissionButton = center.querySelector(".lnPcReminderPermission692C");
@@ -268,6 +291,7 @@
   }
   function hideToast() {
     toast.hidden = true;
+    srovnejPlusNadOznameni699AQ();
     choices.hidden = true;
     snooze.setAttribute("aria-expanded", "false");
     error.hidden = true;
@@ -320,6 +344,7 @@
     choices.hidden = true;
     snooze.setAttribute("aria-expanded", "false");
     toast.hidden = false;
+    srovnejPlusNadOznameni699AQ();
     remember(keyOf(entry));
     notifyOtherTab(entry);
   }

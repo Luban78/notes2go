@@ -18984,3 +18984,14 @@ body.ln-luba-klavesnice-open .lnSyncRecoveryNotice683BX:not([hidden]) {
 #taskModal.ln-v2-find-reveal-699ap .ln-v2-editor > .ln-v2-odstavec[data-ln-v2-bullet-uroven][hidden] {
   display: block !important;
 }
+
+
+/* 699AQ – zvonek v editoru je indikatorem stavu, ne barevne podbarvene tlacitko.
+   Aktivni = cisty zvonek; vypnuta pripominka = preskrtnuty zvonek. */
+#taskModal .editorTopBar #reminderButton.active {
+  background: color-mix(in srgb, var(--color-editor-background) 88%, var(--color-surface)) !important;
+  color: var(--color-editor-text) !important;
+  border-color: var(--color-border) !important;
+}
+#taskModal #reminderButton.active .lnReminderOffSlash699AQ { display: none; }
+#taskModal #reminderButton:not(.active) .lnReminderOffSlash699AQ { display: inline; }

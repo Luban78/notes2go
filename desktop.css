@@ -3033,7 +3033,7 @@
  * tlačítku, čas s rezervou od pravého okraje, plocha +10 px na straně. */
 @media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
   #taskModal > .modalContent {
-    width: min(calc(90vw + 20px), calc(100vw - 16px), 1520px);
+    width: min(calc(90vw + 40px), calc(100vw - 16px), 1540px);
     height: min(calc(95dvh + 20px), calc(100dvh - 16px), 1120px);
   }
 
@@ -3080,5 +3080,26 @@
     width: 88px !important;
     min-width: 88px !important;
     max-width: 88px !important;
+  }
+}
+
+
+/* 699AQ – trisloupcove karty stejne svisle skladani jako ctyrsloupcove.
+   Jednotlive karty jsou uvnitr stabilnich flex sloupcu, ne v radcich. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  .pinnedCards.listView #pinnedLeft {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+  .pinnedCards.listView .desktopMasonryColumn {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: var(--ln-dnv-layout-kartyRadkyMezera, 14px);
+  }
+  /* Posun jen v dobe skutecne zobrazeneho toastu, bez pevneho odhadu vysky. */
+  body.lnPcReminderToastVisible699AQ #addTaskButton {
+    bottom: var(--ln-pc-toast-fab-bottom-699AQ, 240px) !important;
   }
 }
