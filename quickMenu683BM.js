@@ -5,15 +5,6 @@
 (() => {
   'use strict';
   const menu = document.getElementById('mainMenu');
-  /* 699AV: Pouzijeme puvodni menu i jeho listenery. Presun do body
-   * obchazi transformovane/orezane rodice toolbaru. Vsechny odkazy na ID
-   * i event listenery zustavaji platne. CSS :has synchronne ridi backdrop. */
-  if (menu && menu.parentElement !== document.body) {
-    const backdrop = document.createElement('div');
-    backdrop.id = 'lnMainMenuBackdrop699AV';
-    backdrop.setAttribute('aria-hidden', 'true');
-    document.body.append(backdrop, menu);
-  }
   const puvodni = document.getElementById('cardSortButton');
   const popisek = document.getElementById('cardSortMenuLabel');
   const vzhled = document.querySelector('#ln683BJAccordion [data-ln683bj-category="appearance"] .ln683BJOriginal');
