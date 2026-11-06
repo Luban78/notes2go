@@ -1,5 +1,7 @@
 /* 683BM – servisni menu ⋮ vizualne sjednocene s A3. Bez sipek. */
 #mainMenu.ln683BMQuickMenu {
+  top: calc(100% + 2px);
+  right: -10px;
   width: min(255px, calc(100vw - 24px));
   max-height: min(65dvh, 450px);
   overflow-y: auto;
@@ -17,7 +19,7 @@
   column-gap: 9px !important;
   width: 100%;
   min-height: 44px;
-  margin: 0 0 7px;
+  margin: 0 0 9px;
   padding: 5px 8px;
   border: 1px solid var(--color-border);
   border-radius: 11px;
