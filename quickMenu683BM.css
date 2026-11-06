@@ -1,26 +1,26 @@
 /* 683BM – servisni menu ⋮ vizualne sjednocene s A3. Bez sipek. */
 #mainMenu.ln683BMQuickMenu {
-  width: min(325px, calc(100vw - 20px));
-  max-height: min(78dvh, 670px);
+  width: min(255px, calc(100vw - 24px));
+  max-height: min(65dvh, 450px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 13px;
+  padding: 10px;
   border: 1px solid var(--color-border);
-  border-radius: 19px;
+  border-radius: 16px;
   background: var(--color-background);
   color: var(--color-text);
   box-shadow: 0 18px 42px rgba(0,0,0,.35);
 }
 #mainMenu.ln683BMQuickMenu button:not([hidden]) {
   display: grid;
-  grid-template-columns: 39px minmax(0, 1fr) !important;
-  column-gap: 11px !important;
+  grid-template-columns: 32px minmax(0, 1fr) !important;
+  column-gap: 9px !important;
   width: 100%;
-  min-height: 58px;
-  margin: 0 0 9px;
-  padding: 8px 11px;
+  min-height: 44px;
+  margin: 0 0 7px;
+  padding: 5px 8px;
   border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-radius: 11px;
   background: var(--color-surface) !important;
   text-align: left;
   color: var(--color-text);
@@ -33,15 +33,15 @@
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  width: 39px !important;
-  height: 39px !important;
-  border-radius: 12px !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 10px !important;
   background: color-mix(in srgb, var(--color-accent) 13%, var(--color-surface)) !important;
   color: var(--color-accent);
   transform: none;
 }
 #mainMenu.ln683BMQuickMenu .mainMenuLabel {
-  font-size: .94rem;
+  font-size: .86rem;
   font-weight: 650;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -55,7 +55,7 @@
 #mainMenu.ln683BMQuickMenu button.luba-menu-touch-feedback {
   background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface)) !important;
 }
-#mainMenu.ln683BMQuickMenu hr {margin: 7px 8px 10px;}
+#mainMenu.ln683BMQuickMenu hr {margin: 6px 6px 8px;}
 #mainMenu.ln683BMQuickMenu #logoutButton {
   color: var(--color-danger-text, #e17676);
   border-color: color-mix(in srgb, var(--color-danger-text, #e17676) 25%, var(--color-border));
