@@ -34,7 +34,7 @@
   <link rel="stylesheet" href="learningDictionary.css?v=658cs-source-divider">
   <link rel="stylesheet" href="cardActionsMobile.css?v=658be-global-rem-font-scale">
   <link rel="stylesheet" href="theme.css?v=656-theme-pack">
-  <link rel="stylesheet" href="desktop.css?v=699AR-static-fab">
+  <link rel="stylesheet" href="desktop.css?v=699AQ-masonry-modal-plus">
   <link rel="stylesheet" href="desktopReminderAlerts692C.css?v=692F-pc-reminder-palette">
   <link rel="stylesheet" href="iconPreference.css">
   <link rel="stylesheet" href="sharing.css?v=658be-global-rem-font-scale">
@@ -81,7 +81,6 @@
   <link rel="stylesheet" href="homeToolbarPreferences.css?v=683BB-main-toolbar-visibility">
   <link rel="stylesheet" href="homeDateTimeAndStatus683BC.css?v=683BD-clock-edge-no-shift">
   <link rel="stylesheet" href="mobileHeader693J.css?v=693J-one-row-trial">
-  <link rel="stylesheet" href="cloudUsage699AR.css?v=699AR-consumption-details">
   <link rel="stylesheet" href="settingsAccordion683BJ.css?v=683BK-accordion-value-animation">
   <link rel="stylesheet" href="quickMenu683BM.css?v=683BM-quick-menu">
   <link rel="stylesheet" href="editorKeyboardPreferences683BN.css?v=683BN-display-prefs">
@@ -1701,13 +1700,6 @@
             <span class="adminToolArrow" aria-hidden="true">›</span>
           </button>
 
-          <button id="adminStartSync699ARToolButton" class="adminToolCard" type="button">
-            <span class="adminToolIcon" aria-hidden="true">⏱</span>
-            <span class="adminToolText"><strong>Start a synchronizace</strong>
-              <small>Časy startu, FPS výpadky a podrobný technický rozbor</small></span>
-            <span class="adminToolArrow" aria-hidden="true">›</span>
-          </button>
-
           <button id="adminDebugHubToolButton" class="adminToolCard" type="button">
             <span class="adminToolIcon" aria-hidden="true">🐞</span>
             <span class="adminToolText">
@@ -1723,18 +1715,6 @@
             <span class="adminToolArrow" aria-hidden="true">›</span>
           </button>
         </div>
-      </section>
-
-      <section id="adminStartSync699ARView" class="adminDashboardSubView lnAdminStartSync699AR" hidden>
-        <div class="adminAccountsHeader"><button id="adminStartSync699ARBack" class="adminAccountsBackButton" type="button">‹ Dashboard</button><strong>Start a synchronizace</strong></div>
-        <p>Technické časování aplikace pro administrátora. Spotřebu cloudového prostoru najde uživatel po klepnutí na SYNC.</p>
-        <div id="adminStartSync699ARMetrics" class="lnAdminStartSyncMetrics699AR" role="status"></div>
-        <div class="lnAdminStartSyncActions699AR">
-          <button id="adminStartSync699ARRefresh" type="button">Obnovit časy</button>
-          <button id="adminStartSync699ARDetail" type="button">Podrobný rozbor</button>
-          <button id="adminStartSync699ARCopy" type="button">Kopírovat report</button>
-        </div>
-        <p id="adminStartSync699ARNote" class="lnAdminStartSyncHint699AR" role="status"></p>
       </section>
 
       <section id="adminSvgStudio693RView" class="adminDashboardSubView lnSvgStudio" hidden>
@@ -3021,7 +3001,7 @@
   <script src="settings.js?v=683BT-fixed-tomorrow"></script>
   <script src="homeToolbarPreferences.js?v=683BB-main-toolbar-visibility"></script>
   <script src="homeDateTime683BC.js?v=683BC-home-clock-status"></script>
-  <script src="mobileHeader693J.js?v=699AR-sync-quota-only"></script>
+  <script src="mobileHeader693J.js?v=693J-one-row-trial"></script>
   
   
   <script src="recurringTasks.js"></script>
@@ -3050,6 +3030,8 @@
   <script src="epubReader.js?v=658by-continuous-book-flow"></script>
   <script src="learningDictionary.js?v=676b-language-sweep"></script>
   <script src="documents.js?v=676b-language-sweep"></script>
+  <!-- 699AS – Android Open With: content:// se cte jen nativnim Document pluginem. -->
+  <script src="externalOpen699AS.js?v=699AS-android-open-with"></script>
 
   <!-- Interní odkazy na jiné poznámky – V1 ([[ + autocomplete) -->
   <script src="noteLinks.js?v=20260915-internal-link-direct-542"></script>
@@ -3097,7 +3079,7 @@
   <!-- Admin Dashboard – načte se pouze jako UI, oprávnění vždy ověřuje server RPC. -->
   <!-- 695A: Lightweight, admin-only lazy loader; actual tools are not parsed on startup. -->
   <script src="adminToolsLazy695A.js?v=699M-feedback-rollback"></script>
-  <script src="adminDashboard.js?v=699AR-start-sync-admin-view"></script>
+  <script src="adminDashboard.js?v=699E-admin-auto-demo-toggle"></script>
   <script src="fpsBenchmark691BQ.js?v=691BV-manual-performance-history"></script>
   <!-- FÁZE B: privátní Supabase Storage jako cloudová stínová vrstva příloh. -->
   <script src="attachmentsCloud.js?v=697J-plaintext-storage-off"></script>
@@ -3122,9 +3104,9 @@
 
   <!-- Desktop rozložení – pouze PC, mobilní APK se tím nemění -->
   <script src="desktop.js?v=699AP-weekday-in-date"></script>
-  <script src="desktopStatus692A.js?v=699AR-pc-sync-quota-click"></script>
+  <script src="desktopStatus692A.js?v=692A-pc-cloud-status"></script>
   <script src="desktopReminders.js?v=658aj-reminders-stability"></script>
-  <script src="desktopReminderAlerts692C.js?v=699AR-static-fab"></script>
+  <script src="desktopReminderAlerts692C.js?v=699AQ-fab-toast-clearance"></script>
   
   
   <!-- Realtime signál musí poslouchat ještě před prvním startovním syncem -->
@@ -3178,8 +3160,6 @@
   <script src="lubaAutoTesterLivePerf691CS.js?v=691DC-passive-trace"></script>
   <script src="lubaAutoTester.js?v=695D-simple-controls"></script>
   <script src="lubaAutoTesterCopyErrors691AL.js?v=691AL-copy-only-errors"></script>
-  <!-- 699AR: shared user SYNC quota modal, registered after Android Back handlers. -->
-  <script src="cloudUsage699AR.js?v=699AR-consumption-details"></script>
   
 </body>
 

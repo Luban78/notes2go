@@ -550,10 +550,28 @@ public class MainActivity extends BridgeActivity {
     return saved;
   }
 
+  /* 699AS: Fronta noveho dokumentu se zpracuje az webovou vrstvou.
+   * Bez primeho otevirani content:// ve WebView a bez zasahu do alarmu. */
+  private void ohlasExterniDokument699AS() {
+    for (long zpozdeni : new long[]{120L, 650L, 1500L}) {
+      handler685Q.postDelayed(() -> {
+        try {
+          if (getBridge() == null || getBridge().getWebView() == null) return;
+          getBridge().getWebView().evaluateJavascript(
+            "window.dispatchEvent(new Event('lubanote:external-document-699AS'));", null);
+        } catch (RuntimeException ignored) {}
+      }, zpozdeni);
+    }
+  }
+
   @Override
   protected void onNewIntent(Intent intent) {
     super.onNewIntent(intent);
     setIntent(intent);
+    if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction()) &&
+        intent.getData() != null && "content".equals(intent.getData().getScheme())) {
+      ohlasExterniDokument699AS();
+    }
     // 693G: Retain compatibility with notifications already posted by old APKs.
     boolean previousTap=intent != null &&
         intent.getBooleanExtra("lubanote_remote_notification_tap_693G",false);

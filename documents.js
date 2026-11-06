@@ -4951,7 +4951,28 @@
     init();
   }
 
+
+  /* 699AS: Soubor z Android "Otevřít v aplikaci".
+   * Knihovna Dokumentu je lokalni (IndexedDB). Pro DOCX/DOC/EPUB/SQL
+   * zachovame existujici validace limitu a bezpecne ctecky. */
+  async function otevriExterniSoubor699AS(file) {
+    if (!(file instanceof Blob)) return false;
+    try {
+      const record = await vytvorRecordZVybranehoDokumentu(file);
+      if (!record) return false;
+      await ulozDoStore(STORE_FILES, record);
+      await refresh();
+      await otevriSoubor(record.id);
+      return true;
+    } catch (error) {
+      console.error('699AS otevreni externiho dokumentu:', error);
+      zobrazChybu(docT('documents.title', 'Dokumenty'), 'Externí dokument se nepodařilo otevřít.');
+      return false;
+    }
+  }
+
   window.LubaNoteDocumentsHub = {
+    otevriExterniSoubor699AS,
     refresh,
     pridatPdf,
     pridatDocx,

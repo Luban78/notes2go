@@ -2806,7 +2806,27 @@
 
   aktualizujDostupnost();
 
+
+  /* 699AS: Otevrit HTML/TXT predane Androidem. Vzdy jako novy,
+   * zatim neulozeny dokument. Cizi HTML prochazi stavajicim sanitizovanim.
+   * Nikdy nesahat na otevrenou poznamku ani Secret obsah. */
+  function otevriExterniText699AS(soubor) {
+    if (!soubor || soubor.typ !== "text" || typeof soubor.obsah !== "string") return false;
+    if (taskModal && !taskModal.hidden) {
+      zobrazChybu("Otevřít dokument", "Nejdřív prosím zavři rozpracovanou poznámku a soubor otevři znovu.");
+      return false;
+    }
+    try {
+      const data = parsujDokument(soubor);
+      return vlozDokumentDoNovehoEditoru(data);
+    } catch (error) {
+      console.error("Externí HTML/TXT se nepodařilo načíst:", error);
+      zobrazChybu("Otevřít dokument", "Dokument se nepodařilo bezpečně přečíst.");
+      return false;
+    }
+  }
   window.LubaNoteDocuments = {
+    otevriExterniText699AS,
     otevriDokument,
     ulozDokument,
     parsujDokument,

@@ -43,9 +43,11 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.Locale;
 
 @CapacitorPlugin(name = "LubaNoteDocument")
 public class LubaNoteDocumentPlugin extends Plugin {
@@ -75,6 +77,206 @@ public class LubaNoteDocumentPlugin extends Plugin {
 
   /* Zdroj PDF držený jen po dobu systémového dialogu „Uložit kopii“. */
   private Uri cekajiciPdfZdrojUri = null;
+
+  /* 699AS – Android ACTION_VIEW "Otevrit v LubaNote".
+   * Soubor se nikdy nesynchronizuje ani nespousti jako HTML kod.
+   * PDF se otevre stavajicim nativnim PdfRendererem; ostatni binarni
+   * dokumenty se predavaji v omezenych blocich do jiz existujicich ctecek. */
+  private File externiDocSoubor699AS = null;
+  private String externiDocToken699AS = null;
+  private final Object externiDocLock699AS = new Object();
+
+  /* Soubory z predchoziho spusteni nesmeji zustat v privatni cache. */
+  @Override
+  public void load() {
+    super.load();
+    File slozka = new File(getContext().getCacheDir(), "ln-external-documents-699AS");
+    File[] soubory = slozka.listFiles();
+    if (soubory != null) {
+      for (File soubor : soubory) {
+        if (soubor.isFile() && soubor.getName().endsWith(".tmp")) {
+          try { soubor.delete(); } catch (Exception ignored) {}
+        }
+      }
+    }
+  }
+
+  private void vycistiExterniDoc699AS() {
+    synchronized (externiDocLock699AS) {
+      if (externiDocSoubor699AS != null) {
+        try { externiDocSoubor699AS.delete(); } catch (Exception ignored) {}
+      }
+      externiDocSoubor699AS = null;
+      externiDocToken699AS = null;
+    }
+  }
+
+  private void spotrebujExterniIntent699AS(Intent intent) {
+    if (intent == null) return;
+    intent.setAction(Intent.ACTION_MAIN);
+    intent.setData(null);
+  }
+
+  @PluginMethod
+  public void prevzmiExterniSoubor699AS(PluginCall call) {
+    Intent intent = getActivity().getIntent();
+    Uri uri = intent == null ? null : intent.getData();
+    JSObject odpoved = new JSObject();
+    if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction()) ||
+        uri == null || !"content".equals(uri.getScheme())) {
+      odpoved.put("pending", false);
+      call.resolve(odpoved);
+      return;
+    }
+
+    String nazev = ziskejNazevSouboru(uri);
+    if (nazev == null || nazev.trim().isEmpty() || "dokument".equals(nazev)) {
+      String posledni = uri.getLastPathSegment();
+      if (posledni != null && posledni.matches("(?is).+\\.(pdf|docx|doc|epub|sql|html?|txt)")) {
+        nazev = posledni;
+      }
+    }
+    if (nazev == null || nazev.trim().isEmpty()) nazev = "dokument";
+    nazev = nazev.replace('/', '_').replace((char)92, '_').replace((char)10, '_').replace((char)13, '_').replace((char)0, '_');
+    if (nazev.length() > 180) nazev = nazev.substring(nazev.length() - 180);
+
+    String mime = null;
+    try { mime = getContext().getContentResolver().getType(uri); }
+    catch (RuntimeException ignored) {}
+    if (mime == null) mime = intent.getType();
+    if (mime == null) mime = "";
+    String lower = nazev.toLowerCase(Locale.ROOT);
+    String lowerMime = mime.toLowerCase(Locale.ROOT);
+
+    String typ = "";
+    long max = 0;
+    if (lower.endsWith(".pdf") || lowerMime.equals("application/pdf")) {
+      typ = "pdf"; max = 100L * 1024L * 1024L;
+    } else if (lower.endsWith(".docx") || lowerMime.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
+      typ = "docx"; max = 20L * 1024L * 1024L;
+    } else if (lower.endsWith(".doc") || lowerMime.equals("application/msword")) {
+      typ = "doc"; max = 24L * 1024L * 1024L;
+    } else if (lower.endsWith(".epub") || lowerMime.equals("application/epub+zip")) {
+      typ = "epub"; max = 100L * 1024L * 1024L;
+    } else if (lower.endsWith(".sql") || lowerMime.equals("application/sql") || lowerMime.equals("text/x-sql")) {
+      typ = "sql"; max = 10L * 1024L * 1024L;
+    } else if (lower.endsWith(".html") || lower.endsWith(".htm") || lowerMime.equals("text/html")) {
+      typ = "text"; max = 20L * 1024L * 1024L;
+    } else if (lower.endsWith(".txt") || lowerMime.equals("text/plain")) {
+      typ = "text"; max = 20L * 1024L * 1024L;
+    }
+
+    if (typ.isEmpty()) {
+      call.reject("Tento typ dokumentu LubaNote neumí otevřít.");
+      return;
+    }
+
+    try {
+      if ("pdf".equals(typ)) {
+        JSObject result = otevriPdfProViewer(uri, nazev, "application/pdf");
+        result.put("pending", true);
+        spotrebujExterniIntent699AS(intent);
+        call.resolve(result);
+        return;
+      }
+
+      if ("text".equals(typ)) {
+        String obsah = nactiTextovySoubor(uri); // 20MB limit existujiciho parseru
+        odpoved.put("pending", true);
+        odpoved.put("typ", "text");
+        odpoved.put("obsah", obsah);
+        odpoved.put("nazevSouboru", nazev);
+        odpoved.put("mimeType", mime);
+        spotrebujExterniIntent699AS(intent);
+        call.resolve(odpoved);
+        return;
+      }
+
+      // Jedina docasna privatni kopie, s tvrdym limitem pred nactenim do WebView.
+      File slozka = new File(getContext().getCacheDir(), "ln-external-documents-699AS");
+      if (!slozka.exists() && !slozka.mkdirs()) throw new IOException("Nelze vytvorit docasnou slozku.");
+      String token = UUID.randomUUID().toString();
+      File cil = new File(slozka, token + ".tmp");
+      long delka = 0;
+      try (InputStream vstup = getContext().getContentResolver().openInputStream(uri);
+           OutputStream vystup = new FileOutputStream(cil)) {
+        if (vstup == null) throw new IOException("Nelze nacist externi dokument.");
+        byte[] buffer = new byte[64 * 1024];
+        int n;
+        while ((n = vstup.read(buffer)) != -1) {
+          if (n == 0) continue;
+          delka += n;
+          if (delka > max) throw new IOException("Dokument prekrocil povolenou velikost.");
+          vystup.write(buffer, 0, n);
+        }
+      } catch (Exception chyba) {
+        cil.delete();
+        throw chyba;
+      }
+      vycistiExterniDoc699AS();
+      synchronized (externiDocLock699AS) {
+        externiDocSoubor699AS = cil;
+        externiDocToken699AS = token;
+      }
+      odpoved.put("pending", true);
+      odpoved.put("typ", typ);
+      odpoved.put("token", token);
+      odpoved.put("sizeBytes", delka);
+      odpoved.put("nazevSouboru", nazev);
+      odpoved.put("mimeType", mime);
+      spotrebujExterniIntent699AS(intent);
+      call.resolve(odpoved);
+    } catch (SecurityException chyba) {
+      call.reject("Android nedovolil číst tento dokument.", chyba);
+    } catch (Exception chyba) {
+      call.reject("Externí dokument se nepodařilo bezpečně otevřít.", chyba);
+    }
+  }
+
+  @PluginMethod
+  public void prectiExterniBlok699AS(PluginCall call) {
+    String token = call.getString("token");
+    Integer offsetObj = call.getInt("offset");
+    Integer maxObj = call.getInt("maxBytes");
+    long offset = offsetObj == null ? -1L : offsetObj.longValue();
+    int max = maxObj == null ? 128 * 1024 : Math.max(1, Math.min(128 * 1024, maxObj));
+    synchronized (externiDocLock699AS) {
+      if (token == null || !token.equals(externiDocToken699AS) ||
+          externiDocSoubor699AS == null || !externiDocSoubor699AS.isFile()) {
+        call.reject("Externí soubor už není k dispozici.");
+        return;
+      }
+      long total = externiDocSoubor699AS.length();
+      if (offset < 0 || offset > total) {
+        call.reject("Neplatný offset čtení souboru.");
+        return;
+      }
+      int n = (int)Math.min((long)max, total - offset);
+      byte[] data = new byte[n];
+      try (RandomAccessFile zdroj = new RandomAccessFile(externiDocSoubor699AS, "r")) {
+        zdroj.seek(offset);
+        zdroj.readFully(data);
+        JSObject odpoved = new JSObject();
+        odpoved.put("base64", Base64.encodeToString(data, Base64.NO_WRAP));
+        odpoved.put("nextOffset", offset + n);
+        odpoved.put("done", offset + n == total);
+        call.resolve(odpoved);
+      } catch (IOException chyba) {
+        call.reject("Nelze přečíst část souboru.", chyba);
+      }
+    }
+  }
+
+  @PluginMethod
+  public void ukonciExterniSoubor699AS(PluginCall call) {
+    String token = call.getString("token");
+    synchronized (externiDocLock699AS) {
+      if (token != null && token.equals(externiDocToken699AS)) vycistiExterniDoc699AS();
+    }
+    JSObject odpoved = new JSObject();
+    odpoved.put("ok", true);
+    call.resolve(odpoved);
+  }
 
   @PluginMethod
   public void otevriDokument(PluginCall call) {
