@@ -1,0 +1,46 @@
+/* 699BA – desktop-only correction for short browser windows.
+   No changes to mobile quick menu, note rendering or sync.
+   Compact the actual PC sidebar only when viewport height is limited. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) and (max-height: 820px) {
+  .desktopSidebar {
+    padding-top: 14px !important;
+    padding-bottom: 9px !important;
+  }
+
+  .desktopSidebarBrand {
+    min-height: 46px;
+    margin-bottom: 12px;
+  }
+
+  .desktopSidebarLogo {
+    width: min(var(--ln-dnv-sidebar-logo-size, 50px), 42px) !important;
+    height: min(var(--ln-dnv-sidebar-logo-size, 50px), 42px) !important;
+    flex-basis: min(var(--ln-dnv-sidebar-logo-size, 50px), 42px) !important;
+  }
+
+  .desktopSidebarNavSecondary {
+    gap: min(var(--ln-dnv-sidebar-gap, 7px), 3px) !important;
+  }
+
+  .desktopSidebarButton {
+    min-height: min(var(--ln-dnv-sidebar-item-height, 46px), 38px) !important;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+
+  .desktopSidebarDividerCompact {
+    margin-top: 6px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .desktopSidebarFooter {
+    padding-top: 5px;
+    padding-bottom: 0;
+  }
+
+  /* 699AR used fixed 250px, which pushes + too high on short laptops.
+     Keep it stationary when toast appears, but scale its height with viewport. */
+  body:has(#notesModuleButton.active) #addTaskButton {
+    bottom: clamp(178px, 28dvh, 220px) !important;
+  }
+}
