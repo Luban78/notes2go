@@ -1,0 +1,35 @@
+/* 699AR – uživatelské využití cloudu, stejné v APK i na PC. */
+.lnCloudUsageOverlay699AR[hidden]{display:none!important}
+.lnCloudUsageOverlay699AR{position:fixed;inset:0;z-index:25000;display:flex;justify-content:center;align-items:center;padding:12px;box-sizing:border-box;background:rgba(0,0,0,.67);backdrop-filter:blur(3px)}
+.lnCloudUsageBox699AR{box-sizing:border-box;width:min(100%,540px);max-height:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain;padding:18px;border:1px solid var(--color-border);border-radius:20px;background:var(--color-surface);color:var(--color-text);box-shadow:0 14px 52px #0008;font:15px/1.45 system-ui,sans-serif}
+.lnCloudUsageHead699AR{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.lnCloudUsageHead699AR h2{margin:0 0 3px;font-size:1.3rem;line-height:1.3}
+#lnCuState699AR{font-size:.85rem;opacity:.85}
+.lnCloudUsageHead699AR button{width:42px;height:42px;border:1px solid var(--color-border);border-radius:12px;background:transparent;color:inherit;font-size:1.6rem}
+#lnCuStatus699AR{margin:14px 0 10px;font-size:.87rem;color:var(--color-text-secondary)}
+.lnCloudUsageTotals699AR{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.lnCloudUsageTotals699AR>div{min-width:0;border:1px solid var(--color-border);border-radius:11px;padding:9px 7px;text-align:center}
+.lnCloudUsageTotals699AR small{display:block;color:var(--color-text-secondary);font-size:.73rem}
+.lnCloudUsageTotals699AR strong{display:block;overflow-wrap:anywhere;font-size:clamp(.85rem,3.2vw,1.05rem);font-variant-numeric:tabular-nums;margin-top:3px}
+.lnCloudUsageBar699AR{height:10px;background:var(--color-border);border-radius:99px;overflow:hidden;margin:13px 0 14px}
+.lnCloudUsageBar699AR>span{display:block;width:0;height:100%;background:var(--color-accent);transition:width .2s ease}
+.lnCloudUsageBox699AR h3{font-size:1rem;margin:7px 0 8px}
+.lnCloudUsageBreakdown699AR{display:grid;gap:5px}
+.lnCloudUsageRow699AR{display:flex;align-items:baseline;justify-content:space-between;gap:12px;border-bottom:1px solid var(--color-border);padding:6px 1px;font-size:.9rem}
+.lnCloudUsageRow699AR span{min-width:0;overflow-wrap:anywhere}
+.lnCloudUsageRow699AR strong{white-space:nowrap;font-variant-numeric:tabular-nums}
+.lnCloudUsageHint699AR{font-size:.78rem;opacity:.8;line-height:1.45;margin:9px 0}
+#lnCuNotesDetail699AR{border:1px solid var(--color-border);border-radius:11px;padding:9px 11px;margin-top:14px}
+#lnCuNotesDetail699AR summary{cursor:pointer;font-weight:600;font-size:.89rem}
+.lnCloudUsageActions699AR{display:flex;align-items:center;gap:12px;margin:15px 0 8px;flex-wrap:wrap}
+#lnCuRefresh699AR{background:var(--color-accent);color:var(--color-on-accent,#fff);border:0;padding:10px 14px;border-radius:11px;font:600 .94rem system-ui;min-height:42px}
+#lnCuRefresh699AR:disabled{opacity:.6}
+#lnCuUpdated699AR{font-size:.78rem;color:var(--color-text-secondary)}
+#lnDesktopSync692A{cursor:pointer}
+#lnDesktopSync692A:focus-visible{outline:2px solid var(--color-accent);outline-offset:3px}
+.lnAdminStartSync699AR .lnAdminStartSyncMetrics699AR{display:grid;gap:6px;margin:14px 0}
+.lnAdminStartSyncRow699AR{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:11px;border:1px solid var(--color-border);border-radius:11px}
+.lnAdminStartSyncRow699AR strong{font-variant-numeric:tabular-nums}
+.lnAdminStartSyncActions699AR{display:flex;gap:8px;flex-wrap:wrap}
+.lnAdminStartSyncActions699AR button{min-height:40px;padding:9px 12px;border:1px solid var(--color-border);border-radius:11px;background:var(--color-surface);color:var(--color-text)}
+.lnAdminStartSyncHint699AR{font-size:.83rem;color:var(--color-text-secondary)}

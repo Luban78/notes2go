@@ -105,6 +105,15 @@
     if (!document.hidden) void refresh();
   });
   media.addEventListener?.("change", updateVisibility);
+  /* 699AR: otevrit stejny prehled kvoty jako na Androidu. */
+  sync.setAttribute("role", "button");
+  sync.setAttribute("tabindex", "0");
+  sync.title = "Stav synchronizace a využití cloudového úložiště";
+  const otevriSpotrebu699AR = () => window.LubaNoteCloudUsage699AR?.otevri?.();
+  sync.addEventListener("click", otevriSpotrebu699AR);
+  sync.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); otevriSpotrebu699AR(); }
+  });
   renderSync();
   updateVisibility();
 })();

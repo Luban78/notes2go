@@ -49,6 +49,14 @@
     document.getElementById("adminServerBackButton");
   const uiPohled =
     document.getElementById("adminUiView");
+  const startSyncPohled699AR = document.getElementById("adminStartSync699ARView");
+  const startSyncTlacitko699AR = document.getElementById("adminStartSync699ARToolButton");
+  const startSyncZpet699AR = document.getElementById("adminStartSync699ARBack");
+  const startSyncRefresh699AR = document.getElementById("adminStartSync699ARRefresh");
+  const startSyncDetail699AR = document.getElementById("adminStartSync699ARDetail");
+  const startSyncCopy699AR = document.getElementById("adminStartSync699ARCopy");
+  const startSyncMetrics699AR = document.getElementById("adminStartSync699ARMetrics");
+  const startSyncNote699AR = document.getElementById("adminStartSync699ARNote");
   const uiTlacitko =
     document.getElementById("adminUiToolButton");
   const uiZpetTlacitko =
@@ -528,6 +536,7 @@
     uctyPohled.hidden = true;
     serverPohled.hidden = true;
     uiPohled.hidden = true;
+    if (startSyncPohled699AR) startSyncPohled699AR.hidden = true;
     zastavServerStatusAutoRefresh();
     aktualizujSyncTrafficNastroj();
     oznamCutoverKonzoli();
@@ -538,6 +547,7 @@
     uctyPohled.hidden = false;
     serverPohled.hidden = true;
     uiPohled.hidden = true;
+    if (startSyncPohled699AR) startSyncPohled699AR.hidden = true;
     zastavServerStatusAutoRefresh();
     oznamCutoverKonzoli();
   }
@@ -548,6 +558,7 @@
     uctyPohled.hidden = true;
     serverPohled.hidden = false;
     uiPohled.hidden = true;
+    if (startSyncPohled699AR) startSyncPohled699AR.hidden = true;
     aktualizujSyncTrafficNastroj();
     aktualizujBackendZarizeniUi();
     nactiServerStatus();
@@ -570,8 +581,48 @@
     uctyPohled.hidden = true;
     serverPohled.hidden = true;
     uiPohled.hidden = false;
+    if (startSyncPohled699AR) startSyncPohled699AR.hidden = true;
     zastavServerStatusAutoRefresh();
     oznamCutoverKonzoli();
+  }
+
+  /* 699AR – diagnostika jen pro overeneho administratora. Pasivni metriky. */
+  function vykresliStartSync699AR() {
+    if (!startSyncMetrics699AR) return;
+    const m = window.LubaNoteStartTimeline695O?.souhrn?.();
+    const format = ms => Number.isFinite(ms)
+      ? `${(ms / 1000).toLocaleString("cs-CZ", { maximumFractionDigits: 2 })} s` : "—";
+    const hodnoty = m ? [
+      ["UI READY",m.uiReadyMs],
+      ["Splash zmizel",m.splashRemovedMs],
+      ["Synchronizace skončila",m.syncEndMs],
+      ["Délka synchronizace",m.syncDurationMs],
+      ["Opakované připomínky",m.remindersDurationMs],
+      ["Nejdelší mezera vykreslení",m.biggestFrameGapMs]
+    ] : [];
+    startSyncMetrics699AR.replaceChildren();
+    for (const [label,ms] of hodnoty) {
+      const radek = document.createElement("div");
+      radek.className = "lnAdminStartSyncRow699AR";
+      const nazev = document.createElement("span"); nazev.textContent = label;
+      const hodnota = document.createElement("strong"); hodnota.textContent = format(ms);
+      radek.append(nazev,hodnota);
+      startSyncMetrics699AR.append(radek);
+    }
+    if (startSyncNote699AR) startSyncNote699AR.textContent = m
+      ? "Pasivní časová osa od startu aplikace. Časy se mohou překrývat; toto není kontrola cloudové kvóty."
+      : "Časový rozbor zatím není dostupný.";
+  }
+  function zobrazStartSync699AR() {
+    if (!jeAdmin || !startSyncPohled699AR) return;
+    domov.hidden = true;
+    uctyPohled.hidden = true;
+    serverPohled.hidden = true;
+    uiPohled.hidden = true;
+    startSyncPohled699AR.hidden = false;
+    zastavServerStatusAutoRefresh();
+    oznamCutoverKonzoli();
+    vykresliStartSync699AR();
   }
 
   function formatBajty(hodnota) {
@@ -3501,6 +3552,24 @@
     zapisAdminHistory("ui");
     zobrazUi();
   });
+  startSyncTlacitko699AR?.addEventListener("click", () => {
+    if (!jeAdmin) return;
+    zapisAdminHistory("startSync699AR");
+    zobrazStartSync699AR();
+  });
+  startSyncZpet699AR?.addEventListener("click", adminHistoryZpetNaDomov);
+  startSyncRefresh699AR?.addEventListener("click", vykresliStartSync699AR);
+  startSyncDetail699AR?.addEventListener("click", () => {
+    if (jeAdmin) window.LubaNoteStartTimeline695O?.otevri?.();
+  });
+  startSyncCopy699AR?.addEventListener("click", async () => {
+    if (!jeAdmin) return;
+    const report = window.LubaNoteStartTimeline695O?.report?.();
+    if (!report) {if(startSyncNote699AR)startSyncNote699AR.textContent="Report zatím není dostupný.";return;}
+    try {await navigator.clipboard.writeText(report);
+      if(startSyncNote699AR)startSyncNote699AR.textContent="Diagnostický report zkopírován.";
+    } catch (_) {if(startSyncNote699AR)startSyncNote699AR.textContent="Kopírování není povoleno.";}
+  });
   serverZpetTlacitko.addEventListener("click", adminHistoryZpetNaDomov);
   uiZpetTlacitko.addEventListener("click", adminHistoryZpetNaDomov);
   serverObnovitTlacitko?.addEventListener("click", () => {
@@ -3636,6 +3705,7 @@
       adminHistoryDepth = Math.max(1, adminHistoryDepth - 1);
       if (view === "server") zobrazServer();
       else if (view === "ui") zobrazUi();
+      else if (view === "startSync699AR") zobrazStartSync699AR();
       else if (view === "accounts") {
         zobrazUcty();
         nastavFiltr("pending");
@@ -3664,7 +3734,8 @@
       return true;
     }
     if (!modal.hidden) {
-      if (!serverPohled.hidden || !uiPohled.hidden || !uctyPohled.hidden) {
+      if (!serverPohled.hidden || !uiPohled.hidden || !uctyPohled.hidden ||
+          (startSyncPohled699AR && !startSyncPohled699AR.hidden)) {
         adminHistoryZpetNaDomov();
       } else {
         zavriDashboardPresHistorii();

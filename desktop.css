@@ -3098,8 +3098,9 @@
     min-width: 0;
     gap: var(--ln-dnv-layout-kartyRadkyMezera, 14px);
   }
-  /* Posun jen v dobe skutecne zobrazeneho toastu, bez pevneho odhadu vysky. */
-  body.lnPcReminderToastVisible699AQ #addTaskButton {
-    bottom: var(--ln-pc-toast-fab-bottom-699AQ, 240px) !important;
+  /* 699AR: pevna pozice nad PC oznamovacim toastem, zadne poskakovani.
+     Mobilni pozice tlacitka + zustava beze zmeny. */
+  body:has(#notesModuleButton.active) #addTaskButton {
+    bottom: 250px !important;
   }
 }
