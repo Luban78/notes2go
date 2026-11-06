@@ -568,8 +568,10 @@ public class MainActivity extends BridgeActivity {
   protected void onNewIntent(Intent intent) {
     super.onNewIntent(intent);
     setIntent(intent);
-    if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction()) &&
-        intent.getData() != null && "content".equals(intent.getData().getScheme())) {
+    // 699AT: On Xiaomi/other file managers "Open with" can be VIEW
+    // or SEND/EXTRA_STREAM. The existing document plugin validates the URI.
+    if (intent != null && (Intent.ACTION_VIEW.equals(intent.getAction()) ||
+        Intent.ACTION_SEND.equals(intent.getAction()))) {
       ohlasExterniDokument699AS();
     }
     // 693G: Retain compatibility with notifications already posted by old APKs.

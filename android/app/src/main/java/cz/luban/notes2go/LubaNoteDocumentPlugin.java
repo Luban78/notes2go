@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.Context;
 import android.content.ContentValues;
+import android.content.ClipData;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -115,17 +116,61 @@ public class LubaNoteDocumentPlugin extends Plugin {
     if (intent == null) return;
     intent.setAction(Intent.ACTION_MAIN);
     intent.setData(null);
+    intent.removeExtra(Intent.EXTRA_STREAM);
+    intent.setClipData(null);
+  }
+
+  /* 699AT: ACTION_SEND muze mit soubor v EXTRA_STREAM nebo ClipData.
+   * Neprijimat EXTRA_TEXT ani vic souboru, nikdy primo nespoustet URL.
+   * Data z ciziho Intentu se nesmi pouzit k cteni soukromych app souboru. */
+  private Uri ziskejExterniUri699AT(Intent intent) {
+    if (intent == null) return null;
+    final String action = intent.getAction();
+    if (!Intent.ACTION_VIEW.equals(action) && !Intent.ACTION_SEND.equals(action)) return null;
+
+    if (Intent.ACTION_VIEW.equals(action) && intent.getData() != null) {
+      return intent.getData();
+    }
+    if (Intent.ACTION_SEND.equals(action)) {
+      try {
+        Object stream = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+        if (stream instanceof Uri) return (Uri) stream;
+      } catch (RuntimeException ignored) {}
+    }
+    ClipData clip = intent.getClipData();
+    if (clip != null && clip.getItemCount() == 1) {
+      return clip.getItemAt(0).getUri();
+    }
+    return null;
+  }
+
+  private boolean jeBezpecnaExterniUri699AT(Uri uri) {
+    if (uri == null) return false;
+    if ("content".equals(uri.getScheme())) return true;
+    if (!"file".equals(uri.getScheme())) return false;
+    // FileManager muze dodat file://. Nikdy mu nedovolime nacist /data/data,
+    // interni aplikacni soubory, symlinky mimo verejne uloziste ani Android/data.
+    try {
+      String cesta = new File(uri.getPath()).getCanonicalPath();
+      return cesta.startsWith("/storage/") &&
+          !cesta.contains("/Android/data/") &&
+          !cesta.contains("/Android/obb/") &&
+          new File(cesta).isFile();
+    } catch (Exception ignored) { return false; }
   }
 
   @PluginMethod
   public void prevzmiExterniSoubor699AS(PluginCall call) {
     Intent intent = getActivity().getIntent();
-    Uri uri = intent == null ? null : intent.getData();
+    Uri uri = ziskejExterniUri699AT(intent);
     JSObject odpoved = new JSObject();
-    if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction()) ||
-        uri == null || !"content".equals(uri.getScheme())) {
+    if (uri == null) {
       odpoved.put("pending", false);
       call.resolve(odpoved);
+      return;
+    }
+    if (!jeBezpecnaExterniUri699AT(uri)) {
+      call.reject("Externí dokument má nepodporovanou nebo nepovolenou adresu.");
       return;
     }
 
@@ -150,15 +195,15 @@ public class LubaNoteDocumentPlugin extends Plugin {
 
     String typ = "";
     long max = 0;
-    if (lower.endsWith(".pdf") || lowerMime.equals("application/pdf")) {
+    if (lower.endsWith(".pdf") || lowerMime.equals("application/pdf") || lowerMime.equals("application/x-pdf")) {
       typ = "pdf"; max = 100L * 1024L * 1024L;
     } else if (lower.endsWith(".docx") || lowerMime.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
       typ = "docx"; max = 20L * 1024L * 1024L;
-    } else if (lower.endsWith(".doc") || lowerMime.equals("application/msword")) {
+    } else if (lower.endsWith(".doc") || lowerMime.equals("application/msword") || lowerMime.equals("application/vnd.ms-word")) {
       typ = "doc"; max = 24L * 1024L * 1024L;
-    } else if (lower.endsWith(".epub") || lowerMime.equals("application/epub+zip")) {
+    } else if (lower.endsWith(".epub") || lowerMime.equals("application/epub+zip") || lowerMime.equals("application/x-epub+zip")) {
       typ = "epub"; max = 100L * 1024L * 1024L;
-    } else if (lower.endsWith(".sql") || lowerMime.equals("application/sql") || lowerMime.equals("text/x-sql")) {
+    } else if (lower.endsWith(".sql") || lowerMime.equals("application/sql") || lowerMime.equals("application/x-sql") || lowerMime.equals("text/x-sql") || lowerMime.equals("text/sql")) {
       typ = "sql"; max = 10L * 1024L * 1024L;
     } else if (lower.endsWith(".html") || lower.endsWith(".htm") || lowerMime.equals("text/html")) {
       typ = "text"; max = 20L * 1024L * 1024L;
