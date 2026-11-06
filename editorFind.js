@@ -22,6 +22,17 @@
   let observerEditoru = null;
   let debounceTimer = 0;
 
+  /* 699AP: hledání jen DOČASNĚ zviditelní sbalené Bullet řádky.
+   * Core model (sbaleno), Undo, save i HTML export zůstávají nedotčené.
+   * Stav je sdílen s hledáním z hlavní obrazovky. */
+  const docasneOdhaleni699AP = { hlavni: false, editor: false };
+  function nastavDocasneRozbaleni699AP(zdroj, zapnuto) {
+    if (zdroj !== "hlavni" && zdroj !== "editor") return;
+    docasneOdhaleni699AP[zdroj] = Boolean(zapnuto);
+    taskModal.classList.toggle("ln-v2-find-reveal-699ap",
+      !taskModal.hidden && (docasneOdhaleni699AP.hlavni || docasneOdhaleni699AP.editor));
+  }
+
   function editor() {
     return taskModal.querySelector(".ln-v2-editor[data-ln-v2-editor]");
   }
@@ -158,6 +169,7 @@
   function obnovVysledky({ zachovatIndex = false, neposouvat = false } = {}) {
     const koren = editor();
     const dotaz = vstup.value.trim();
+    nastavDocasneRozbaleni699AP("editor", Boolean(koren && dotaz && jeOtevrene()));
     const puvodniIndex = aktualniIndex;
 
     vysledky = [];
@@ -249,6 +261,7 @@
     observerEditoru?.disconnect();
     observerEditoru = null;
     clearTimeout(debounceTimer);
+    nastavDocasneRozbaleni699AP("editor", false);
     return true;
   }
 
@@ -280,10 +293,14 @@
   }, true);
 
   new MutationObserver(() => {
-    if (taskModal.hidden && jeOtevrene()) zavriPanel();
+    if (!taskModal.hidden) return;
+    if (jeOtevrene()) zavriPanel();
+    nastavDocasneRozbaleni699AP("hlavni", false);
+    nastavDocasneRozbaleni699AP("editor", false);
   }).observe(taskModal, { attributes: true, attributeFilter: ["hidden"] });
 
   window.LubaNoteEditorFind = Object.freeze({
+    nastavDocasneRozbaleni: nastavDocasneRozbaleni699AP,
     jeOtevrene,
     otevri,
     zavri: zavriPanel,

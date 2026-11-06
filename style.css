@@ -18977,3 +18977,10 @@ body.ln-luba-klavesnice-open .lnSyncRecoveryNotice683BX:not([hidden]) {
   .adminAutoDemo699E { grid-template-columns: 1fr; }
   .adminAutoDemo699EToggle { width: 100%; }
 }
+
+/* 699AP – vizuální rozbalení při hledání (hlavní hledání i hledání v editoru).
+ * DOM hidden atributy i modelový stav sbaleno zůstávají původní. Zobrazení
+ * se vrátí přesně do předchozího stavu po zavření hledání/editoru. */
+#taskModal.ln-v2-find-reveal-699ap .ln-v2-editor > .ln-v2-odstavec[data-ln-v2-bullet-uroven][hidden] {
+  display: block !important;
+}

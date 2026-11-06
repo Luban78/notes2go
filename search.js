@@ -591,6 +591,10 @@ function zvyrazniAktualniVyhledavaniVEditoru() {
   const hledanyText =
     ziskejAktivniHledanyText();
 
+  // 699AP: při otevření poznámky z hlavního hledání se dočasně
+  // zviditelní i text pod sbaleným Bulletem; po zavření se stav vrátí.
+  window.LubaNoteEditorFind?.nastavDocasneRozbaleni?.("hlavni", Boolean(hledanyText));
+
   if (!hledanyText) {
     return;
   }

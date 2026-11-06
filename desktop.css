@@ -3028,3 +3028,57 @@
   body.desktopNotesToolbarA .searchRow.searchExpanded .desktopCategoryActions > [data-area-filter="private"] { order: 3; }
   body.desktopNotesToolbarA .searchRow.searchExpanded .desktopCategoryActions > #favoriteFilterButton { order: 4; }
 }
+
+/* 699AP – PC editor: hledání vlevo, kompaktní datum + den v jednom
+ * tlačítku, čas s rezervou od pravého okraje, plocha +10 px na straně. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  #taskModal > .modalContent {
+    width: min(calc(90vw + 20px), calc(100vw - 16px), 1520px);
+    height: min(calc(95dvh + 20px), calc(100dvh - 16px), 1120px);
+  }
+
+  #taskModal .editorFindBar {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+  }
+
+  #taskModal .editorTopBar .dateTimeInputs {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0;
+    margin-left: auto;
+    margin-right: 0;
+    gap: 9px;
+  }
+
+  #taskModal .editorTopBar #modalDateButton {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 0 12px;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  #taskModal .editorTopBar #modalDateButton #modalWeekday {
+    flex: 0 0 auto;
+    width: auto !important;
+    min-width: 0 !important;
+    font-size: 0.85rem;
+    opacity: 0.8;
+  }
+
+  #taskModal .editorTopBar #modalDateButton #modalDateLabel {
+    flex: 0 0 auto;
+    width: auto !important;
+    min-width: 0;
+  }
+
+  #taskModal .editorTopBar #modalTimeButton {
+    flex: 0 0 88px !important;
+    width: 88px !important;
+    min-width: 88px !important;
+    max-width: 88px !important;
+  }
+}

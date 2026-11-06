@@ -92,6 +92,15 @@
 
   sestavDesktopNotesToolbar();
 
+  /* 699AP – PC: zkratku dne přesuneme dovnitř skutečného tlačítka data.
+   * Stávající updateModalWeekday() dál mění tentýž element; picker i
+   * hodnoty data/času se nemění. Na Androidu desktop.js tuto větev nespouští. */
+  const den699AP = document.getElementById("modalWeekday");
+  const datumTlacitko699AP = document.getElementById("modalDateButton");
+  if (den699AP && datumTlacitko699AP && den699AP.parentElement !== datumTlacitko699AP) {
+    datumTlacitko699AP.prepend(den699AP);
+  }
+
   /* PATCH 658AB – PC: vodorovné rolování uživatelských štítků kolečkem.
      Scrollbar zůstává vizuálně skrytý, ale běžné kolečko / touchpad
      posune řádek štítků do stran. Na krajích necháme událost projít dál,
