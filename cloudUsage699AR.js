@@ -59,8 +59,13 @@
   function reset(){
     for(const id of ['lnCuUsed699AR','lnCuLimit699AR','lnCuFree699AR']) find(id).textContent='—';
     fill.style.width='0%';bar.setAttribute('aria-valuenow','0');
-    categories.replaceChildren();notesList.replaceChildren();reserved.textContent='';
-    find('lnCuExact699AR').textContent='';
+    categories.replaceChildren();
+    // 699AV: Stejne tri radky existuji pred i po odpovedi serveru.
+    // Prazdne cislo neni stary cache ani odhad.
+    for(const nazev of ['Poznámky','Sdílená média','Přílohy']) radek(categories,nazev,'—');
+    notesList.replaceChildren();
+    reserved.textContent='Rezervované místo: —';
+    find('lnCuExact699AR').textContent='Přesná spotřeba: —';
     find('lnCuUpdated699AR').textContent='Zatím nenačteno';
   }
   function zmenStav(text){status.textContent=text;}

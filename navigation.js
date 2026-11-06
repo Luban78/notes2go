@@ -231,6 +231,9 @@
   const logoutButton =
     document.getElementById("logoutButton");
 
+  const stavLubaNoteMenu699AV =
+    document.getElementById("lnMainMenuCloudStatus699AV");
+
   const settingsModal =
     document.getElementById("settingsModal");
 
@@ -340,6 +343,18 @@
   aboutModal.addEventListener("click", (event) => {
     if (event.target === aboutModal) {
       aboutModal.hidden = true;
+    }
+  });
+
+  /* 699AV: Stejny uzivatelsky stav jako pri kliknuti na horni SYNC. */
+  stavLubaNoteMenu699AV?.addEventListener("click", () => {
+    closeMainMenu();
+    // Po zavreni stavu vratit fokus na viditelne tlacitko menu.
+    try { menuButton.focus({ preventScroll: true }); } catch (_) {}
+    if (typeof window.LubaNoteCloudUsage699AR?.otevri === "function") {
+      window.LubaNoteCloudUsage699AR.otevri();
+    } else {
+      showToast("Přehled LubaNote není dostupný");
     }
   });
 
