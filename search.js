@@ -80,8 +80,41 @@ function aktualizujPrazdnyVysledekVyhledavani() {
 }
 
 function prekresliVysledkyVyhledavani() {
+  // 699AN: měříme skutečnou cenu kompletního překreslení, ne délku dotazu.
+  // Do diagnostiky se neposílá text ani identifikace poznámek.
+  const start = performance.now();
   renderTasks();
+  const renderMs = performance.now() - start;
+  if (renderMs >= 100) {
+    window.LubaNoteStartupDiag?.zapis?.(
+      "PERF", `699AN SEARCH RENDER | ms=${Math.round(renderMs)} | apk=${window.Capacitor?.isNativePlatform?.() === true ? "Y" : "N"}`
+    );
+  }
   aktualizujPrazdnyVysledekVyhledavani();
+}
+
+/* 699AN – 200 ms pro PC (rychle vykreslování), 550 ms pro nativní APK.
+ * Při typickém psaní na mobilu je prodleva mezi znaky často přes 200 ms:
+ * předchozí časovač spouštěl celý render karet mezi jednotlivými klávesami.
+ * Text vstupuje do pole okamžitě, přepočet výsledků běží po pauze.
+ * Vždy se ruší předchozí timer; ochrany 699AM zůstávají. */
+const ODLOZENI_HLEDANI_699AN_MS =
+  window.Capacitor?.isNativePlatform?.() === true ? 550 : 200;
+let casovacHledani699AM = null;
+
+function zrusOdlozeneHledani699AM() {
+  const byloNaplanovano = casovacHledani699AM !== null;
+  if (byloNaplanovano) clearTimeout(casovacHledani699AM);
+  casovacHledani699AM = null;
+  return byloNaplanovano;
+}
+
+function naplanujOdlozeneHledani699AM() {
+  zrusOdlozeneHledani699AM();
+  casovacHledani699AM = setTimeout(() => {
+    casovacHledani699AM = null;
+    prekresliVysledkyVyhledavani();
+  }, ODLOZENI_HLEDANI_699AN_MS);
 }
 
 function aktivujVyhledavaniUzivatelem() {
@@ -284,28 +317,55 @@ searchNotes.addEventListener("input", () => {
   if (!vyhledavaniAktivovaneUzivatelem) {
     zajistiCisteNeaktivniVyhledavani();
     aktualizujTlacitkoMazaniVyhledavani();
-    prekresliVysledkyVyhledavani();
+    naplanujOdlozeneHledani699AM();
     return;
   }
 
+  // Text a krizkovy ovladac se meni hned; drahy render karet az po pauze.
   aktualizujTlacitkoMazaniVyhledavani();
-  prekresliVysledkyVyhledavani();
+  naplanujOdlozeneHledani699AM();
 });
 
-clearSearchButton?.addEventListener("click", () => {
+function zavriVyhledavaniKrizkem699AM() {
+  if (!searchNotes) return;
+  const byloVyhledavaniAktivni = vyhledavaniAktivovaneUzivatelem;
+  const meloText = searchNotes.value.length > 0;
+  const bylCekajiciRender = zrusOdlozeneHledani699AM();
+
   searchNotes.value = "";
   vyhledavaniAktivovaneUzivatelem = false;
   searchNotes.readOnly = true;
+
+  // 540/699AM – schovat klavesnici JESTE pred blur, ktery jinak prazdne
+  // hledani sbali a odebere krizek z DOM pred dorucenim udalosti click.
+  window.LubaNoteKeyboard?.skryj?.();
+  searchNotes.blur();
   nastavRozsireneVyhledavani(false);
   clearSearchButton.hidden = true;
 
-  // SEARCH CLOSE CONTRACT 540:
-  // Křížek ukončuje celé hledání, ne jen maže text.
-  // Proto musí zároveň vždy zavřít LubaKeyboard a zrušit focus pole.
-  window.LubaNoteKeyboard?.skryj?.();
-  searchNotes.blur();
+  // Pokud nebyl zadany jediny znak, nebyl zadny filtr ani duvod znovu
+  // renderovat vsechny karty – pri zavreni prazdneho hledani jen schovat IME.
+  if (byloVyhledavaniAktivni || meloText || bylCekajiciRender) {
+    prekresliVysledkyVyhledavani();
+  } else {
+    aktualizujPrazdnyVysledekVyhledavani();
+  }
+}
 
-  prekresliVysledkyVyhledavani();
+// Na Android WebView pointerdown predchazi automatickemu blur textoveho pole.
+// Zavreni provedeme uz zde – necekame na click, ktery se pri prazdnem poli
+// mohl ztratit, protoze blur mezitim skryl tlacitko.
+clearSearchButton?.addEventListener("pointerdown", (event) => {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  if (event.cancelable) event.preventDefault();
+  zavriVyhledavaniKrizkem699AM();
+});
+
+// Fallback pro Enter/Space, pristupnost a programove vyvolany click.
+clearSearchButton?.addEventListener("click", () => {
+  if (!jeVyhledavaniRozsirene() &&
+      !vyhledavaniAktivovaneUzivatelem && !searchNotes.value) return;
+  zavriVyhledavaniKrizkem699AM();
 });
 
 /*
@@ -318,9 +378,12 @@ searchNotes.addEventListener("blur", () => {
     return;
   }
 
+  // Pri odchodu z prazdneho pole nesmi zustat cekat render starych vysledku.
+  const bylCekajiciRender = zrusOdlozeneHledani699AM();
   vyhledavaniAktivovaneUzivatelem = false;
   searchNotes.readOnly = true;
   nastavRozsireneVyhledavani(false);
+  if (bylCekajiciRender) prekresliVysledkyVyhledavani();
 });
 
 /* 696U: On a cold load script.js has already rendered the cards once.
@@ -329,6 +392,7 @@ searchNotes.addEventListener("blur", () => {
  * old redraw so stale search filters cannot survive a navigation.
  */
 window.addEventListener("pageshow", (event) => {
+  zrusOdlozeneHledani699AM();
   const bylAktivniDotaz696U = vyhledavaniAktivovaneUzivatelem;
   vyhledavaniAktivovaneUzivatelem = false;
   nastavRozsireneVyhledavani(false);
@@ -378,6 +442,7 @@ function vycistiVyhledavaniPoZamknutiTajnehoRezimu() {
     return;
   }
 
+  zrusOdlozeneHledani699AM();
   searchNotes.value = "";
   searchNotes.readOnly = true;
   vyhledavaniAktivovaneUzivatelem = false;

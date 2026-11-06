@@ -2953,3 +2953,28 @@
   body.desktopNotesToolbarA .desktopCategoryActions { gap:9px !important; }
   body.desktopNotesToolbarA .searchActions { gap:10px !important; }
 }
+
+/* 699AN – desktop: rozšířit aktivní hledání nad toolbar, bez posouvání
+ * ostatních filtrů. V klidu platí všechna původní PC nastavení/Visual Lab.
+ * Mobilní kompaktní vyhledávání se nemění. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  body.desktopNotesToolbarA .searchRow {
+    position: relative;
+  }
+  body.desktopNotesToolbarA .searchRow.searchExpanded .searchBox {
+    position: absolute !important;
+    z-index: 60;
+    inset: 0 auto auto 0;
+    box-sizing: border-box;
+    width: min(calc(var(--ln-dnv-search-size, 420px) * 2), 100%) !important;
+    max-width: min(calc(var(--ln-dnv-search-size, 420px) * 2), 100%) !important;
+    min-width: 0 !important;
+    flex: none !important;
+    box-shadow: 0 8px 22px rgba(23, 19, 47, 0.16);
+  }
+  body.desktopNotesToolbarA .searchRow.searchExpanded .desktopCategoryActions,
+  body.desktopNotesToolbarA .searchRow.searchExpanded .searchActions {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
