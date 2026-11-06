@@ -326,6 +326,14 @@
     sourceStorageLabel?.textContent?.trim() || "Úložiště: Synchronizované"
   );
 
+  // 699BB – PC sidebar: stejny prehled synchronizace a kvoty jako v menu.
+  // Jen otevre existujici modal; zadne vlastni dotazy ani zmeny dat.
+  const desktopCloudStatusButton699BB = vytvorSidebarTlacitko(
+    "desktopCloudStatusButton699BB",
+    "obnovit",
+    "Stav LubaNote"
+  );
+
   const desktopLogoutButton = vytvorSidebarTlacitko(
     "desktopLogoutButton",
     "odhlasit",
@@ -351,6 +359,7 @@
     desktopCardSortButton,
     desktopStorageButton,
     divider,
+    desktopCloudStatusButton699BB,
     desktopLogoutButton,
     desktopAdminDashboardButton
   ].filter(Boolean);
@@ -423,6 +432,11 @@
     otevriPoznamkyNaPozadi();
     sourceStorageButton?.click();
     synchronizujDynamickePopisky();
+  });
+
+  desktopCloudStatusButton699BB?.addEventListener("click", () => {
+    // Funkce je nacitavana az na konci index.html; pri kliknuti uz existuje.
+    window.LubaNoteCloudUsage699AR?.otevri?.();
   });
 
   desktopLogoutButton?.addEventListener("click", () => {

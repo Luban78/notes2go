@@ -1,46 +1,94 @@
-/* 699BA – desktop-only correction for short browser windows.
-   No changes to mobile quick menu, note rendering or sync.
-   Compact the actual PC sidebar only when viewport height is limited. */
-@media (min-width: 1100px) and (hover: hover) and (pointer: fine) and (max-height: 820px) {
+/* 699BB – sjednoceny, kompaktni desktop pro ruzne DPI a vysky oken.
+ * Jen PC (mys/hover, sirka >= 1100 CSS px); bez zasahu do APK.
+ * Zachovava promenne PC Visual Labu, ale u prostorove narocnych
+ * prvku omezuje vysku na rozumny strop. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  /* SIDEBAR – stejny kompaktni zaklad na obou noteboocich.
+     Pri opravdu malem okne je scroll pojistka, ne vychozi stav. */
   .desktopSidebar {
-    padding-top: 14px !important;
-    padding-bottom: 9px !important;
+    padding-top: 10px !important;
+    padding-bottom: 8px !important;
   }
-
   .desktopSidebarBrand {
-    min-height: 46px;
-    margin-bottom: 12px;
+    min-height: 42px !important;
+    margin: 0 5px 9px !important;
+    gap: 9px;
   }
-
   .desktopSidebarLogo {
-    width: min(var(--ln-dnv-sidebar-logo-size, 50px), 42px) !important;
-    height: min(var(--ln-dnv-sidebar-logo-size, 50px), 42px) !important;
-    flex-basis: min(var(--ln-dnv-sidebar-logo-size, 50px), 42px) !important;
+    width: min(var(--ln-dnv-sidebar-logo-size, 50px), 40px) !important;
+    height: min(var(--ln-dnv-sidebar-logo-size, 50px), 40px) !important;
+    flex-basis: min(var(--ln-dnv-sidebar-logo-size, 50px), 40px) !important;
   }
-
   .desktopSidebarNavSecondary {
-    gap: min(var(--ln-dnv-sidebar-gap, 7px), 3px) !important;
+    gap: min(var(--ln-dnv-sidebar-gap, 7px), 4px) !important;
+    padding-right: 1px;
   }
-
   .desktopSidebarButton {
-    min-height: min(var(--ln-dnv-sidebar-item-height, 46px), 38px) !important;
-    padding-top: 2px;
-    padding-bottom: 2px;
+    min-height: min(var(--ln-dnv-sidebar-item-height, 46px), 40px) !important;
+    padding: 5px 9px !important;
+    line-height: 1.18;
   }
-
   .desktopSidebarDividerCompact {
-    margin-top: 6px !important;
-    margin-bottom: 4px !important;
+    margin: 5px 6px 3px !important;
   }
-
   .desktopSidebarFooter {
-    padding-top: 5px;
-    padding-bottom: 0;
+    padding: 5px 8px 0 !important;
   }
 
-  /* 699AR used fixed 250px, which pushes + too high on short laptops.
-     Keep it stationary when toast appears, but scale its height with viewport. */
+  /* HORNI CAST – datum/sync hned pod okrajem, vice mista pro karty.
+     Vlastni Y offset z PC Visual Labu zustava zachovan. */
+  .homeHeader {
+    padding-top: 6px !important;
+    padding-bottom: 4px !important;
+  }
+  body.desktopNotesToolbarA:has(#notesModuleButton.active) .homeHeader {
+    padding-top: calc(6px + var(--ln-dnv-layout-offsetY, 0px)) !important;
+  }
+  .homeHeader > #lnHomeDateTime683BC {
+    min-height: 40px !important;
+    padding: 4px 10px !important;
+    margin-bottom: 7px !important;
+  }
+  .homeHeader .moduleBar { margin-top: 0 !important; }
+  .homeHeader nav.moduleTabs { gap: 10px !important; }
+  .homeHeader nav.moduleTabs > .moduleTab,
+  body:has(#notesModuleButton.active) .homeHeader nav.moduleTabs > .moduleTab {
+    height: min(var(--ln-dnv-modules-size, 54px), 48px) !important;
+    min-height: 44px !important;
+  }
+  body.desktopNotesToolbarA .searchRow {
+    margin-top: 8px !important;
+  }
+  body.desktopNotesToolbarA .searchRow .searchBox,
+  body.desktopNotesToolbarA .desktopCategoryActions,
+  body.desktopNotesToolbarA .desktopCategoryActions .categoryTab,
+  body.desktopNotesToolbarA .searchActions > button {
+    height: min(var(--ln-dnv-layout-toolbarVyska, 50px), 46px) !important;
+    min-height: 0 !important;
+  }
+  body.desktopNotesToolbarA #searchNotes {
+    height: calc(min(var(--ln-dnv-layout-toolbarVyska, 50px), 46px) - 2px) !important;
+  }
+  body.desktopNotesToolbarA .categoryTabs {
+    margin-top: min(var(--ln-dnv-layout-toolbarStitkyMezera, 8px), 5px) !important;
+    padding-bottom: 1px !important;
+  }
+  body.desktopNotesToolbarA #tagFilterButtons .categoryTab {
+    height: min(var(--ln-dnv-tags-size, 38px), 35px) !important;
+    min-height: min(var(--ln-dnv-tags-size, 38px), 35px) !important;
+  }
+  body.desktopNotesToolbarA #pinnedCards {
+    margin-top: min(var(--ln-dnv-layout-stitkyKartyMezera, 10px), 7px) !important;
+  }
+
+  /* PRIPOMINKA dole; + stale ve stejne vysce nad jejim mistem.
+     Bez JS presouvani, bez 28dvh, bez poskakovani pri zobrazeni toastu. */
+  #lnPcReminderToast692C:not([hidden]) {
+    bottom: 12px !important;
+    right: 18px !important;
+  }
   body:has(#notesModuleButton.active) #addTaskButton {
-    bottom: clamp(178px, 28dvh, 220px) !important;
+    bottom: 226px !important;
+    right: 22px !important;
   }
 }
