@@ -8,8 +8,9 @@
   transform: translate(-50%, -50%) !important;
   z-index: 24001 !important;
   box-sizing: border-box;
-  width: min(420px, calc(100vw - 28px));
-  max-height: min(84dvh, 720px);
+  /* 699AW varianta A: uzsi sloupec, stale uprostred. */
+  width: min(336px, calc(100vw - 56px));
+  max-height: min(88dvh, 760px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 12px;
