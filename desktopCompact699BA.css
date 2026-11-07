@@ -112,3 +112,80 @@
     right: 22px !important;
   }
 }
+
+/* 699BE – pouze PC, bez zmeny APK a bez zmeny logiky karet. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  /* Svisle vystredeni znacky; nechat menu vyplnit vysku bez obrich mezer. */
+  .desktopSidebarBrand { display:flex !important; align-items:center !important; padding-top:0 !important; padding-bottom:0 !important; }
+  .desktopSidebarBrandText { align-self:center !important; line-height:1.15 !important; }
+  .desktopSidebarNavSecondary {
+    justify-content: space-evenly !important;
+    gap: clamp(5px, .65vh, 10px) !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+  /* Stavajici FAB zustava stejne tlacitko se stejnym click handlerem.
+     V PC je ukotveno v levem panelu nad patickou. */
+  body:has(#notesModuleButton.active) #addTaskButton {
+    position: fixed !important;
+    left: 16px !important;
+    right: auto !important;
+    bottom: 39px !important;
+    width: 204px !important;
+    height: 43px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    border-radius: 12px !important;
+    font-size: 0 !important;
+    line-height: 1 !important;
+    z-index: 1810 !important;
+  }
+  body:has(#notesModuleButton.active) #addTaskButton::after {
+    content: '+  Nová poznámka';
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .desktopSidebarNavSecondary { padding-bottom: 57px !important; }
+}
+
+/* Uzsi desktopova sirka: pouze jemne upravit hledani a vizualni styly.
+   Nemeni breakpoint leveho panelu ani mobilni APK (dotykovy vstup). */
+@media (min-width: 800px) and (max-width: 1099.98px) and (hover: hover) and (pointer: fine) {
+  body.desktopNotesToolbarA .searchRow { display:flex !important; flex-wrap:nowrap !important; gap:5px !important; min-width:0 !important; }
+  body.desktopNotesToolbarA .searchRow .searchBox {
+    flex: 1 1 75px !important;
+    width: 75px !important;
+    min-width: 75px !important;
+    max-width: none !important;
+    box-sizing: border-box !important;
+  }
+  body.desktopNotesToolbarA .desktopCategoryActions { flex: 0 0 auto !important; gap:4px !important; }
+  body.desktopNotesToolbarA .desktopCategoryActions .categoryTab {
+    width: 43px !important; min-width:43px !important; flex-basis:43px !important;
+    height:44px !important; min-height:44px !important;
+    padding:0 4px !important; border-radius:12px !important;
+  }
+  body.desktopNotesToolbarA .searchActions { flex:0 0 auto !important; gap:4px !important; margin-left:0 !important; }
+  body.desktopNotesToolbarA .searchActions > button {
+    width:43px !important; min-width:43px !important; height:44px !important;
+    min-height:44px !important; padding:0 4px !important;
+    border-radius:12px !important;
+  }
+  body.desktopNotesToolbarA .desktopCategoryActions #lnDesktopNewTag693B {
+    min-width: 94px !important; width:auto !important; height:44px !important;
+    padding:0 7px !important; border-radius:12px !important;
+    border:1px solid var(--color-border) !important;
+    background:var(--color-surface) !important;
+    color:var(--color-text) !important;
+    font:inherit !important; font-weight:600 !important;
+    white-space:nowrap !important; box-sizing:border-box !important;
+  }
+  /* Barevna paleta v hlavicce, ne bile systemove tlacitko. */
+  #lnDesktopPaletteButton693B, #lnDesktopPaletteButton693C {
+    border:1px solid var(--color-border) !important;
+    border-radius:12px !important;
+    background:var(--color-surface) !important;
+    color:var(--color-text) !important;
+  }
+}
