@@ -1,4 +1,4 @@
-/* 699BB – sjednoceny, kompaktni desktop pro ruzne DPI a vysky oken.
+/* 699BB + 699BD – kompaktni desktop s vyvazenou vyskou leveho panelu.
  * Jen PC (mys/hover, sirka >= 1100 CSS px); bez zasahu do APK.
  * Zachovava promenne PC Visual Labu, ale u prostorove narocnych
  * prvku omezuje vysku na rozumny strop. */
@@ -20,13 +20,19 @@
     flex-basis: min(var(--ln-dnv-sidebar-logo-size, 50px), 40px) !important;
   }
   .desktopSidebarNavSecondary {
-    gap: min(var(--ln-dnv-sidebar-gap, 7px), 4px) !important;
+    /* 699BD: polozky rovnomerne vyplni volnou vysku mezi logem a
+       statusovou patickou. Pri nedostatku vysky zustava scroll pojistkou. */
+    justify-content: space-between;
+    gap: clamp(7px, 1.1vh, 15px) !important;
+    padding-top: clamp(12px, 2.4vh, 24px);
+    padding-bottom: clamp(9px, 1.8vh, 18px);
     padding-right: 1px;
   }
   .desktopSidebarButton {
     min-height: min(var(--ln-dnv-sidebar-item-height, 46px), 40px) !important;
     padding: 5px 9px !important;
     line-height: 1.18;
+    flex-shrink: 0;
   }
   .desktopSidebarDividerCompact {
     margin: 5px 6px 3px !important;
@@ -70,15 +76,29 @@
     height: calc(min(var(--ln-dnv-layout-toolbarVyska, 50px), 46px) - 2px) !important;
   }
   body.desktopNotesToolbarA .categoryTabs {
-    margin-top: min(var(--ln-dnv-layout-toolbarStitkyMezera, 8px), 5px) !important;
-    padding-bottom: 1px !important;
+    /* Puvodnich 5 px lepilo stitky k radku hledani a rychlych filtru. */
+    margin-top: 12px !important;
+    padding-bottom: 3px !important;
   }
   body.desktopNotesToolbarA #tagFilterButtons .categoryTab {
     height: min(var(--ln-dnv-tags-size, 38px), 35px) !important;
     min-height: min(var(--ln-dnv-tags-size, 38px), 35px) !important;
   }
   body.desktopNotesToolbarA #pinnedCards {
-    margin-top: min(var(--ln-dnv-layout-stitkyKartyMezera, 10px), 7px) !important;
+    margin-top: min(var(--ln-dnv-layout-stitkyKartyMezera, 10px), 10px) !important;
+  }
+  /* Karty jako pri 100 %: zachovat velikost textu a tvar, zabranit
+     jen nadmernemu rozvolneni kvuli ulozenym hodnotam PC Visual Labu. */
+  body.desktopNotesToolbarA .taskCard {
+    padding: min(var(--ln-dnv-cards-size, 16px), 16px) !important;
+  }
+  body.desktopNotesToolbarA .pinnedCards:not(.listView) #pinnedLeft,
+  body.desktopNotesToolbarA .pinnedCards.listView #pinnedLeft {
+    column-gap: min(var(--ln-dnv-layout-kartySloupceMezera, 14px), 14px) !important;
+    row-gap: min(var(--ln-dnv-layout-kartyRadkyMezera, 14px), 14px) !important;
+  }
+  body.desktopNotesToolbarA .desktopMasonryColumn {
+    gap: min(var(--ln-dnv-layout-kartyRadkyMezera, 14px), 14px) !important;
   }
 
   /* PRIPOMINKA dole; + stale ve stejne vysce nad jejim mistem.
