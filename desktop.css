@@ -3354,3 +3354,16 @@
     white-space: nowrap !important;
   }
 }
+
+/* 699BG-M: sirka data podle obsahu pouze ve dvouskupinovem PC editoru.
+   !important prebiji starsi pevnou sirku 220 px z 699BG-K. */
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  #taskModal.lnEditorTwoGroups699BI .editorTopBar #modalDateButton {
+    flex: 0 0 auto !important;
+    width: max-content !important;
+    min-width: max-content !important;
+    max-width: none !important;
+    padding-inline: 12px !important;
+    overflow: visible !important;
+  }
+}
