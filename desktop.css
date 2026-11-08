@@ -3120,10 +3120,11 @@
   }
   body.desktopNotesToolbarA .searchRow .searchBox {
     box-sizing: border-box !important;
-    flex: 0 0 52px !important;
-    width: 52px !important;
+    /* 699BG-D: hledani vyplni zbyvajici misto v jedinem radku. */
+    flex: 1 1 52px !important;
+    width: auto !important;
     min-width: 52px !important;
-    max-width: 52px !important;
+    max-width: none !important;
     overflow: hidden !important;
   }
   body.desktopNotesToolbarA .searchRow.searchExpanded .searchBox,
