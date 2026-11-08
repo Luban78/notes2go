@@ -3287,7 +3287,10 @@
   }
 
   #taskModal.lnEditorTwoGroups699BI .editorTopBar #modalDateButton {
-    flex: 0 0 136px;
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: 170px;
+    max-width: none;
     box-sizing: border-box;
     min-width: 0;
     padding: 0 5px;
@@ -3305,5 +3308,17 @@
   #taskModal.lnEditorTwoGroups699BI .editorTopBar .editorTopActions {
     flex: 0 0 auto;
     margin-left: 0;
+  }
+}
+
+/* 699BG-J: datum v kompaktnim PC editoru nesmi mit oriznuty rok.
+   Siroka PC lista i Android zustavaji beze zmeny. */
+@media (min-width: 900px) {
+  #taskModal.lnEditorTwoGroups699BI .editorTopBar #modalDateButton #modalDateLabel {
+    width: max-content;
+    min-width: max-content;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
   }
 }
