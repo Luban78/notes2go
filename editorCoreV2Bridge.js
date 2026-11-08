@@ -1467,6 +1467,43 @@
     return window.innerWidth >= 900;
   }
 
+  /* 699BG-I: rozhoduj podle obsahu, ne podle procent zoomu nebo pevne sirky.
+   * Docasne merit prirozenou sirku OBOU skupin, i kdyz je jedna skryta.
+   * Behem jedine synchronni operace se nic nevykresli na obrazovku.
+   */
+  function potrebujeDveSkupinyV2(textToolbar, toolsToolbar, datumCas) {
+    const horni = taskModal.querySelector('.editorTopBar');
+    if (!horni || horni.clientWidth <= 0) return false;
+    const akce = horni.querySelector('.editorTopActions');
+    const rozsah = Number.parseFloat(getComputedStyle(horni).columnGap) || 0;
+    const merit = (el) => {
+      if (!el) return 0;
+      const pred = {
+        hidden: el.hidden,
+        flex: el.style.flex,
+        width: el.style.width,
+        minWidth: el.style.minWidth,
+        maxWidth: el.style.maxWidth
+      };
+      el.hidden = false;
+      el.style.flex = 'none';
+      el.style.width = 'max-content';
+      el.style.minWidth = 'max-content';
+      el.style.maxWidth = 'none';
+      const sirka = el.getBoundingClientRect().width;
+      el.style.flex = pred.flex;
+      el.style.width = pred.width;
+      el.style.minWidth = pred.minWidth;
+      el.style.maxWidth = pred.maxWidth;
+      el.hidden = pred.hidden;
+      return sirka;
+    };
+    const potreba = merit(textToolbar) + merit(toolsToolbar) +
+      merit(datumCas) + (akce?.getBoundingClientRect().width || 0) +
+      3 * rozsah + 8;
+    return potreba > horni.clientWidth;
+  }
+
   function nastavToolbarV2(rezim = "cas") {
     const tlacitko = document.getElementById("editorToolbarToggle");
     const textToolbar = document.getElementById("editorQuickToolbar");
@@ -1477,16 +1514,36 @@
 
     const jeSdilenyEditor = taskModal.classList.contains("sharingEditorMode");
 
+    /* Na mobilu se zachovavaji puvodni tri rezimy. */
+    taskModal.classList.remove('lnEditorTwoGroups699BI');
     if (jeDesktopToolbarV2()) {
       datumCas.hidden = false;
-      textToolbar.hidden = false;
-      toolsToolbar.hidden = false;
-      tlacitko.hidden = true;
       if (pripominka) pripominka.hidden = false;
+      if (potrebujeDveSkupinyV2(textToolbar, toolsToolbar, datumCas)) {
+        taskModal.classList.add('lnEditorTwoGroups699BI');
+        rezimToolbaruV2 = rezim === 'nastroje' ? 'nastroje' : 'text';
+        const jeText = rezimToolbaruV2 === 'text';
+        textToolbar.hidden = !jeText;
+        toolsToolbar.hidden = jeText;
+        tlacitko.hidden = false;
+        tlacitko.textContent = 'Aa';
+        tlacitko.setAttribute('aria-label', jeText ? 'Zobrazit další nástroje' : 'Zobrazit formátování');
+        tlacitko.setAttribute('title', jeText ? 'Další nástroje' : 'Formátování');
+        tlacitko.setAttribute('aria-pressed', String(!jeText));
+        tlacitko.setAttribute('aria-expanded', 'false');
+        tlacitko.classList.toggle('active', !jeText);
+      } else {
+        textToolbar.hidden = false;
+        toolsToolbar.hidden = false;
+        tlacitko.hidden = true;
+        tlacitko.removeAttribute('title');
+      }
       zavriPanelyFormatu();
       return true;
     }
 
+    // Po prechodu z uzkeho PC na mobil vratime i puvodni mobilni popisek.
+    tlacitko.removeAttribute('title');
     if (jeSdilenyEditor && rezim === "cas") rezim = "nastroje";
     if (!["cas", "text", "nastroje"].includes(rezim)) rezim = "cas";
     rezimToolbaruV2 = rezim;
@@ -1540,6 +1597,10 @@
   }
 
   function cyklujToolbarV2() {
+    if (jeDesktopToolbarV2() && taskModal.classList.contains('lnEditorTwoGroups699BI')) {
+      nastavToolbarV2(rezimToolbaruV2 === 'text' ? 'nastroje' : 'text');
+      return;
+    }
     const jeSdilenyEditor = taskModal.classList.contains("sharingEditorMode");
     if (jeSdilenyEditor) {
       nastavToolbarV2(rezimToolbaruV2 === "text" ? "nastroje" : "text");
@@ -4905,6 +4966,21 @@
         zapisV2Stabilitu(`TOOLBAR_${typ.toUpperCase()}`, `id=${lista.id} left=${Math.round(lista.scrollLeft)} cw=${lista.clientWidth} sw=${lista.scrollWidth}`);
       }, { passive: true });
     });
+  });
+
+  /* 699BG-I: kdyz je jedna skupina delsi nez misto vedle data,
+   * lze ji na PC posouvat i koleckem mysi, nikoliv jen touchpadem. */
+  ['editorQuickToolbar', 'editorToolsToolbar'].forEach((id) => {
+    const lista = document.getElementById(id);
+    lista?.addEventListener('wheel', (event) => {
+      if (!taskModal.classList.contains('lnEditorTwoGroups699BI') ||
+          event.ctrlKey || event.altKey ||
+          Math.abs(event.deltaY) <= Math.abs(event.deltaX) ||
+          lista.scrollWidth <= lista.clientWidth + 1) return;
+      const bylo = lista.scrollLeft;
+      lista.scrollLeft += event.deltaY;
+      if (lista.scrollLeft !== bylo) event.preventDefault();
+    }, { passive: false });
   });
 
   window.addEventListener("resize", () => {
