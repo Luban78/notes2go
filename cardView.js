@@ -6,7 +6,7 @@ function applyCardView() {
   pinnedCards.classList.toggle("listView", cardView === "list");
 }
 function updateCardViewButton() {
-  const desktop693C = window.matchMedia("(min-width: 1100px) and (hover: hover) and (pointer: fine)").matches;
+  const desktop693C = window.matchMedia("(min-width: 900px) and (hover: hover) and (pointer: fine)").matches;
   if (desktop693C) {
     // 4 columns = 8 squares; 3 columns = 6 squares. Current mode, not next mode.
     const columns = cardView === "list" ? 3 : 4;
