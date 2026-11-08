@@ -3286,14 +3286,18 @@
     gap: 4px;
   }
 
+  /* 699BG-K: PC - den v tydnu i CELE datum v jednom tlacitku.
+   * Puvodni pravidlo z desktop.css obsahuje !important, proto je
+   * nutne jej prebit stejnou prioritou, ale JEN v rezimu dvou skupin.
+   * Bez teto tridy (napr. siroke PC, 125 % kdyz se vse vejde)
+   * zachovavame puvodni rozmery. */
   #taskModal.lnEditorTwoGroups699BI .editorTopBar #modalDateButton {
-    flex: 0 0 auto;
-    width: max-content;
-    min-width: 170px;
-    max-width: none;
     box-sizing: border-box;
-    min-width: 0;
-    padding: 0 5px;
+    flex: 0 0 220px !important;
+    width: 220px !important;
+    min-width: 220px !important;
+    max-width: 220px !important;
+    padding: 0 10px;
     overflow: hidden;
   }
 
