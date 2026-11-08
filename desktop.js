@@ -6,8 +6,10 @@
 ================================================== */
 
 (() => {
+  /* 699BG-E: sestavit desktopovou listu i na uzsim PC (900-1099 CSS px).
+     Ostatni desktopove inicializace zustavaji na puvodni hranici 1100 px. */
   const desktopRezim = window.matchMedia(
-    "(min-width: 1100px) and (hover: hover) and (pointer: fine)"
+    "(min-width: 900px) and (hover: hover) and (pointer: fine)"
   );
 
   if (!desktopRezim.matches) {
