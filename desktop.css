@@ -3326,3 +3326,31 @@
     white-space: nowrap;
   }
 }
+
+/* 699BG-L – den v tydnu nesmi roztahnout obsah datumoveho tlacitka.
+   Plati pouze pri aktivnim rozdeleni PC nastroju do dvou skupin. */
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  #taskModal.lnEditorTwoGroups699BI .editorTopBar #modalDateButton {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+  }
+  #taskModal.lnEditorTwoGroups699BI .editorTopBar #modalDateButton #modalWeekday {
+    display: inline-block !important;
+    flex: 0 0 auto !important;
+    width: max-content !important;
+    min-width: 0 !important;
+    max-width: max-content !important;
+    white-space: nowrap !important;
+  }
+  #taskModal.lnEditorTwoGroups699BI .editorTopBar #modalDateButton #modalDateLabel {
+    display: inline-block !important;
+    flex: 0 0 auto !important;
+    width: max-content !important;
+    min-width: max-content !important;
+    max-width: none !important;
+    white-space: nowrap !important;
+  }
+}
