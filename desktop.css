@@ -3241,3 +3241,34 @@
     border-radius: 12px !important;
   }
 }
+
+
+/* 699BG-H – PC editor: při vyšším přiblížení musí datum a čas zůstat
+ * dostupné; pouze dlouhé řady formátovacích nástrojů se posouvají.
+ * Bez změn mobilního editoru, Core V2 a ovládání data/času. */
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  #taskModal .editorTopBar {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #taskModal .editorTopBar #editorQuickToolbar,
+  #taskModal .editorTopBar #editorToolsToolbar {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+  }
+
+  #taskModal .editorTopBar .dateTimeInputs {
+    flex: 0 0 auto !important;
+    margin-left: auto;
+  }
+
+  #taskModal .editorTopBar .editorTopActions {
+    flex: 0 0 auto;
+    margin-left: 0;
+  }
+}
