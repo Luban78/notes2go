@@ -23,7 +23,7 @@
     <h3>Co zabírá místo</h3><div id="lnCuCategories699AR" class="lnCloudUsageBreakdown699AR"></div>
     <p id="lnCuReserved699AR" class="lnCloudUsageHint699AR"></p>
     <details id="lnCuNotesDetail699AR"><summary>Největší poznámky (orientačně)</summary>
-      <p class="lnCloudUsageHint699AR">Odhad délky místního obsahu, nikoliv přesná velikost na serveru. E2E a přílohy mohou zabírat jiné množství dat. Tajné a pouze místní poznámky zde nezobrazujeme.</p>
+      <p class="lnCloudUsageHint699AR">Velikosti poznámek jsou orientační. Skutečná spotřeba na serveru se může lišit kvůli šifrování a přílohám. Poznámky uložené pouze v zařízení nejsou zahrnuty.</p>
       <div id="lnCuNotes699AR" class="lnCloudUsageBreakdown699AR"></div></details>
     <div class="lnCloudUsageActions699AR"><button type="button" id="lnCuRefresh699AR">Aktualizovat</button>
       <span id="lnCuUpdated699AR">Zatím nenačteno</span></div>
@@ -65,6 +65,8 @@
     for(const nazev of ['Poznámky','Sdílená média','Přílohy']) radek(categories,nazev,'—');
     notesList.replaceChildren();
     reserved.textContent='Rezervované místo: —';
+    reserved.hidden=true;
+    reserved.style.display='none';
     find('lnCuExact699AR').textContent='Přesná spotřeba: —';
     find('lnCuUpdated699AR').textContent='Zatím nenačteno';
   }
@@ -113,7 +115,7 @@
       const safe=v=>Number.isFinite(v)&&v>=0?v:null;
       const breakdown=[['Poznámky',data.note_bytes==null?null:safe(note)],['Sdílená média',data.shared_media_bytes==null?null:safe(media)],['Přílohy',data.attachment_bytes==null?null:safe(att)]];
       find('lnCuUsed699AR').textContent=format(used);
-      find('lnCuExact699AR').textContent=`Přesně podle serverového výpočtu: ${Math.round(used).toLocaleString('cs-CZ')} B. Zaokrouhlení na MB může skrýt malé změny.`;
+      find('lnCuExact699AR').textContent=`Přesná spotřeba na serveru: ${Math.round(used).toLocaleString('cs-CZ')} B.`;
       find('lnCuLimit699AR').textContent=limit===null?'Bez limitu':format(limit);
       find('lnCuFree699AR').textContent=limit===null?'Bez stanoveného limitu':format(Math.max(0,limit-used));
       const percent=limit===null?0:Math.max(0,Math.min(100,Math.round(used*100/limit)));
@@ -127,6 +129,8 @@
         if(difference< -1)radek(categories,'Rozdíl v metodice výpočtu',`−${format(-difference)}`);
       }
       const reservedBytes=data.reserved_bytes==null?null:safe(Number(data.reserved_bytes));
+      reserved.hidden=reservedBytes===0;
+      reserved.style.display=reservedBytes===0?'none':'';
       reserved.textContent=reservedBytes===null?'Rezervace místa: údaj není dostupný.':`Rezervované místo: ${format(reservedBytes)} (podle serverové funkce mimo zobrazenou spotřebu).`;
       const stamp=new Date().toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
       find('lnCuUpdated699AR').textContent=`Aktualizováno v ${stamp}`;
