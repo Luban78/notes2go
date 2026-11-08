@@ -236,8 +236,10 @@
 ================================================== */
 
 (() => {
+  /* 699BG-F: Nastroje sidebaru sestavit uz od 900 px, aby byly
+     pripravene i pri prechodu z uzsiho okna nad 1100 px bez F5. */
   const desktopRezim = window.matchMedia(
-    "(min-width: 1100px) and (hover: hover) and (pointer: fine)"
+    "(min-width: 900px) and (hover: hover) and (pointer: fine)"
   );
 
   if (!desktopRezim.matches) {
@@ -445,15 +447,33 @@
     sourceLogoutButton?.click();
   });
 
-  if (mainMenuButton) {
-    mainMenuButton.hidden = true;
-    mainMenuButton.setAttribute("aria-hidden", "true");
-    mainMenuButton.setAttribute("tabindex", "-1");
+  /* 699BG-F: Na uzsim PC musi zustat menu pristupne.
+     Pri prekroceni 1100 px jej skryje desktop CSS a sidebar
+     uz ma vsechny polozky. Pri navratu pod 1100 obnovime pristupnost. */
+  const sirokyDesktop699BGF = window.matchMedia(
+    "(min-width: 1100px) and (hover: hover) and (pointer: fine)"
+  );
+  function nastavMenu699BGF() {
+    const siroky = sirokyDesktop699BGF.matches;
+    if (mainMenuButton) {
+      mainMenuButton.hidden = siroky;
+      if (siroky) {
+        mainMenuButton.setAttribute("aria-hidden", "true");
+        mainMenuButton.setAttribute("tabindex", "-1");
+      } else {
+        mainMenuButton.removeAttribute("aria-hidden");
+        mainMenuButton.removeAttribute("tabindex");
+      }
+    }
+    if (mainMenu && siroky) {
+      mainMenu.hidden = true;
+      mainMenu.setAttribute("aria-hidden", "true");
+    } else if (mainMenu) {
+      mainMenu.removeAttribute("aria-hidden");
+    }
   }
-  if (mainMenu) {
-    mainMenu.hidden = true;
-    mainMenu.setAttribute("aria-hidden", "true");
-  }
+  nastavMenu699BGF();
+  sirokyDesktop699BGF.addEventListener?.("change", nastavMenu699BGF);
 })();
 
 
