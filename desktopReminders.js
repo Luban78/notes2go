@@ -8,11 +8,16 @@
 (() => {
   "use strict";
 
+  /* 699BG-P: webovy PC rezim od 900 CSS px; dotykove/nativni APK nechat beze zmen.
+   * Inicializace se provede jednou i po zmene sirky/zoomu bez F5. */
   const desktopRezim = window.matchMedia(
-    "(min-width: 1100px) and (hover: hover) and (pointer: fine)"
+    "(min-width: 900px) and (hover: hover) and (pointer: fine)"
   );
+  if (document.body.classList.contains("nativeApp") ||
+      window.Capacitor?.isNativePlatform?.()) return;
 
-  if (!desktopRezim.matches) return;
+  function inicializujPcPripominky699BP() {
+    if (!desktopRezim.matches) return;
 
   const screen = document.getElementById("remindersScreen");
   const puvodniToolbar = screen?.querySelector(".remindersToolbar");
@@ -562,4 +567,13 @@
 
   window.LubaNoteIcons?.naplnDeklarovaneIkony?.(layout);
   vykresli();
+  }
+
+  inicializujPcPripominky699BP();
+  /* Umoznuje prechod z puvodne uzkeho okna do PC rezimu bez refresh. */
+  if (typeof desktopRezim.addEventListener === "function") {
+    desktopRezim.addEventListener("change", inicializujPcPripominky699BP);
+  } else if (typeof desktopRezim.addListener === "function") {
+    desktopRezim.addListener(inicializujPcPripominky699BP);
+  }
 })();

@@ -1730,7 +1730,7 @@
    beze změny. Původní toolbar + Dnes/Zítra/Později zůstávají
    v DOM jako funkční fallback, na PC je nahrazuje časová osa.
    ========================================================== */
-@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
   body.desktopRemindersTimelineReady #remindersScreen:not([hidden]) {
     display: block;
     width: min(100%, 1180px);
@@ -3563,5 +3563,142 @@ body.desktopNotesToolbarA .categoryTabs[hidden] {
     gap: 6px;
     padding: 7px 0;
     font-size: 0.88rem;
+  }
+}
+
+
+/* 699BG-P – Připomínky na kompaktním PC (např. 150 % zoom).
+ * Stejná dvousloupcová PC časová osa jako na 100/125 %, jen kompaktnější.
+ * Bez zásahu do Androidu, dotykových zařízení a širokého PC. */
+@media (min-width: 900px) and (max-width: 1099px) and (hover: hover) and (pointer: fine) {
+  body.desktopRemindersTimelineReady #remindersScreen:not([hidden]) {
+    display: block;
+    box-sizing: border-box;
+    width: min(100%, 100vw);
+    max-width: none;
+    height: calc(100dvh - 172px);
+    min-height: 0;
+    margin: 0 auto;
+    padding: 0 12px 8px;
+    overflow: hidden;
+    background: transparent;
+  }
+  #remindersScreen .desktopRemindersLayout {
+    display: grid;
+    grid-template-columns: minmax(188px, 26%) minmax(0, 1fr);
+    gap: 10px;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+  #remindersScreen .desktopRemindersFilterPanel,
+  #remindersScreen .desktopRemindersTimelinePanel {
+    min-width: 0;
+    min-height: 0;
+  }
+  #remindersScreen .desktopRemindersFilterPanel {
+    padding: 9px;
+    overflow: hidden;
+  }
+  #remindersScreen .desktopRemindersFilterPanel h2 {
+    font-size: 1rem;
+    margin: 0;
+  }
+  #remindersScreen .desktopReminderSearch {
+    flex: 0 0 auto;
+    min-height: 36px;
+    margin: 7px 0;
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+  #remindersScreen .desktopReminderSearch input {
+    height: 34px;
+    font-size: 0.8rem;
+  }
+  #remindersScreen .desktopReminderFilterList {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0 3px 5px 0;
+    gap: 4px;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  #remindersScreen .desktopReminderFilterButton {
+    min-height: 35px;
+    gap: 5px;
+    grid-template-columns: 19px minmax(0, 1fr) auto;
+    padding: 3px 7px;
+    font-size: 0.78rem;
+  }
+  #remindersScreen .desktopRemindersTimelinePanel {
+    padding: 9px;
+  }
+  #remindersScreen .desktopRemindersTimelineHeader {
+    min-height: 39px;
+    gap: 5px;
+    margin-bottom: 7px;
+  }
+  #remindersScreen .desktopRemindersTimelineHeader h2 {
+    font-size: 1rem;
+  }
+  #remindersScreen .desktopReminderTimelineActions {
+    gap: 3px;
+  }
+  #remindersScreen .desktopReminderTimelineActions > button {
+    min-width: 30px;
+    height: 34px;
+    padding: 0 6px;
+    font-size: 0.8rem;
+  }
+  #remindersScreen .desktopReminderTimelineActions .desktopReminderAdd {
+    min-width: 76px;
+    padding-inline: 6px;
+  }
+  #remindersScreen .desktopReminderCalendarPopover {
+    width: min(286px, 72vw);
+    box-sizing: border-box;
+  }
+  #remindersScreen .desktopReminderTimelineScroll {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+  }
+  #remindersScreen .desktopReminderTimelineRow.reminderItem {
+    grid-template-columns: 56px minmax(0, 1fr) minmax(70px, auto) 28px;
+    column-gap: 5px;
+    min-height: 42px;
+    padding: 6px;
+    font-size: 0.81rem;
+  }
+  #remindersScreen .desktopReminderBadges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 3px;
+    width: auto;
+    min-width: 0;
+  }
+  #remindersScreen .desktopReminderBadgeSlot {
+    width: auto;
+    min-width: 0;
+  }
+  #remindersScreen .desktopReminderRepeatBadge,
+  #remindersScreen .desktopReminderAreaBadge {
+    width: auto;
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 0.68rem;
+  }
+  #remindersScreen .desktopReminderDayTitle {
+    font-size: 0.85rem;
+  }
+}
+
+/* Pokud se PC okno zmenší pod hranici desktopového rozložení, znovu
+ * zobrazit původní responzivní Připomínky a PC časovou osu skrýt. */
+@media (max-width: 899px), (hover: none), (pointer: coarse) {
+  #desktopRemindersTimeline {
+    display: none !important;
   }
 }
