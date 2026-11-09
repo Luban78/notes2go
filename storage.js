@@ -1779,6 +1779,20 @@ function odstranPlanovanePolozkyPoznamek(idsPoznamek) {
   );
 }
 
+async function uklidPoSmazaniPoznamek699BGV(noteIds, notificationIds) {
+  if (typeof window.uklidUpozorneniSmazanychPoznamek699BGV === "function") {
+    try {
+      await window.uklidUpozorneniSmazanychPoznamek699BGV(
+        [...noteIds].filter(Boolean), [...notificationIds]
+      );
+      return;
+    } catch (error) {
+      console.warn("699BG-V: úklid upozornění se nezdařil", error);
+    }
+  }
+  zrusNotifikaceNaPozadi(notificationIds);
+}
+
 function zrusNotifikaceNaPozadi(notificationIds) {
   if (
     !(notificationIds instanceof Set) ||
@@ -1838,8 +1852,11 @@ async function deleteTask(index) {
     new Set([taskToDelete.id].filter(Boolean))
   );
 
-  await saveAllTasks(tasks);
-  zrusNotifikaceNaPozadi(notificationIds);
+  const ulozeno699BGV = await saveAllTasks(tasks);
+  if (ulozeno699BGV === false) return false;
+  await uklidPoSmazaniPoznamek699BGV(
+    new Set([taskToDelete.id]), notificationIds
+  );
 
   /*
    * PATCH 488 – přesun do Koše je obsahová změna, ne tombstone.
@@ -1960,7 +1977,9 @@ async function deleteTasksByIds(ids) {
     };
   }
 
-  zrusNotifikaceNaPozadi(notificationIds);
+  await uklidPoSmazaniPoznamek699BGV(
+    new Set(mazanePoznamky.map(task => task.id)), notificationIds
+  );
 
   return {
     pocet: mazanePoznamky.length + pocetSdilenych,

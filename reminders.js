@@ -1449,6 +1449,74 @@ async function cancelNotification(notificationId) {
 }
 
 
+/*
+ * 699BG-V – úklid upozornění po přesunu poznámky do Koše.
+ * Sjednocuje ID z uložené poznámky, čekajících (včetně nativního
+ * AlarmManageru 699W) a již doručených notifikací.
+ * Neodstraňuje upozornění jiných poznámek.
+ */
+async function uklidUpozorneniSmazanychPoznamek699BGV(noteIds, znameIds = []) {
+  const idsPoznamek = new Set((noteIds || []).filter(Boolean).map(String));
+  if (!idsPoznamek.size) return true;
+
+  const local = window.Capacitor?.Plugins?.LocalNotifications;
+  const native = window.Capacitor?.Plugins?.LubaNoteFcmToken;
+  const idsAlarmu = new Set(
+    (znameIds || []).map(Number).filter(id => Number.isInteger(id) && id > 0)
+  );
+  const patriPoznamce = notification => {
+    const extra = notification?.extra || notification?.data || {};
+    return idsPoznamek.has(String(extra.taskId || extra.sourceNoteId || ""));
+  };
+  let vseOk = true;
+
+  try {
+    if (local?.getPending) {
+      const pending = await nactiCekajiciSNative692Z(local);
+      for (const item of pending?.notifications || []) {
+        if (patriPoznamce(item) && Number.isInteger(Number(item.id))) {
+          idsAlarmu.add(Number(item.id));
+        }
+      }
+    }
+  } catch (error) {
+    vseOk = false;
+    console.warn("699BG-V: čekající upozornění nelze načíst", error);
+  }
+
+  try {
+    if (local?.getDeliveredNotifications) {
+      const delivered = await local.getDeliveredNotifications();
+      for (const item of delivered?.notifications || []) {
+        if (patriPoznamce(item) && Number.isInteger(Number(item.id))) {
+          idsAlarmu.add(Number(item.id));
+        }
+      }
+    }
+  } catch (error) {
+    vseOk = false;
+    console.warn("699BG-V: doručená upozornění nelze načíst", error);
+  }
+
+  for (const id of idsAlarmu) {
+    try {
+      await cancelNotification(id);
+      // Native 699W alarm běží mimo standardní Capacitor PendingIntent.
+      // Metoda je idempotentní; zruší i navazující opakování.
+      if (typeof native?.cancelLocalNote692Z === "function") {
+        await native.cancelLocalNote692Z({ id });
+      }
+    } catch (error) {
+      vseOk = false;
+      console.warn("699BG-V: zrušení alarmu selhalo", id, error);
+    }
+  }
+  return vseOk;
+}
+window.uklidUpozorneniSmazanychPoznamek699BGV =
+  uklidUpozorneniSmazanychPoznamek699BGV;
+
+
 function updateReminderButton(enabled) {
   const button =
     document.getElementById("reminderButton");
