@@ -5185,7 +5185,42 @@ async function pripravNeoznaceneObrazkyCoreV2695P(note) {
 }
 
 
+/* 699BG-U: bezpečné místní přepnutí bez změny serverového handoffu. */
+let probihaMistniPrepnutiEditoru699BGU = false;
+async function dokoncitEditorPredMistnimPrepnutim699BGU(ciloveId) {
+  if (taskModal.hidden) return true;
+  if (activeTaskId && activeTaskId === ciloveId) return false;
+  if (probihaMistniPrepnutiEditoru699BGU) return false;
+  probihaMistniPrepnutiEditoru699BGU = true;
+  try {
+    if (window.LubaNoteEditorV2Bridge?.jeAktivni?.() &&
+        window.LubaNoteEditorV2Bridge?.dokoncModelPredExterniAkci?.() !== true) {
+      zobrazZpravuAplikace("Editor",
+        "Přepnutí zastaveno: obsah původní poznámky nelze bezpečně připravit.");
+      return false;
+    }
+    if (bylEditorZmenen()) {
+      const vysledek = await ulozAZavriEditor();
+      if (vysledek?.ok !== true) return false;
+    } else {
+      zpracujZavreniEditoru();
+    }
+    return taskModal.hidden === true && activeTaskId === null;
+  } catch (error) {
+    console.warn("699BG-U: místní přepnutí editoru selhalo", error);
+    return false;
+  } finally {
+    probihaMistniPrepnutiEditoru699BGU = false;
+  }
+}
+
 async function openTaskEditorById(taskId) {
+  if (!taskModal.hidden) {
+    const lzePrepnout =
+      await dokoncitEditorPredMistnimPrepnutim699BGU(taskId);
+    if (!lzePrepnout) return false;
+  }
+
   const tokenOpenCele = window.LubaNoteStartupDiag?.zacni?.(
     `NOTE OPEN TOTAL | id=${taskId}`
   );
