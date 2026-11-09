@@ -304,7 +304,14 @@
     areaSlot.appendChild(badge);
 
     badges.append(repeatSlot, areaSlot);
-    row.insertBefore(badges, row.querySelector(".reminderItemMenu"));
+    // 699BG-R: Nabidka muze byt zanorena uvnitr radku.
+    // insertBefore vyzaduje primeho potomka rodicovskeho uzlu.
+    const menu = row.querySelector(".reminderItemMenu");
+    if (menu?.parentNode) {
+      menu.parentNode.insertBefore(badges, menu);
+    } else {
+      row.appendChild(badges);
+    }
     return row;
   }
 
