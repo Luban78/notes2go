@@ -3367,3 +3367,53 @@
     overflow: visible !important;
   }
 }
+
+/* 699BG-N – respektovat navigaci mezi moduly.
+   Desktopove display:flex !important nesmi prebit atribut hidden. */
+body.desktopNotesToolbarA .searchRow[hidden],
+body.desktopNotesToolbarA .categoryTabs[hidden] {
+  display: none !important;
+}
+
+/* 699BG-N – kompaktni PC plan (napr. Chrome 150 %).
+   Pouze 900–1099 CSS px, PC mys; siroky desktop a Android beze zmeny. */
+@media (min-width: 900px) and (max-width: 1099px) and (hover: hover) and (pointer: fine) {
+  #calendarScreen:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    gap: 0;
+    width: min(720px, calc(100% - 24px));
+    padding-top: 8px;
+  }
+  #calendarScreen .calendarHeader {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  #calendarScreen .calendarWeekdays {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    margin-bottom: 5px;
+  }
+  #calendarScreen .calendarGrid {
+    grid-column: 1;
+    grid-row: 3;
+    width: 100%;
+    gap: 4px;
+  }
+  #calendarScreen .calendarDay {
+    min-height: 44px;
+    aspect-ratio: auto;
+    padding: 5px 2px;
+  }
+  #calendarScreen .calendarAgenda {
+    grid-column: 1;
+    grid-row: 4;
+    position: static;
+    width: 100%;
+    margin-top: 12px;
+    max-height: none;
+    overflow: visible;
+  }
+}
