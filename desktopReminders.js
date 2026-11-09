@@ -16,6 +16,11 @@
   if (document.body.classList.contains("nativeApp") ||
       window.Capacitor?.isNativePlatform?.()) return;
 
+  /* 699BG-Q – jeden vlastnik desktopoveho rendereru: pri resize/zoomu
+   * neinstalovat druhe event listenery, ale znovu nacist aktualni polozky. */
+  let obnovPcSeznam699BQ = null;
+  let resizeTimer699BQ = 0;
+
   function inicializujPcPripominky699BP() {
     if (!desktopRezim.matches) return;
 
@@ -27,7 +32,13 @@
   const recurringOverviewButton = document.getElementById("recurringOverviewButton");
 
   if (!screen || !puvodniToolbar || !puvodniGroups) return;
-  if (document.getElementById("desktopRemindersTimeline")) return;
+  if (document.getElementById("desktopRemindersTimeline")) {
+    // Nemenime aktualni filtr ani nerozebirame DOM – pouze aktualizujeme data.
+    if (!screen.hidden && typeof obnovPcSeznam699BQ === "function") {
+      requestAnimationFrame(obnovPcSeznam699BQ);
+    }
+    return;
+  }
 
   const STAV = {
     rezim: "all",
@@ -175,7 +186,7 @@
   function vsechnyPolozky() {
     try {
       if (typeof getReminderEntries === "function") {
-        return getReminderEntries();
+        return getReminderEntries("all");
       }
     } catch (_error) {}
     return [];
@@ -566,6 +577,7 @@
   });
 
   window.LubaNoteIcons?.naplnDeklarovaneIkony?.(layout);
+  obnovPcSeznam699BQ = vykresli;
   vykresli();
   }
 
@@ -576,4 +588,21 @@
   } else if (typeof desktopRezim.addListener === "function") {
     desktopRezim.addListener(inicializujPcPripominky699BP);
   }
+
+  /* 699BG-Q – zoom 150 % -> 125 % meni CSS pixely, ale pokud zustaneme
+   * nad 900 px, media-query change se vubec nespusti. Resize ano. */
+  window.addEventListener("resize", () => {
+    if (!desktopRezim.matches) return;
+    clearTimeout(resizeTimer699BQ);
+    resizeTimer699BQ = window.setTimeout(() => {
+      if (!document.getElementById("remindersScreen")?.hidden) {
+        inicializujPcPripominky699BP();
+      }
+    }, 150);
+  }, { passive: true });
+  window.addEventListener("pageshow", () => {
+    if (desktopRezim.matches && !document.getElementById("remindersScreen")?.hidden) {
+      inicializujPcPripominky699BP();
+    }
+  });
 })();
