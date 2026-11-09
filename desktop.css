@@ -3702,3 +3702,94 @@ body.desktopNotesToolbarA .categoryTabs[hidden] {
     display: none !important;
   }
 }
+
+
+/* 699BG-S – PC (900–1099 CSS px): obsah připomínky je při zoomu
+   zabalen do .reminderItemSwipeContent (vytváří reminders.js pod 1100 px).
+   Sloupce musí být na tomto vnitřním obalu, nikoliv pouze na řádku.
+   Nedotýká se APK, dotykového UI ani desktopu nad 1099 px. */
+@media (min-width: 900px) and (max-width: 1099px) and (hover: hover) and (pointer: fine) {
+  body:not(.nativeApp) #remindersScreen #desktopRemindersTimeline
+  .desktopReminderTimelineRow.reminderItem:has(> .reminderItemSwipeContent) {
+    display: block !important;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+  }
+
+  body:not(.nativeApp) #remindersScreen #desktopRemindersTimeline
+  .desktopReminderTimelineRow > .reminderItemSwipeContent {
+    display: grid !important;
+    grid-template-columns: 54px minmax(0, 1fr) 138px 30px !important;
+    align-items: center;
+    column-gap: 5px;
+    row-gap: 0;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  body:not(.nativeApp) #remindersScreen #desktopRemindersTimeline
+  .desktopReminderTimelineRow > .reminderItemSwipeContent > .reminderItemTime {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+  body:not(.nativeApp) #remindersScreen #desktopRemindersTimeline
+  .desktopReminderTimelineRow > .reminderItemSwipeContent > .reminderItemContent {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  /* Společné pro případ, že řádek vznikl ještě při širším zoomu.
+     Štítky se nikdy nezalamují; volný prostor jde textu (ellipsis). */
+  body:not(.nativeApp) #remindersScreen #desktopRemindersTimeline
+  .desktopReminderTimelineRow .desktopReminderBadges {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+  }
+  body:not(.nativeApp) #remindersScreen #desktopRemindersTimeline
+  .desktopReminderTimelineRow .desktopReminderBadgeSlot.is-empty {
+    display: none !important;
+  }
+  body:not(.nativeApp) #remindersScreen #desktopRemindersTimeline
+  .desktopReminderTimelineRow .desktopReminderBadgeSlot {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  body:not(.nativeApp) #remindersScreen #desktopRemindersTimeline
+  .desktopReminderTimelineRow > .reminderItemSwipeContent > .desktopReminderBadges {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  body:not(.nativeApp) #remindersScreen #desktopRemindersTimeline
+  .desktopReminderTimelineRow > .reminderItemSwipeContent > .reminderItemMenu {
+    grid-column: 4;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+    min-width: 30px;
+    width: 30px;
+  }
+  body:not(.nativeApp) #remindersScreen #desktopRemindersTimeline
+  .desktopReminderTimelineRow .reminderItemTitle,
+  body:not(.nativeApp) #remindersScreen #desktopRemindersTimeline
+  .desktopReminderTimelineRow .reminderItemPreview {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
