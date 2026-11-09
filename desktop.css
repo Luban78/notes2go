@@ -3375,45 +3375,193 @@ body.desktopNotesToolbarA .categoryTabs[hidden] {
   display: none !important;
 }
 
-/* 699BG-N – kompaktni PC plan (napr. Chrome 150 %).
-   Pouze 900–1099 CSS px, PC mys; siroky desktop a Android beze zmeny. */
+/* 699BG-O – kompaktní PC Plán (900–1099 CSS px, myš).
+   Opravuje 699BG-N: měsíc zůstává vlevo, agenda vpravo.
+   Zmenší pouze hlavičku aktivního Plánu a zachová všechny důležité akce.
+   Vypnuté pro Android/touch a pro široké PC >=1100 CSS px.
+*/
 @media (min-width: 900px) and (max-width: 1099px) and (hover: hover) and (pointer: fine) {
+  /* V Plánu není třeba opakovat logo a den v horním stavovém řádku.
+     Synchronizace, cloudová spotřeba, čas a navigace zůstávají. */
+  body:has(#plannerModuleButton.active) .homeHeader {
+    padding: 4px 8px 2px !important;
+  }
+  body:has(#plannerModuleButton.active) .homeHeader .moduleLogo,
+  body:has(#plannerModuleButton.active) .homeHeader #lnHomeDate683BC {
+    display: none !important;
+  }
+  body:has(#plannerModuleButton.active) .homeHeader #lnHomeDateTime683BC {
+    min-height: 32px !important;
+    margin: 0 0 4px !important;
+    padding: 4px 9px !important;
+    gap: 6px;
+  }
+  body:has(#plannerModuleButton.active) .homeHeader .moduleBar {
+    gap: 0;
+    overflow: visible;
+    min-height: 0;
+    margin: 0;
+  }
+  body:has(#plannerModuleButton.active) .homeHeader nav.moduleTabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+    gap: 6px;
+  }
+  body:has(#plannerModuleButton.active) .homeHeader nav.moduleTabs > .moduleTab {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    flex: none;
+    height: 40px !important;
+    min-height: 40px;
+    padding: 3px 7px;
+    gap: 5px;
+    font-size: 0.875rem;
+    border-radius: 10px;
+  }
+  body:has(#plannerModuleButton.active) #plannerSubnav:not([hidden]) {
+    width: min(100%, 940px);
+    margin: 2px auto 4px;
+    padding: 0 8px;
+    gap: 6px;
+  }
+  body:has(#plannerModuleButton.active) #plannerSubnav .plannerSubnavButton {
+    min-height: 38px;
+    height: 38px;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    gap: 5px;
+    border-radius: 10px;
+    font-size: 0.875rem;
+  }
+
+  /* Kalendář + agenda musí být současně na obrazovce. */
   #calendarScreen:not([hidden]) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto auto;
-    gap: 0;
-    width: min(720px, calc(100% - 24px));
-    padding-top: 8px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.98fr);
+    grid-template-rows: auto auto auto;
+    column-gap: 12px;
+    row-gap: 0;
+    align-items: start;
+    width: min(1050px, calc(100% - 20px));
+    max-width: none;
+    margin: 0 auto;
+    padding: 5px 0 14px;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    overflow-y: auto; /* Na nižší obrazovce musí být dosažitelný i poslední týden. */
   }
   #calendarScreen .calendarHeader {
     grid-column: 1;
     grid-row: 1;
+    margin-bottom: 3px;
+  }
+  #calendarScreen .calendarHeader button {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+  }
+  #calendarScreen .calendarHeader h2 {
+    font-size: 1.06rem;
   }
   #calendarScreen .calendarWeekdays {
     grid-column: 1;
     grid-row: 2;
     width: 100%;
-    margin-bottom: 5px;
+    max-width: 100%;
+    margin: 0 0 4px;
   }
   #calendarScreen .calendarGrid {
     grid-column: 1;
     grid-row: 3;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     width: 100%;
-    gap: 4px;
+    max-width: 100%;
+    gap: 3px;
+    align-content: start;
   }
   #calendarScreen .calendarDay {
-    min-height: 44px;
+    box-sizing: border-box;
+    height: 37px;
+    min-height: 37px;
     aspect-ratio: auto;
-    padding: 5px 2px;
+    padding: 2px;
+    border-radius: 9px;
   }
+  #calendarScreen .calendarDay.hasItems::after {
+    bottom: 2px;
+  }
+
+  /* Pravý panel: zvolený den nahoře, scrollují jen úkoly pod ním. */
   #calendarScreen .calendarAgenda {
-    grid-column: 1;
-    grid-row: 4;
-    position: static;
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
     width: 100%;
-    margin-top: 12px;
+    min-width: 0;
+    height: clamp(205px, calc(100dvh - 176px), 540px);
+    min-height: 0;
     max-height: none;
-    overflow: visible;
+    position: static;
+    margin: 0;
+    padding: 8px;
+    overflow: hidden;
+    border-radius: 13px;
+  }
+  #calendarScreen .calendarAgendaHeader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 36px;
+    align-items: center;
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    margin: 0 0 6px;
+    gap: 5px;
+  }
+  #calendarScreen .calendarSelectedDateButton {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 0.84rem;
+  }
+  #calendarScreen .calendarSelectedDateText {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #calendarScreen .calendarWeekNumber {
+    font-size: 0.82rem;
+    transform: none;
+  }
+  #calendarScreen #plannerAddTaskButton {
+    box-sizing: border-box;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+  }
+  #calendarScreen #calendarDayItems {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+  }
+  #calendarScreen .calendarAgendaItem {
+    grid-template-columns: 47px minmax(0, 1fr) 30px;
+    gap: 6px;
+    padding: 7px 0;
+    font-size: 0.88rem;
   }
 }
