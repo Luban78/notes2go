@@ -5185,6 +5185,40 @@ async function pripravNeoznaceneObrazkyCoreV2695P(note) {
 }
 
 
+/*
+ * 699BG-W: zavření editoru končí až po 250ms vizuálním cleanupu.
+ * Čekáme na reálné nastavení hidden, ne pouze na návrat save funkce.
+ * Pokud se editor nezavře, cílovou poznámku z bezpečnostních důvodů
+ * neotevřeme. MutationObserver nespoléhá na přesný čas animace.
+ */
+function pockejNaDokonceniZavreniEditoru699BGW() {
+  if (taskModal.hidden === true) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    let hotovo = false;
+    let pojistka = null;
+    const pozorovatel = new MutationObserver(() => {
+      if (taskModal.hidden === true) dokoncit(true);
+    });
+    const dokoncit = (ok) => {
+      if (hotovo) return;
+      hotovo = true;
+      pozorovatel.disconnect();
+      clearTimeout(pojistka);
+      resolve(ok);
+    };
+
+    pozorovatel.observe(taskModal, {
+      attributes: true,
+      attributeFilter: ["hidden"]
+    });
+    pojistka = setTimeout(
+      () => dokoncit(taskModal.hidden === true), 1500
+    );
+    if (taskModal.hidden === true) dokoncit(true);
+  });
+}
+
 /* 699BG-U: bezpečné místní přepnutí bez změny serverového handoffu. */
 let probihaMistniPrepnutiEditoru699BGU = false;
 async function dokoncitEditorPredMistnimPrepnutim699BGU(ciloveId) {
@@ -5205,9 +5239,13 @@ async function dokoncitEditorPredMistnimPrepnutim699BGU(ciloveId) {
     } else {
       zpracujZavreniEditoru();
     }
-    return taskModal.hidden === true && activeTaskId === null;
+    // 699BG-W: zpracujZavreniEditoru i save zavírají taskModal s 250ms
+    // odkladem; bez čekání by se oznámení jen označilo jako přečtené.
+    const skutecneZavreno = await pockejNaDokonceniZavreniEditoru699BGW();
+    return skutecneZavreno && activeTaskId === null &&
+      !taskModal.classList.contains("show");
   } catch (error) {
-    console.warn("699BG-U: místní přepnutí editoru selhalo", error);
+    console.warn("699BG-W: místní přepnutí editoru selhalo", error);
     return false;
   } finally {
     probihaMistniPrepnutiEditoru699BGU = false;
