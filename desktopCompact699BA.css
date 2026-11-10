@@ -241,3 +241,22 @@
     min-height: 36px !important;
   }
 }
+
+
+/* =============================================================
+   699BG-Z – KOMPAKTNÍ PC / PŘIBLÍŽENÍ CCA 150 %
+   -------------------------------------------------------------
+   Když se při zvětšení nebo zúžení PC okna skryje sidebar
+   (< 1100 CSS px), uvolnit výšku po horním řádku datum/sync/
+   cloud/motiv/čas. Nezasahovat do navigace, modulů ani poznámek.
+
+   Media query záměrně sleduje prostor, nikoli domnělé číslo zoomu:
+   rozlišení displeje a měřítko Windows mění CSS šířku stejně.
+   Nedotýká se nativní APK (body.nativeApp) a běžného dotyku.
+   ============================================================= */
+@media (max-width: 1099px) and (hover: hover) and (pointer: fine) {
+  body:not(.nativeApp) .homeHeader > #lnHomeDateTime683BC,
+  body:not(.nativeApp) .homeHeader > #syncTrafficBar {
+    display: none !important;
+  }
+}
