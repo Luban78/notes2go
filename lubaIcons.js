@@ -70,6 +70,8 @@
     ukol: "✅",
     dokument: "📄",
     obnovit: "↻",
+    uloziste: "🗄️",
+    stavLubaNote: "📈",
     zpet: "←",
     odepnout: "📍",
     oznacit: "☑️",
@@ -416,6 +418,18 @@
     obnovit: [
       ["path", { d: "M20 7.5V3.8l-3.1 3.1" }],
       ["path", { d: "M19.1 7A8 8 0 1 0 20 14" }]
+    ],
+
+    /* 699BG-Y: dvě záměrně odlišné ikony PC levého panelu. */
+    uloziste: [
+      ["ellipse", { cx: "12", cy: "5.6", rx: "8", ry: "2.8" }],
+      ["path", { d: "M4 5.6v12.6c0 1.55 3.58 2.8 8 2.8s8-1.25 8-2.8V5.6" }],
+      ["path", { d: "M4 11.9c0 1.55 3.58 2.8 8 2.8s8-1.25 8-2.8" }]
+    ],
+
+    stavLubaNote: [
+      ["rect", { x: "3", y: "4.1", width: "18", height: "15.8", rx: "2.2" }],
+      ["path", { d: "M5.5 12h3.3l1.7-3.2 2.9 6.4 2.2-3.8h2.9" }]
     ],
 
     zpet: [

@@ -183,3 +183,61 @@
     flex-shrink: 0;
   }
 }
+
+
+/* ==========================================================
+   699BG-Y – PC: nove tlacitko nad Nastavenim, logo na stred,
+   floating + jen v rezime bez skutecne viditelneho sidebaru.
+   ----------------------------------------------------------
+   Jen >=1100 CSS px s presnou mysi. Pri 150% (pod touto hranici)
+   zustava puvodni plovouci + beze zmeny a sidebar je skryty.
+   ========================================================== */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  .desktopSidebarBrand {
+    width: 100%;
+    margin: 0 0 9px !important;
+    justify-content: center !important;
+    gap: 9px !important;
+    box-sizing: border-box;
+  }
+  .desktopSidebarBrand > .desktopSidebarLogo,
+  .desktopSidebarBrand > .desktopSidebarBrandText {
+    translate: none !important;
+    transform: none !important;
+  }
+
+  /* Vložené + využije dosavadní prázdné místo nad Nastavením:
+     zmenšení horního paddingu vykompenzuje výšku nového řádku. */
+  .desktopSidebarNavSecondary {
+    padding-top: clamp(6px, 1vh, 11px) !important;
+  }
+  .desktopSidebarNavSecondary > #desktopNewNoteButton699BGY {
+    display: none !important;
+    font-weight: 720;
+    color: var(--color-accent) !important;
+    background: color-mix(in srgb, var(--color-accent) 11%, var(--color-surface)) !important;
+    border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent) !important;
+  }
+  .desktopSidebarNavSecondary > #desktopNewNoteButton699BGY:hover {
+    background: color-mix(in srgb, var(--color-accent) 20%, var(--color-surface)) !important;
+  }
+  body:has(#notesModuleButton.active) .desktopSidebarNavSecondary > #desktopNewNoteButton699BGY {
+    display: grid !important;
+  }
+  /* Původní tlačítko zůstává v DOM, jeho jediná akce je dále použita
+     sidebarovým proxy; po skrytí levého panelu se samo opět objeví. */
+  body:has(#notesModuleButton.active) #addTaskButton {
+    display: none !important;
+  }
+}
+
+/* 699BG-Y – velmi nízké PC okno: zachovat spodní Admin Dashboard bez překryvu. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) and (max-height: 760px) {
+  .desktopSidebarNavSecondary {
+    gap: clamp(5px, 0.9vh, 8px) !important;
+    padding-top: 4px !important;
+  }
+  .desktopSidebarNavSecondary > .desktopSidebarButton {
+    min-height: 36px !important;
+  }
+}

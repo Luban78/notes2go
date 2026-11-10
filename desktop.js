@@ -326,7 +326,7 @@
 
   const desktopStorageButton = vytvorSidebarTlacitko(
     "desktopStorageButton",
-    "obnovit",
+    "uloziste",
     sourceStorageLabel?.textContent?.trim() || "Úložiště: Synchronizované"
   );
 
@@ -334,7 +334,7 @@
   // Jen otevre existujici modal; zadne vlastni dotazy ani zmeny dat.
   const desktopCloudStatusButton699BB = vytvorSidebarTlacitko(
     "desktopCloudStatusButton699BB",
-    "obnovit",
+    "stavLubaNote",
     "Stav LubaNote"
   );
 
@@ -359,6 +359,7 @@
   // Skryté řazení karet ponecháme funkční v Nastavení (683BM).
   // Admin Dashboard je poslední a CSS jej drží u patičky.
   const poradi = [
+    document.getElementById("desktopNewNoteButton699BGY"),
     desktopSettingsButton,
     desktopManageTagsButton,
     desktopBackupButton,
@@ -713,4 +714,16 @@
       button.style.setProperty("box-sizing", "border-box", "important");
     }
   }
+})();
+
+/* 699BG-Y – sidebar pouze preposila klik na jediny originalni + handler.
+ * Registrace i pri startu pod 900px: nasledne zvetseni okna na desktop
+ * nesmi zobrazit nefunkcni tlacitko ani prijit o puvodni +. */
+(() => {
+  const sidebarNew = document.getElementById("desktopNewNoteButton699BGY");
+  sidebarNew?.addEventListener("click", () => {
+    if (!document.getElementById("notesModuleButton")?.classList.contains("active")) return;
+    const original = document.getElementById("addTaskButton");
+    if (original && !original.disabled) original.click();
+  });
 })();
