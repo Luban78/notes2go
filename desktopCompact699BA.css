@@ -20,12 +20,12 @@
     flex-basis: min(var(--ln-dnv-sidebar-logo-size, 50px), 40px) !important;
   }
   .desktopSidebarNavSecondary {
-    /* 699BD: polozky rovnomerne vyplni volnou vysku mezi logem a
-       statusovou patickou. Pri nedostatku vysky zustava scroll pojistkou. */
-    justify-content: space-between;
-    gap: clamp(7px, 1.1vh, 15px) !important;
-    padding-top: clamp(12px, 2.4vh, 24px);
-    padding-bottom: clamp(9px, 1.8vh, 18px);
+    /* 699BG-X: kompaktní položky odshora; případné volné místo patří
+       pouze před Admin Dashboard, nikoliv mezi každé dvě položky. */
+    justify-content: flex-start !important;
+    gap: clamp(8px, 1.8vh, 19px) !important;
+    padding-top: clamp(27px, 6.3vh, 58px) !important;
+    padding-bottom: 7px !important;
     padding-right: 1px;
   }
   .desktopSidebarButton {
@@ -110,5 +110,76 @@
   body:has(#notesModuleButton.active) #addTaskButton {
     bottom: 226px !important;
     right: 22px !important;
+  }
+}
+
+
+/* ==========================================================
+   699BG-X – PC LEVÝ PANEL PODLE 100% VISUAL DEBUG NÁVRHU
+   ----------------------------------------------------------
+   Schválně nepřebírat záporné posuny translate z Visual Debug:
+   nepřemisťují místo prvků a rozbíjejí 110–150 % / menší okno.
+   Platí jen v původním desktop režimu (>=1100 CSS px + myš).
+   Při 150 % pod touto hranicí zůstává panel skrytý beze změny.
+   ========================================================== */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  /* Jeden rozměr pro sidebar i odsazení hlavního obsahu.
+     Na širokém PC odpovídá exportovaným 246 px, při zúžení
+     nechává více místa poznámkám. */
+  body {
+    --ln-699bgx-sidebar-sirka: clamp(218px, 15.2vw, 246px);
+    padding-left: var(--ln-699bgx-sidebar-sirka) !important;
+  }
+  .desktopSidebar {
+    width: var(--ln-699bgx-sidebar-sirka) !important;
+  }
+  .desktopSidebarBrand {
+    margin: 0 11px 9px !important;
+    align-items: center;
+  }
+  .desktopSidebarBrandText {
+    font-size: clamp(0.99rem, 1.1vw, 1.12rem) !important;
+  }
+  .desktopSidebarNavSecondary {
+    justify-content: flex-start !important;
+    align-content: flex-start;
+    gap: clamp(8px, 1.8vh, 19px) !important;
+    padding-top: clamp(27px, 6.3vh, 58px) !important;
+    padding-bottom: 7px !important;
+    min-height: 0;
+    overflow-y: auto; /* jen nouzová pojistka pro nízké okno */
+    overflow-x: hidden;
+  }
+  .desktopSidebarNavSecondary > .desktopSidebarButton {
+    min-height: 40px !important;
+    padding: 5px 4px 5px 14px !important;
+    font-size: 15px !important;
+    line-height: 1.18;
+    grid-template-columns: 28px minmax(0, 1fr) !important;
+    gap: 8px !important;
+    flex: 0 0 auto;
+    position: static !important;
+    translate: none !important;
+  }
+  .desktopSidebarNavSecondary > .desktopSidebarButton > span:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  /* Dlouhý aktuální název úložiště se při šířce 246 px
+     vejde; při menším okně se může bezpečně zalomit. */
+  #desktopStorageButton {
+    font-size: 13px !important;
+  }
+  #desktopSidebarMergedDivider {
+    flex: 0 0 1px;
+    align-self: stretch;
+    margin: 12px 6px 9px !important;
+    translate: none !important;
+  }
+  #desktopAdminDashboardButton:not([hidden]) {
+    margin-top: auto !important;
+  }
+  .desktopSidebarFooter {
+    flex-shrink: 0;
   }
 }

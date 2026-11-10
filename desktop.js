@@ -353,18 +353,21 @@
     return el;
   })();
 
-  // Poskládat kompletní desktop nástroje do levého panelu.
-  // Admin Dashboard zůstává schválně úplně poslední.
+  // 699BG-X: skutečné pořadí odpovídá 100% PC návrhu z Visual Debugu.
+  // Nezaměňovat s vizuálním posunem (translate): DOM pořadí funguje
+  // i při změně výšky, Windows DPI a přepnutí 100–150 %.
+  // Skryté řazení karet ponecháme funkční v Nastavení (683BM).
+  // Admin Dashboard je poslední a CSS jej drží u patičky.
   const poradi = [
     desktopSettingsButton,
     desktopManageTagsButton,
     desktopBackupButton,
-    desktopAboutButton,
-    desktopCardSortButton,
     desktopStorageButton,
-    divider,
     desktopCloudStatusButton699BB,
+    desktopAboutButton,
+    divider,
     desktopLogoutButton,
+    desktopCardSortButton,
     desktopAdminDashboardButton
   ].filter(Boolean);
 
