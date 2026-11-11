@@ -9,6 +9,16 @@
   const ID = 'ln-theme-builder-699c';
   const PUVODNI_TEMATA = new Set(['light', 'dark', 'cappuccino', 'ocean', 'darkg', 'arctic', 'violetnight', 'solar', 'retro']);
   const STYLE_ID = 'ln-theme-builder-live-699c';
+  // 699C-C: Barevná identita štítku je samostatná od barev prostředí.
+  // Uložené barvy štítků ani jejich ID se v nástroji nikdy nepřepisují.
+  const BARVY_STITKU = [
+    ['cervena', 'Odstín 1 · nejsvětlejší'], ['oranzova', 'Odstín 2'],
+    ['zluta', 'Odstín 3'], ['zelena', 'Odstín 4'],
+    ['tyrkysova', 'Odstín 5'], ['modra', 'Odstín 6'],
+    ['fialova', 'Odstín 7'], ['ruzova', 'Odstín 8 · nejtmavší']
+  ];
+  const TAG_START = '/* LN-TB-TAG-COLORS:START */';
+  const TAG_END = '/* LN-TB-TAG-COLORS:END */';
   const BAREVNE_VLASTNOSTI = /(?:^color$|(?:-|^)color$|^background(?:-color|-image)?$|^border(?:-[a-z-]+)?$|^outline(?:-color)?$|^box-shadow$|^text-shadow$|^fill$|^stroke$|^caret-color$|^text-decoration(?:-color)?$|^-webkit-text-fill-color$|^-webkit-text-stroke(?:-color)?$)/i;
   const TOKEN = /#[a-f\d]{3,8}\b|(?:rgba?|hsla?)\([^()]*\)|var\(--[\w-]+(?:\s*,\s*[^()]*)?\)|\b(?:transparent|currentColor|white|black|red|blue|green|yellow|orange|purple|pink|gray|grey)\b/gi;
   const VLASTNOSTI = [
@@ -27,7 +37,7 @@
     cssFiltr: '', cssPozice: 0, domFiltr: '', domPozice: 0,
     celekCss: 0, chybyCss: [], history: [], zmenaPriVyberu: false, nacteno: false,
     presun: null, paletaOtevrena: false, zakladBarva: '#c9384e', editaceNazvu: null,
-    smazanaTemata: new Map()
+    smazanaTemata: new Map(), vlastniStitky: new Map()
   };
 
   const el = (tag, className, content) => {
@@ -89,7 +99,19 @@
     const reOld = /\/\*\s*LN-TB-OVERRIDES:\s*([a-z0-9-]+):START\s*\*\/([\s\S]*?)\/\*\s*LN-TB-OVERRIDES:\s*\1:END\s*\*\//g;
     let prev;
     while ((prev = reOld.exec(css))) old.set(prev[1], prev[2]);
-    for (const t of found) t.preservedOverrides = old.get(t.id) || '';
+    for (const t of found) {
+      let preserved = old.get(t.id) || '';
+      t.tagColors = new Map();
+      // Při opakovaném importu zachovat uložené mapování, ale nevkládat ho dvakrát.
+      const tagBlock = /\/\* LN-TB-TAG-COLORS:START \*\/([\s\S]*?)\/\* LN-TB-TAG-COLORS:END \*\//g;
+      preserved = preserved.replace(tagBlock, (_, content) => {
+        for (const m of content.matchAll(/\/\* TAG: (#[a-f0-9]{6}) = (#[a-f0-9]{6}) \*\//gi)) {
+          t.tagColors.set(m[1].toLowerCase(), m[2].toLowerCase());
+        }
+        return '';
+      });
+      t.preservedOverrides = preserved;
+    }
     return found;
   }
 
@@ -200,6 +222,7 @@
     }
     for (const o of d.autoOverrides.values()) css += makeOverrideCss(stav.aktivni, o);
     for (const o of d.overrides.values()) css += makeOverrideCss(stav.aktivni, o);
+    css += makeTagColorsCSS(stav.aktivni, d.tagColors);
     style.textContent = css;
   }
 
@@ -237,12 +260,84 @@
     return result;
   }
 
+  function makeTagColorsCSS(id, tagColors) {
+    if (!tagColors?.size) return '';
+    const parent = scope(id);
+    let css = `${TAG_START}\n`;
+    for (const [original, newColor] of tagColors) {
+      if (!/^#[a-f0-9]{6}$/i.test(original) || !/^#[a-f0-9]{6}$/i.test(newColor)) continue;
+      const fg = contrastFg(newColor), tint = fg === '#ffffff' ? '#000000' : '#ffffff';
+      const oldSelector = `[data-tag-color=\"${original}\" i]`;
+      css += `/* TAG: ${original} = ${newColor} */\n`;
+      // Proměnná karty má jediný zdroj pro plochu, obrys, swipe i malý štítek.
+      css += `${parent} .taskCard[data-barva-karty=\"${original}\" i] { --luba-card-bg: ${newColor} !important; --luba-tag-text-683AB: ${fg} !important; --luba-tag-chip-tint-683AD: ${tint} !important; }\n`;
+      // Původní vlastní barva a text se na filtr dávají inline; pouze ve zvoleném motivu
+      // je vizuálně nahradíme. -webkit-text-fill-color zajistí kontrast i při inline color !important.
+      css += `${parent} .categoryTab${oldSelector}, ${parent} .tagOptions button${oldSelector}, ${parent} .manageTagColorButton${oldSelector} { --luba-tag-bg: ${newColor} !important; background-color: ${newColor} !important; -webkit-text-fill-color: ${fg} !important; }\n`;
+    }
+    return css + `${TAG_END}\n`;
+  }
+
+  function nactiVlastniStitky() {
+    // Při otevření jiného modulu lze seznam doplnit tlačítkem Obnovit přehled.
+    for (const node of document.querySelectorAll('[data-tag-color], .taskCard[data-barva-karty]')) {
+      if (node.closest(`#${ID}`)) continue;
+      const value = String(node.dataset.tagColor || node.dataset.barvaKarty || '').toLowerCase();
+      if (!/^#[0-9a-f]{6}$/.test(value)) continue;
+      const label = node.matches('.categoryTab, .manageTagColorButton, .tagOptions button')
+        ? String(node.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 48) : '';
+      if (!stav.vlastniStitky.has(value) || (label && !stav.vlastniStitky.get(value)))
+        stav.vlastniStitky.set(value, label);
+    }
+  }
+
+  function nominalTagColor(key) {
+    const val = aktualni()?.vars.get(`--card-${key}`);
+    if (val) return val;
+    return getComputedStyle(document.body).getPropertyValue(`--card-${key}`).trim() || '#777777';
+  }
+  function renderTagPalette(target) {
+    const d = aktualni();
+    const section = el('section', 'lnTBtags699C');
+    section.append(el('h3', '', '🏷️ Barvy štítků a karet'));
+    section.append(el('p', 'lnTBhint699C', 'Osm odstínů sdílí štítky i karty. Barvu můžeš upravit zvlášť pro tento motiv, uložená ID štítků se nemění.'));
+    for (const [key, label] of BARVY_STITKU) {
+      const prop = `--card-${key}`, value = nominalTagColor(key);
+      const row = el('div', 'lnTBcolorRow699C');
+      const meta = el('div', 'lnTBcolorMeta699C');
+      meta.append(el('strong', '', label), el('small', '', `${prop} · ${value}`));
+      row.append(meta, colorButton(value, () => picker(value, label, newColor => {
+        saveUndo(); d.vars.set(prop, newColor); changed();
+      })));
+      section.append(row);
+    }
+    nactiVlastniStitky();
+    if (stav.vlastniStitky.size) {
+      section.append(el('h3', '', '🎨 Vlastní barvy uložených štítků'));
+      section.append(el('p', 'lnTBhint699C', 'Tady přebarvuješ pouze zobrazení v tomto motivu. Původní barva štítku v databázi zůstává stejná. Zobrazené jsou barvy právě načtených štítků.'));
+      for (const [original, name] of stav.vlastniStitky) {
+        const value = d.tagColors.get(original) || original;
+        const row = el('div', 'lnTBcolorRow699C');
+        const meta = el('div', 'lnTBcolorMeta699C');
+        meta.append(el('strong', '', name || 'Vlastní odstín'), el('small', '', `${original} → ${value}`));
+        row.append(meta, colorButton(value, () => picker(value, name || 'Vlastní štítek', newColor => {
+          saveUndo(); d.tagColors.set(original, newColor.toLowerCase()); changed();
+        })));
+        section.append(row);
+      }
+    } else {
+      section.append(el('p', 'lnTBhint699C', 'Vlastní štítky nyní nejsou na stránce načtené. Otevři jejich seznam a klikni na „Obnovit přehled CSS a prvků“.'));
+    }
+    target.append(section);
+  }
+
   function renderVars() {
     const target = get('lnTBbody699C');
     if (!target) return;
     target.replaceChildren();
     const d = aktualni();
     for (const [k, v] of d.vars) {
+      if (k.startsWith('--card-')) continue; // osm odstínů má přehled níže
       const row = el('div', 'lnTBcolorRow699C');
       const title = el('div', 'lnTBcolorMeta699C');
       title.append(el('strong', '', k), el('small', '', v));
@@ -254,7 +349,7 @@
       if (alpha) row.append(alpha);
       target.append(row);
     }
-    target.append(el('p', 'lnTBhint699C', 'Každá změna zde upraví všechny prvky používající odpovídající CSS proměnnou. Pro výjimky a pevně zadané barvy použij záložku CSS barvy nebo režim kliknutí na prvek.'));
+    renderTagPalette(target);
   }
   function colorButton(raw, onclick, label = 'Upravit barvu') {
     const b = el('button', 'lnTBcolorButton699C');
@@ -481,7 +576,7 @@
     if (!d) return;
     stav.history.push({ action: 'edit', id: stav.aktivni, vars: new Map(d.vars),
       overrides: new Map(d.overrides), autoOverrides: new Map(d.autoOverrides), preservedOverrides: d.preservedOverrides, name: d.name,
-      base: d.base, paletteName: d.paletteName });
+      base: d.base, paletteName: d.paletteName, tagColors: new Map(d.tagColors) });
     if (stav.history.length > 40) stav.history.shift();
   }
   function undo() {
@@ -510,6 +605,7 @@
     d.name = last.name;
     d.base = last.base;
     d.paletteName = last.paletteName;
+    d.tagColors = new Map(last.tagColors || []);
     const t = stav.temata.find(x => x.id === last.id);
     if (t) t.name = last.name;
     preview(last.id);
@@ -532,7 +628,7 @@
   }
   function renderHeader() {
     const d = aktualni();
-    textValue(get('lnTBchanges699C'), `${d?.autoOverrides.size || 0} sladěných barev · ${d?.overrides.size || 0} ručních výjimek · ${stav.drafty.size} motivů`);
+    textValue(get('lnTBchanges699C'), `${d?.autoOverrides.size || 0} sladěných CSS · ${d?.tagColors.size || 0} vlastních barev štítků · ${d?.overrides.size || 0} výjimek · ${stav.drafty.size} motivů`);
     const btn = get('lnTBthemes699C');
     const menu = get('lnTBthemeMenu699C');
     if (!btn || !menu) return;
@@ -678,6 +774,14 @@
       ['--color-editor-text', '--color-editor-background'], ['--color-on-accent', '--color-accent']]) {
       if (contrast(vals.get(fgKey), vals.get(bgKey)) < 4.5) vals.set(fgKey, contrastFg(vals.get(bgKey)));
     }
+    // Samostatná tonální škála – odstíny jsou rozlišitelné a používají je
+    // současně karta, štítek i jejich obrys. Nesmí vzniknout 8 stejných karet.
+    const lightness = dark ? [.90, .79, .68, .57, .47, .37, .28, .20]
+      : [.96, .88, .79, .68, .56, .45, .35, .25];
+    BARVY_STITKU.forEach(([key], i) => {
+      const hue = (h + (i - 3.5) * 3 + 360) % 360;
+      vals.set(`--card-${key}`, hslHex(hue, Math.min(.64, Math.max(.29, s * .69)), lightness[i]));
+    });
     return vals;
   }
   function harmonizeFixed(data, palette) {
@@ -686,7 +790,10 @@
     if (!data.selector || /theme-|secretmodeactive|:host|:root|#ln-theme-builder-699c/.test(selector)) return null;
     if (/(?:^|[\W])(secret|password|captcha|alert|error|success|danger|warning|critical|invalid|failed|delete|destructive)(?:$|[\W])/.test(selector)) return null;
     if (/(?:theme|debug|tester|studio|dictionary|keyboard|generated)\w*\.css/.test(src)) return null;
-    if (/tag(?:color|pill|chip)|colorpicker|customcolor|badge.*(?:color|tag)/.test(selector)) return null;
+    // Kartám a štítkům NIKDY nepřepisovat jejich background/color obecným
+    // harmonizátorem. Vazba karta → hlavní štítek má přednost před motivem.
+    if (/(?:taskcard|tasktag|cardcolor|\[data-barva-karty|\[data-tag-color|categorytab|tagoptions|tagfilter|managetag|luba-card-bg|luba-tag-bg|luba-tag-text)/.test(selector)) return null;
+    if (/(?:tag|stitek|category|chip|badge|cardpalette|colorpicker|customcolor)/.test(selector) && /(?:background|color|fill|stroke)/.test(property)) return null;
     if (property.startsWith('--')) return null;
     if (/\bvar\(|\bcurrentcolor\b|\binherit\b|\burl\(/i.test(data.value)) return null;
     if (/^(?:background-image|text-shadow|box-shadow)$/i.test(property)) return null; // zachovat přechody a stíny
@@ -715,6 +822,29 @@
       return next;
     });
     return rewritten !== data.value ? rewritten : null;
+  }
+  function autoCustomTagColors(base, mode) {
+    nactiVlastniStitky();
+    const output = new Map();
+    const h = rgbHsl(base).h;
+    const bright = [], dim = [];
+    for (const original of stav.vlastniStitky.keys()) {
+      // Inline JS odvozuje barvu textu z původní barvy. Proto zachováme
+      // světlý/tmavý kontrast a motiv pouze změní jeho barevnou rodinu.
+      (relativeLum(original) > .179 ? bright : dim).push(original);
+    }
+    for (const [isBright, group] of [[true, bright], [false, dim]]) {
+      group.sort((a, b) => rgbHsl(a).h - rgbHsl(b).h || relativeLum(b) - relativeLum(a));
+      group.forEach((original, index) => {
+        const count = group.length;
+        const fraction = count <= 1 ? .5 : index / (count - 1);
+        const l = isBright ? .88 - .18 * fraction : .24 + .14 * fraction;
+        const hue = (h - 14 + 28 * fraction + 360) % 360;
+        const generated = hslHex(hue, mode.dark ? .52 : .46, l);
+        output.set(original, generated);
+      });
+    }
+    return output;
   }
   function automaticColors(palette) {
     const output = new Map();
@@ -762,7 +892,9 @@
         if (!draft(stav.aktivni)?.name) return;
         saveUndo();
         const d = aktualni(); d.vars = values;
-        d.autoOverrides = automaticColors(values); d.preservedOverrides = ''; d.paletteName = mode.name; d.base = stav.zakladBarva;
+        d.autoOverrides = automaticColors(values); d.preservedOverrides = '';
+        d.tagColors = autoCustomTagColors(stav.zakladBarva, mode);
+        d.paletteName = mode.name; d.base = stav.zakladBarva;
         changed(); renderPalettes();
         setStatus(`Použita paleta „${mode.name}“. Sladěno ${d.autoOverrides.size} pevných CSS pravidel. Náhled platí pouze pro „${d.name}“.`);
       });
@@ -813,7 +945,14 @@
       const src = aktualni(), prev = stav.aktivni;
       stav.history.push({ action: 'create', id, previous: prev });
       stav.temata.push({ id, name, originalName: '', new: true, custom: true });
-      stav.drafty.set(id, { name, vars: new Map(src.vars), overrides: new Map(), autoOverrides: new Map(), preservedOverrides: '', base: src.vars.get('--color-accent') || stav.zakladBarva, paletteName: '' });
+      // Kopie převezme i současné odstíny štítků, přestože jejich hodnoty
+      // mohou pocházet ze style.css a nikoliv přímo z theme.css.
+      const copiedVars = new Map(src.vars);
+      for (const [key] of BARVY_STITKU) {
+        if (!copiedVars.has(`--card-${key}`)) copiedVars.set(`--card-${key}`, nominalTagColor(key));
+      }
+      stav.drafty.set(id, { name, vars: copiedVars, overrides: new Map(), autoOverrides: new Map(),
+        tagColors: new Map(src.tagColors), preservedOverrides: '', base: src.vars.get('--color-accent') || stav.zakladBarva, paletteName: '' });
       stav.zakladBarva = parsedFromCSS(src.vars.get('--color-accent') || '')?.hex || stav.zakladBarva;
       zavriFormNazvu(); preview(id);
       showPalette(true);
@@ -899,12 +1038,13 @@
     }
     for (const t of stav.temata) {
       const d = draft(t.id);
-      if (!d.overrides.size && !d.autoOverrides.size && !d.preservedOverrides) continue;
+      if (!d.overrides.size && !d.autoOverrides.size && !d.preservedOverrides && !d.tagColors.size) continue;
       extras += `\n/* LN-TB-OVERRIDES: ${t.id}:START */\n`;
       extras += `/* Motiv: ${d.name.replace(/\*\//g, '')} – automatická paleta (${d.autoOverrides.size}), ruční výjimky (${d.overrides.size}) */\n`;
       if (d.preservedOverrides) extras += d.preservedOverrides;
       for (const o of d.autoOverrides.values()) extras += makeOverrideCss(t.id, o);
       for (const o of d.overrides.values()) extras += makeOverrideCss(t.id, o);
+      extras += makeTagColorsCSS(t.id, d.tagColors);
       extras += `/* LN-TB-OVERRIDES: ${t.id}:END */\n`;
     }
     const secret = result.search(/\/\*\s*=+\s*\n\s*SECRET REŽIM/i);
@@ -948,7 +1088,8 @@
     } else {
       saveUndo();
       t.name = t.originalName;
-      stav.drafty.set(t.id, { name: t.name, vars: new Map(t.original), overrides: new Map(), autoOverrides: new Map(), preservedOverrides: t.preservedOverrides, paletteName: '' });
+      stav.drafty.set(t.id, { name: t.name, vars: new Map(t.original), overrides: new Map(), autoOverrides: new Map(),
+        tagColors: new Map(t.tagColors), preservedOverrides: t.preservedOverrides, paletteName: '' });
       changed();
     }
     setStatus('Rozpracované změny motivu byly zahazeny.');
@@ -1043,7 +1184,7 @@
     const pick = el('button', 'lnTBpick699C', '🎯 Vybrat prvek kliknutím'); pick.id = 'lnTBpick699C'; pick.type = 'button';
     pick.addEventListener('click', togglePick); scrollAll.append(pick);
     const refresh = el('button', 'lnTBrefresh699C', '↻ Obnovit přehled CSS a prvků'); refresh.type = 'button';
-    refresh.addEventListener('click', () => { readCSSRules(); scanDom(); renderActive(); setStatus('Katalog obnoven pro aktuální obrazovku.'); });
+    refresh.addEventListener('click', () => { readCSSRules(); scanDom(); nactiVlastniStitky(); renderActive(); setStatus('Katalog obnoven včetně barev štítků pro aktuální obrazovku.'); });
     scrollAll.append(refresh);
     const body = el('div', 'lnTBbody699C'); body.id = 'lnTBbody699C'; scrollAll.append(body);
     const footer = el('div', 'lnTBfooter699C');
@@ -1072,11 +1213,13 @@
     const available = nacistTemata(source);
     stav.source = source; stav.temata = available; stav.drafty = new Map(); stav.history = [];
     stav.smazanaTemata = new Map(); stav.paletaOtevrena = false; stav.editaceNazvu = null;
-    for (const t of available) stav.drafty.set(t.id, { name: t.name, vars: new Map(t.original), overrides: new Map(), autoOverrides: new Map(), preservedOverrides: t.preservedOverrides, paletteName: '' });
+    stav.vlastniStitky = new Map();
+    for (const t of available) stav.drafty.set(t.id, { name: t.name, vars: new Map(t.original), overrides: new Map(), autoOverrides: new Map(),
+      tagColors: new Map(t.tagColors), preservedOverrides: t.preservedOverrides, paletteName: '' });
     stav.puvodniTridy = Array.from(document.body.classList).filter(c => c.startsWith('theme-'));
     stav.aktivni = available.find(t => t.id === (stav.puvodniTridy[0] || '').slice(6))?.id || 'light';
     if (!stav.drafty.has(stav.aktivni)) stav.aktivni = available[0].id;
-    ui(); readCSSRules(); scanDom(); preview(stav.aktivni);
+    ui(); readCSSRules(); scanDom(); nactiVlastniStitky(); preview(stav.aktivni);
     document.addEventListener('pointerdown', selectionHandler, true);
     document.addEventListener('click', selectionHandler, true);
     document.addEventListener('pointermove', moveHighlight, true);
@@ -1102,8 +1245,9 @@
     return stav.temata.some(t => {
       const d = draft(t.id);
       if (!d) return false;
-      if (d.overrides.size || d.autoOverrides.size || d.name !== t.originalName) return true;
+      if (d.overrides.size || d.autoOverrides.size || d.tagColors.size !== t.tagColors.size || d.name !== t.originalName) return true;
       for (const [key, original] of t.original) if (d.vars.get(key) !== original) return true;
+      for (const [key, original] of t.tagColors) if (d.tagColors.get(key) !== original) return true;
       return false;
     });
   }
