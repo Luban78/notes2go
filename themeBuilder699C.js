@@ -110,7 +110,9 @@
         }
         return '';
       });
-      t.preservedOverrides = cleanOldCardSurface(preserved);
+      // 699C-E: při opětovném načtení starého automatického exportu
+      // oprav jeho významové barvy bez změny již zvoleného odstínu motivu.
+      t.preservedOverrides = sanitizeLegacyAutoCss(cleanOldCardSurface(preserved));
     }
     return found;
   }
@@ -242,8 +244,12 @@
     return splitSelector(selector).map(s => {
       if (excludeTools) {
         const shield = ':not(:is(#ln-theme-builder-699c, #ln-theme-builder-699c *, .lubaTagColorOverlay683AC, .lubaTagColorOverlay683AC *))';
-        s = s.replace(/(::(?:before|after|first-letter|first-line|selection|placeholder|marker))$/i, shield + '$1');
-        if (!s.includes(shield)) s += shield;
+        // 699C-E: :not() ZA pseudo-elementem je neplatné CSS
+        // (například ::highlight(search):not(...)). Štít musí být vždy
+        // připojen k reálnému elementu před koncovým ::pseudo-elementem.
+        const pseudo = s.match(/(::[a-z][\w-]*(?:\([^()]*\))?)$/i);
+        if (pseudo) s = s.slice(0, -pseudo[1].length) + shield + pseudo[1];
+        else s += shield;
       }
       s = s.replace(/\bbody\.theme-[\w-]+/g, 'body');
       if (/^:root(?:\b|:)/.test(s)) return `:root:has(> ${body})${s.slice(5)}`;
@@ -815,10 +821,72 @@
     });
     return vals;
   }
+  // 699C-E: Sémantické barvy nesmějí být podřízeny dekorativnímu motivu.
+  // Tyto prvky nesou informaci (stav spojení, OK/chyba, typ souboru),
+  // nebo jsou to skutečné uživatelsky volitelné barvy v editoru/čtečce.
+  // Ruční inspektor je může stále upravit, automatická paleta nikoliv.
+  function isSemanticColorRule(selector) {
+    return /(?:\[data-(?:state|status|error|direction|high|low|severity|result|highlight-color|epub-highlight-color|file-type)\b|\[aria-invalid\b|\.is-(?:yellow|green|blue|violet|red|docx?|epub|sql|pdf|txt|xlsx?|pptx?|html|css|js|json|csv|md)\b|\.reader-theme-[\w-]+|\.textcolor(?:white|black)\b|\.textcolorpalette\b|\.documents(?:epubhighlight|epubmarkcolor|epubselectioncolors|docxviewercontent|epubcontent|epubbody)\b|::(?:highlight|selection)\b)/i.test(selector) ||
+      /(?:^|[^a-z])(?:overdue|offline|online|pending|synced|syncing|conflict|expired|success|failure|failed|error|warning|danger|critical|invalid|disabled|readonly|destructive|reset|delete|trash|recovery)(?:$|[^a-z])/i.test(selector);
+  }
+
+  function sanitizeLegacyAutoCss(css) {
+    // Tato automatická oprava je bezpečná jen tehdy, pokud původní export
+    // skutečně neobsahoval žádnou ručně vytvořenou CSS výjimku.
+    const header = css.match(/automatická paleta\s*\((\d+)\)\s*,\s*ruční výjimky\s*\((\d+)\)/i);
+    if (!header || +header[1] === 0 || +header[2] !== 0) return css;
+    try {
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(css);
+      const rows = [];
+      const visit = (rules, context = []) => {
+        for (const rule of rules) {
+          if (rule.type === CSSRule.STYLE_RULE) {
+            if (isSemanticColorRule(rule.selectorText)) continue;
+            for (const property of rule.style) {
+              rows.push({ selector: rule.selectorText, property,
+                value: rule.style.getPropertyValue(property).trim(),
+                important: rule.style.getPropertyPriority(property) === 'important', context });
+            }
+          } else if (rule.cssRules) {
+            const head = rule.cssText.slice(0, rule.cssText.indexOf('{')).trim();
+            visit(rule.cssRules, [...context, head]);
+          } else {
+            // Neznámý typ pravidla nikdy neodstraňovat beze stopy.
+            throw new Error('Unsupported legacy CSS rule');
+          }
+        }
+      };
+      visit(sheet.cssRules);
+      const keyFor = (o) => `${o.context.join('\u0001')}\u00a6${o.selector}`;
+      const backgrounds = new Map();
+      for (const o of rows) {
+        if (!/^background(?:-color)?$/i.test(o.property)) continue;
+        const bg = parsedFromCSS(o.value);
+        if (bg && bg.alpha >= .98) backgrounds.set(keyFor(o), bg.hex);
+      }
+      return '/* LN-TB-699C-E: Bezpečně očištěný automatický export */\n' + rows.map(o => {
+        let value = o.value;
+        const bg = backgrounds.get(keyFor(o));
+        if (bg && /^(?:color|-webkit-text-fill-color)$/i.test(o.property)) {
+          const fg = parsedFromCSS(value);
+          if (fg && fg.alpha >= .98 && contrast(fg.hex, bg) < 4.5) value = contrastFg(bg);
+        }
+        let rule = `${o.selector} { ${o.property}: ${value}${o.important ? ' !important' : ''}; }\n`;
+        for (let i = o.context.length - 1; i >= 0; i--) rule = `${o.context[i]} {\n${rule}}\n`;
+        return rule;
+      }).join('');
+    } catch (error) {
+      console.warn('Theme Builder 699C-E: Legacy CSS nebylo možné automaticky očistit.', error);
+      return css; // původní CSS je bezpečnější než jeho neúplný přepis
+    }
+  }
+
   function harmonizeFixed(data, palette) {
     const property = data.property.toLowerCase(), selector = data.selector.toLowerCase();
     const src = data.src.toLowerCase();
     if (!data.selector || /theme-|secretmodeactive|:host|:root|#ln-theme-builder-699c/.test(selector)) return null;
+    if (isSemanticColorRule(selector)) return null;
     if (/(?:^|[\W])(secret|password|captcha|alert|error|success|danger|warning|critical|invalid|failed|delete|destructive)(?:$|[\W])/.test(selector)) return null;
     if (/(?:theme|debug|tester|studio|dictionary|keyboard|generated)\w*\.css/.test(src)) return null;
     // Kartám a štítkům NIKDY nepřepisovat jejich background/color obecným
@@ -879,10 +947,31 @@
   }
   function automaticColors(palette) {
     const output = new Map();
+    const backgroundBySelector = new Map();
+    const keyFor = (o) => `${o.context.join('\u0001')}\u00a6${o.selector}`;
     for (const x of stav.cssRadky) {
       if (output.has(x.key)) continue;
       const value = harmonizeFixed(x, palette);
-      if (value) output.set(x.key, { selector: x.selector, property: x.property, value, context: x.context, auto: true });
+      if (!value) continue;
+      const item = { selector: x.selector, property: x.property, value, context: x.context, auto: true };
+      output.set(x.key, item);
+      // Jen souvislá neprůhledná barva. Průhledné překryvy, gradienty,
+      // ::before a nezávislé části UI se nehodí k odhadu barvy pod textem.
+      if (/^background(?:-color)?$/i.test(x.property)) {
+        const bg = parsedFromCSS(value);
+        if (bg && bg.alpha >= .98) backgroundBySelector.set(keyFor(item), bg.hex);
+      }
+    }
+    // Čitelnost aktivních prvků: pokud stejné pravidlo pro daný selektor
+    // nastavuje i plné pozadí, vypočti kontrast textu PŘÍMO vůči němu.
+    // Např. růžový text na červeném pozadí měl kontrast jen 1.81:1.
+    for (const item of output.values()) {
+      if (item.property !== 'color' && item.property !== '-webkit-text-fill-color') continue;
+      const bg = backgroundBySelector.get(keyFor(item));
+      if (!bg) continue;
+      const fg = parsedFromCSS(item.value);
+      if (!fg || fg.alpha < .98 || contrast(fg.hex, bg) >= 4.5) continue;
+      item.value = contrastFg(bg, palette.get('--color-on-accent'));
     }
     return output;
   }
