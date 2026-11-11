@@ -260,3 +260,18 @@
     display: none !important;
   }
 }
+
+/* ==========================================================
+   699BG-AA – PC 150 %: vsechny tri moduly ve stejne horni pozici
+   ----------------------------------------------------------
+   V intervalu 900–1099 CSS px ma Plan uz od 699BG-O specialni
+   padding-top: 4px, zatimco Poznamky a Dokumenty mely 18px.
+   Sjednotime pouze horni odsazeni – bez zmen vysky tlacitek,
+   rozmisteni dalsich nastroju, sirky a mobilniho layoutu.
+   Horni stavovy radek zustava skryty dle 699BG-Z.
+   ========================================================== */
+@media (min-width: 900px) and (max-width: 1099px) and (hover: hover) and (pointer: fine) {
+  body:not(.nativeApp) .homeHeader {
+    padding-top: 4px !important;
+  }
+}
