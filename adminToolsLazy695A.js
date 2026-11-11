@@ -9,7 +9,7 @@
     svg: ['adminSvgStudio693R.css?v=696F-object-relief-shading', 'adminSvgStudio693R.js?v=696F-object-relief-shading'],
     visual: ['visualDebug.css?v=658be-global-rem-font-scale', 'visualDebug.js?v=690Q-dock-verification'],
     hub: ['debugHub.css?v=699M-feedback-rollback', 'debugHub.js?v=699M-feedback-rollback'],
-    theme: ['themeBuilder699C.css?v=699C-C-tag-card-colors', 'themeBuilder699C.js?v=699C-C-tag-card-colors']
+    theme: ['themeBuilder699C.css?v=699C-D-full-card-color', 'themeBuilder699C.js?v=699C-D-full-card-color']
   };
   const jobs = new Map();
 

@@ -110,7 +110,7 @@
         }
         return '';
       });
-      t.preservedOverrides = preserved;
+      t.preservedOverrides = cleanOldCardSurface(preserved);
     }
     return found;
   }
@@ -223,6 +223,7 @@
     for (const o of d.autoOverrides.values()) css += makeOverrideCss(stav.aktivni, o);
     for (const o of d.overrides.values()) css += makeOverrideCss(stav.aktivni, o);
     css += makeTagColorsCSS(stav.aktivni, d.tagColors);
+    if (cardSurfaceNeeded(stav.temata.find(t => t.id === stav.aktivni), d)) css += cardSurfaceCss(stav.aktivni);
     style.textContent = css;
   }
 
@@ -258,6 +259,36 @@
     let result = `${sel} { ${prop}: ${value} !important; }\n`;
     for (let i = o.context.length - 1; i >= 0; i--) result = `${o.context[i]} {\n${result}}\n`;
     return result;
+  }
+
+  // 699C-D: Barevná plocha poznámky MUSÍ být odvozena z barvy jejího
+  // hlavního štítku. Starší ruční nebo automatické výjimky mohou vložit
+  // background/background-color přímo na .taskCard; samotná změna
+  // --luba-card-bg pak nestačila. Toto pravidlo je proto záměrně
+  // až ZA výjimkami Builderu, v živém náhledu i exportovaném theme.css.
+  // Vybrané karty mají zachován původní neutralizovaný stav cardSelected.
+  // Swipe ponechává průhledný hostitel a barvu na pohyblivé ::before vrstvě.
+  function cardSurfaceCss(id) {
+    const root = scope(id);
+    // Dvě neodpovídající ID v :not() zvyšují specificitu přes cílené
+    // CSS výjimky z inspektoru (např. #notesContainer .taskCard),
+    // avšak NIKDY nefiltrují skutečnou kartu.
+    const card = `${root} .taskCard:not(#ln-theme-builder-699c):not(#ln-theme-builder-live-699c)`;
+    return `/* LN-TB-CARD-SURFACE:START */\n` +
+      `${card}[data-barva-karty]:not(.cardSelected):not(.lubaSwipeDoneTarget) { background: var(--luba-card-bg) !important; }\n` +
+      `${card}:not([data-barva-karty]):not(.cardSelected):not(.lubaSwipeDoneTarget) { background: var(--color-surface) !important; }\n` +
+      `${card}.cardSelected:not(.lubaSwipeDoneTarget) { background: color-mix(in srgb, var(--color-surface) 58%, #777777 42%) !important; }\n` +
+      `${card}.lubaSwipeDoneTarget { background: transparent !important; }\n` +
+      `${card}.lubaSwipeDoneTarget::before { background: var(--luba-card-bg) !important; }\n` +
+      `/* LN-TB-CARD-SURFACE:END */\n`;
+  }
+  function cardSurfaceNeeded(theme, data) {
+    return !!(theme?.new || theme?.custom || data?.tagColors?.size || data?.autoOverrides?.size ||
+      [...(data?.vars?.keys() || [])].some(name => name.startsWith('--card-')) ||
+      /LN-TB-OVERRIDES:|Motiv:|LN-TB-CARD-SURFACE/i.test(data?.preservedOverrides || ''));
+  }
+  function cleanOldCardSurface(css) {
+    return String(css || '').replace(/\/\* LN-TB-CARD-SURFACE:START \*\/[\s\S]*?\/\* LN-TB-CARD-SURFACE:END \*\/\s*/g, '');
   }
 
   function makeTagColorsCSS(id, tagColors) {
@@ -1038,13 +1069,14 @@
     }
     for (const t of stav.temata) {
       const d = draft(t.id);
-      if (!d.overrides.size && !d.autoOverrides.size && !d.preservedOverrides && !d.tagColors.size) continue;
+      if (!d.overrides.size && !d.autoOverrides.size && !d.preservedOverrides && !d.tagColors.size && !cardSurfaceNeeded(t, d)) continue;
       extras += `\n/* LN-TB-OVERRIDES: ${t.id}:START */\n`;
       extras += `/* Motiv: ${d.name.replace(/\*\//g, '')} – automatická paleta (${d.autoOverrides.size}), ruční výjimky (${d.overrides.size}) */\n`;
       if (d.preservedOverrides) extras += d.preservedOverrides;
       for (const o of d.autoOverrides.values()) extras += makeOverrideCss(t.id, o);
       for (const o of d.overrides.values()) extras += makeOverrideCss(t.id, o);
       extras += makeTagColorsCSS(t.id, d.tagColors);
+      if (cardSurfaceNeeded(t, d)) extras += cardSurfaceCss(t.id);
       extras += `/* LN-TB-OVERRIDES: ${t.id}:END */\n`;
     }
     const secret = result.search(/\/\*\s*=+\s*\n\s*SECRET REŽIM/i);
