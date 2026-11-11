@@ -267,6 +267,100 @@
     return result;
   }
 
+  // 699C-F: Úsporný, ale čitelný export automatických pravidel.
+  // Slučujeme POUZE bezprostředně sousedící deklarace pro shodný
+  // selektor ve shodných @media/@supports. Tím se nemění pořadí kaskády.
+  // Nezávislé ruční výjimky a soubor theme.css původních témat neměníme.
+  function komprimovatPravidla699CF(radky, transformovatSelector = null) {
+    const skupiny = [];
+    const stejnyKontext = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+    for (const o of radky) {
+      const selector = transformovatSelector ? transformovatSelector(o) : o.selector;
+      const context = o.context || [];
+      if (!selector || !o.property || !o.value) continue;
+      const pred = skupiny[skupiny.length - 1];
+      const prop = o.property.replace(/[^a-zA-Z-]/g, '');
+      const value = String(o.value).replace(/[{};]/g, '');
+      if (!prop || !value) continue;
+      const deklarace = { prop, value, important: o.important !== false };
+      if (pred && pred.selector === selector && stejnyKontext(pred.context, context)) {
+        pred.deklarace.push(deklarace);
+      } else skupiny.push({ selector, context: [...context], deklarace: [deklarace] });
+    }
+    // Čtyři identické strany barvy okraje jsou sémanticky ekvivalentní
+    // jedné deklaraci border-color. Nikdy neslučovat, jsou-li v bloku
+    // jiná pravidla border nebo různé hodnoty některé ze stran.
+    const strany = ['border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color'];
+    for (const group of skupiny) {
+      const decl = group.deklarace;
+      const sideRows = decl.filter(x => strany.includes(x.prop));
+      if (sideRows.length !== 4 || new Set(sideRows.map(x => x.prop)).size !== 4 ||
+          new Set(sideRows.map(x => x.value + '|' + x.important)).size !== 1 ||
+          decl.some(x => /^(?:border|border-color)$/.test(x.prop))) continue;
+      const start = decl.findIndex(x => strany.includes(x.prop));
+      const first = decl[start];
+      group.deklarace = decl.filter(x => !strany.includes(x.prop));
+      group.deklarace.splice(start, 0, { prop: 'border-color', value: first.value, important: first.important });
+    }
+    // Sousedící skupiny se stejnými deklaracemi smí sdílet selektorový seznam.
+    // Pozice obou pravidel v kaskádě zůstane na tomtéž místě.
+    const spojene = [];
+    for (const g of skupiny) {
+      const prev = spojene[spojene.length - 1];
+      const kod = JSON.stringify(g.deklarace);
+      if (prev && prev.kod === kod && stejnyKontext(prev.context, g.context)) {
+        prev.selector += ',\n' + g.selector;
+      } else spojene.push({ ...g, kod });
+    }
+    // @media bloky zapisovat jen jednou pro sousedící pravidla.
+    let css = '', otevreny = [];
+    for (const g of spojene) {
+      let shared = 0;
+      while (shared < otevreny.length && shared < g.context.length && otevreny[shared] === g.context[shared]) shared++;
+      while (otevreny.length > shared) { css += '  '.repeat(otevreny.length - 1) + '}\n'; otevreny.pop(); }
+      for (let i = shared; i < g.context.length; i++) {
+        css += '  '.repeat(i) + g.context[i] + ' {\n';
+        otevreny.push(g.context[i]);
+      }
+      const odsazeni = '  '.repeat(otevreny.length);
+      css += odsazeni + g.selector.replace(/\n/g, '\n' + odsazeni) + ' { ';
+      css += g.deklarace.map(d => `${d.prop}: ${d.value}${d.important ? ' !important' : ''};`).join(' ');
+      css += ' }\n';
+    }
+    while (otevreny.length) { css += '  '.repeat(otevreny.length - 1) + '}\n'; otevreny.pop(); }
+    return css;
+  }
+
+  function komprimovatStarsiAutomatiku699CF(css) {
+    // Pouze pravidla předchozího automatu bez ručních výjimek.
+    // Pokud CSSOM narazí na něco neznámého, původní obsah zachováme.
+    if (!/LN-TB-699C-E: Bezpečně očištěný automatický export/.test(css)) return css;
+    try {
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(css);
+      const rules = [];
+      const read = (list, context = []) => {
+        for (const rule of list) {
+          if (rule.type === CSSRule.STYLE_RULE) {
+            for (const property of rule.style) rules.push({
+              selector: rule.selectorText, property,
+              value: rule.style.getPropertyValue(property).trim(),
+              important: rule.style.getPropertyPriority(property) === 'important', context
+            });
+          } else if (rule.cssRules) {
+            const head = rule.cssText.slice(0, rule.cssText.indexOf('{')).trim();
+            read(rule.cssRules, [...context, head]);
+          } else throw new Error('Neznámé CSS pravidlo ve starém exportu');
+        }
+      };
+      read(sheet.cssRules);
+      return '/* LN-TB-699C-F: optimalizované automatické výjimky */\n' + komprimovatPravidla699CF(rules);
+    } catch (error) {
+      console.warn('Theme Builder 699C-F: Starší CSS ponecháno beze změny.', error);
+      return css;
+    }
+  }
+
   // 699C-D: Barevná plocha poznámky MUSÍ být odvozena z barvy jejího
   // hlavního štítku. Starší ruční nebo automatické výjimky mohou vložit
   // background/background-color přímo na .taskCard; samotná změna
@@ -1161,8 +1255,8 @@
       if (!d.overrides.size && !d.autoOverrides.size && !d.preservedOverrides && !d.tagColors.size && !cardSurfaceNeeded(t, d)) continue;
       extras += `\n/* LN-TB-OVERRIDES: ${t.id}:START */\n`;
       extras += `/* Motiv: ${d.name.replace(/\*\//g, '')} – automatická paleta (${d.autoOverrides.size}), ruční výjimky (${d.overrides.size}) */\n`;
-      if (d.preservedOverrides) extras += d.preservedOverrides;
-      for (const o of d.autoOverrides.values()) extras += makeOverrideCss(t.id, o);
+      if (d.preservedOverrides) extras += komprimovatStarsiAutomatiku699CF(d.preservedOverrides);
+      extras += komprimovatPravidla699CF(d.autoOverrides.values(), o => scopedSelector(t.id, o.selector, true));
       for (const o of d.overrides.values()) extras += makeOverrideCss(t.id, o);
       extras += makeTagColorsCSS(t.id, d.tagColors);
       if (cardSurfaceNeeded(t, d)) extras += cardSurfaceCss(t.id);
@@ -1252,7 +1346,7 @@
     const handle = el('span', 'lnTBhandle699C', '⠿'); handle.setAttribute('aria-hidden', 'true');
     const brand = el('div', 'lnTBbrand699C');
     brand.append(el('h2', '', '🎨 Theme Builder'), el('small', '', 'LubaNote · táhni hlavičku pro přesun'));
-    const copyFast = el('button', 'lnTBcopyFast699C', '⧉ CSS');
+    const copyFast = el('button', 'lnTBcopyFast699C', '⧉ Kopírovat');
     copyFast.title = 'Zkopírovat celý theme.css do schránky'; copyFast.type = 'button';
     copyFast.addEventListener('click', copyCSS);
     const close = el('button', 'lnTBclose699C', '×'); close.title = 'Zavřít Theme Builder'; close.type = 'button';
@@ -1310,10 +1404,8 @@
     const body = el('div', 'lnTBbody699C'); body.id = 'lnTBbody699C'; scrollAll.append(body);
     const footer = el('div', 'lnTBfooter699C');
     const count = el('small'); count.id = 'lnTBchanges699C'; footer.append(count);
-    const exportBtn = el('button', 'lnTBexport699C', '⬇ Exportovat kompletní theme.css');
+    const exportBtn = el('button', 'lnTBexport699C', '⬇ Stáhnout theme.css');
     exportBtn.addEventListener('click', exportCSS); footer.append(exportBtn);
-    const copyBtn = el('button', 'lnTBcopy699C', '⧉ Kopírovat celý CSS do schránky');
-    copyBtn.addEventListener('click', copyCSS); footer.append(copyBtn);
     const status = el('small', 'lnTBstatus699C'); status.id = 'lnTBstatus699C'; status.setAttribute('role', 'status'); footer.append(status);
     scrollAll.append(footer); panel.append(scrollAll);
     stav.root = panel; stav.panel = panel;
