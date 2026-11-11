@@ -249,3 +249,21 @@
   #ln-theme-builder-699c .lnTBpaletteBase699C { justify-content: space-between; }
   #ln-theme-builder-699c .lnTBformActions699C button { min-height: 41px; }
 }
+
+/* 699C-I – sdílené nastavení tónování automatických světlých variant. */
+#ln-theme-builder-699c .lnTBtonePanel699I {
+  display: grid; gap: 12px; min-width: 0; padding: 12px;
+  background: #1e2937; border: 1px solid #5a8f99; border-radius: 12px;
+}
+#ln-theme-builder-699c .lnTBtonePanel699I[hidden] { display: none !important; }
+#ln-theme-builder-699c .lnTBtonePanel699I > strong { font-size: 14px; }
+#ln-theme-builder-699c .lnTBtonePanel699I .lnTBhint699C { margin: 0; }
+#ln-theme-builder-699c .lnTBtoneRow699I { display: grid; gap: 7px; min-width: 0; }
+#ln-theme-builder-699c .lnTBtoneLabel699I { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+#ln-theme-builder-699c .lnTBtoneLabel699I label { font-size: 13px; font-weight: 650; }
+#ln-theme-builder-699c .lnTBtoneLabel699I output { font-size: 13px; min-width: 44px; text-align: right; color: #b7f4e5; }
+#ln-theme-builder-699c .lnTBtoneRange699I { width: 100%; min-height: 32px; accent-color: #62cfb9; touch-action: pan-x; }
+#ln-theme-builder-699c .lnTBtoneRow699I small { font-size: 11px; line-height: 1.35; }
+#ln-theme-builder-699c .lnTBtoneActions699I { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#ln-theme-builder-699c .lnTBtoneActions699I button { font-size: 12px; min-height: 46px; padding: 8px; white-space: normal; }
+#ln-theme-builder-699c .lnTBtoneDownload699I { background: #23616a; border-color: #63abb9; font-weight: 650; }

@@ -1,6 +1,7 @@
 /* LubaNote Theme Builder 699C – admin-only, lazy loaded.
- * Every change stays in memory until a deliberate full theme.css export.
- * No writes to localStorage, the backend, or the production stylesheet.
+ * Theme edits stay in memory until full theme.css export; no backend writes.
+ * 699C-I automatic light tuning is the one exception: its preview values
+ * are saved locally, and a small JS preset can be explicitly exported.
  */
 (() => {
   'use strict';
@@ -37,7 +38,8 @@
     cssFiltr: '', cssPozice: 0, domFiltr: '', domPozice: 0,
     celekCss: 0, chybyCss: [], history: [], zmenaPriVyberu: false, nacteno: false,
     presun: null, paletaOtevrena: false, zakladBarva: '#c9384e', editaceNazvu: null,
-    smazanaTemata: new Map(), vlastniStitky: new Map()
+    smazanaTemata: new Map(), vlastniStitky: new Map(),
+    toneOpen: false, toneTimer: 0
   };
 
   const el = (tag, className, content) => {
@@ -1419,6 +1421,7 @@
     stav.aktivni = id;
     updateStyle(); renderHeader(); renderActive();
     if (stav.paletaOtevrena) renderPalettes();
+    if (stav.toneOpen) tonePreview699I();
     setStatus('Náhled motivu: ' + draft(id).name + '. Produkční CSS ani uložený motiv se nemění.');
   }
 
@@ -1555,6 +1558,102 @@
     setStatus(stav.vyberAktivni ? 'Klepni na libovolný prvek mimo panel – kliknutí jeho akci nespustí.' : 'Výběr prvku vypnutý.');
   }
 
+  // 699C-I: Jeden algoritmus pro VSECHNY automaticke denni podoby.
+  // Zadna zmena theme.css ani uzivatelskych barev jednotlivych motivu.
+  function toneApi699I() { return window.LubaNoteLiveTone699H; }
+  function tonePreview699I() {
+    if (!stav.toneOpen) return;
+    const api = toneApi699I();
+    if (!api) return setStatus('Algoritmus denních barev není načten.');
+    if (aktualni()?.variant === 'light') {
+      api.disable(true);
+      return setStatus('Tato ručně vytvořená světlá varianta se společným algoritmem nemění.');
+    }
+    if (!api.enable(stav.aktivni, false, false))
+      setStatus('Náhled automatického denního motivu se nepodařilo vytvořit.');
+  }
+  function toneToggle699I(open = !stav.toneOpen) {
+    const panel = get('lnTBtone699I'), btn = get('lnTBtoneToggle699I');
+    if (!panel || !btn) return;
+    if (stav.toneTimer) { clearTimeout(stav.toneTimer); stav.toneTimer = 0; }
+    stav.toneOpen = !!open;
+    panel.hidden = !stav.toneOpen;
+    btn.setAttribute('aria-expanded', String(stav.toneOpen));
+    btn.textContent = stav.toneOpen ? '☀️ Zavřít ladění denních barev' : '☀️ Ladit denní barvy všech motivů';
+    if (stav.toneOpen) {
+      const config = toneApi699I()?.getTuning?.();
+      if (!config) return setStatus('Algoritmus denních barev není dostupný.');
+      for (const key of ['tint', 'depth']) {
+        const control = get('lnTBtone' + key + '699I');
+        if (control) control.value = String(config[key]);
+        textValue(get('lnTBtone' + key + 'Value699I'), config[key] + ' %');
+      }
+      tonePreview699I();
+      setStatus('Odsuň panel a nastav společný barevný nádech a hloubku.');
+    } else {
+      toneApi699I()?.disable(true);
+      updateStyle();
+      setStatus('Denní náhled vypnutý. Běžné barvy motivů se nemění.');
+    }
+  }
+  function toneMove699I(key, value, commit = false) {
+    textValue(get('lnTBtone' + key + 'Value699I'), value + ' %');
+    toneApi699I()?.setTuning?.({ [key]: +value }, false);
+    if (stav.toneTimer) clearTimeout(stav.toneTimer);
+    if (commit) {
+      stav.toneTimer = 0;
+      tonePreview699I();
+    } else {
+      stav.toneTimer = setTimeout(() => { stav.toneTimer = 0; tonePreview699I(); }, 110);
+    }
+  }
+  function toneExport699I() {
+    const content = toneApi699I()?.exportTuning?.();
+    if (!content) return setStatus('Nelze exportovat nastavení denních barev.');
+    const url = URL.createObjectURL(new Blob([content], { type: 'text/javascript;charset=utf-8' }));
+    const a = el('a'); a.href = url; a.download = 'liveTonePreset699I.js';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus('Soubor liveTonePreset699I.js nahraď ve vývojové větvi. theme.css se nemění.');
+  }
+  function tonePanel699I() {
+    const box = el('section', 'lnTBtonePanel699I'); box.id = 'lnTBtone699I'; box.hidden = true;
+    box.append(el('strong', '', '☀️ Společná automatická denní paleta'));
+    box.append(el('p', 'lnTBhint699C', 'Tyto posuvníky ovlivňují všechny automatické světlé varianty. Hotové tmavé motivy i ručně vytvořené světlé dvojice zůstanou stejné.'));
+    for (const [key, name, help] of [
+      ['depth', 'Hloubka světlých barev', '0 % = skoro bílé, 100 % = výraznější pastelové pozadí a karty'],
+      ['tint', 'Síla barevného nádechu', '0 % = téměř neutrální, 100 % = sytější odstín zvoleného motivu']
+    ]) {
+      const row = el('div', 'lnTBtoneRow699I');
+      const heading = el('div', 'lnTBtoneLabel699I');
+      const label = el('label', '', name); label.htmlFor = 'lnTBtone' + key + '699I';
+      const value = el('output', '', ''); value.id = 'lnTBtone' + key + 'Value699I';
+      heading.append(label, value);
+      const range = el('input', 'lnTBtoneRange699I'); range.type = 'range';
+      range.id = 'lnTBtone' + key + '699I'; range.min = '0'; range.max = '100'; range.step = '1';
+      range.addEventListener('input', () => toneMove699I(key, range.value));
+      range.addEventListener('change', () => toneMove699I(key, range.value, true));
+      row.append(heading, range, el('small', '', help)); box.append(row);
+    }
+    const actions = el('div', 'lnTBtoneActions699I');
+    const reset = el('button', '', '↺ Výchozí hodnoty');
+    reset.addEventListener('click', () => {
+      const config = toneApi699I()?.resetTuning?.(); if (!config) return;
+      for (const key of ['tint', 'depth']) {
+        get('lnTBtone' + key + '699I').value = String(config[key]);
+        textValue(get('lnTBtone' + key + 'Value699I'), config[key] + ' %');
+      }
+      tonePreview699I();
+      setStatus('Obnovené výchozí hodnoty z projektu.');
+    });
+    const exportButton = el('button', 'lnTBtoneDownload699I', '⬇ Uložit pro další APK');
+    exportButton.title = 'Stáhne malý soubor liveTonePreset699I.js';
+    exportButton.addEventListener('click', toneExport699I);
+    actions.append(reset, exportButton); box.append(actions);
+    box.append(el('p', 'lnTBhint699C', 'Posuvníky se samy zapamatují na tomto zařízení. Pro všechna zařízení stáhni nastavení a nahraď v projektu soubor liveTonePreset699I.js. Není třeba znovu exportovat theme.css.'));
+    return box;
+  }
+
   function ui() {
     const panel = el('aside', 'lnTBpanel699C'); panel.id = ID;
     panel.setAttribute('role', 'region'); panel.setAttribute('aria-label', 'LubaNote Theme Builder');
@@ -1604,6 +1703,11 @@
     manage.append(rename, remove); tools.append(manage);
     const pairPanel = el('div', 'lnTBpair699CG'); pairPanel.id = 'lnTBpair699CG';
     pairPanel.hidden = true; tools.append(pairPanel);
+    const toneToggle = el('button', 'lnTBpaletteToggle699C', '☀️ Ladit denní barvy všech motivů');
+    toneToggle.id = 'lnTBtoneToggle699I'; toneToggle.type = 'button';
+    toneToggle.setAttribute('aria-expanded', 'false');
+    toneToggle.addEventListener('click', () => toneToggle699I());
+    tools.append(toneToggle, tonePanel699I());
     const form = el('div', 'lnTBnameForm699C'); form.id = 'lnTBnameForm699C'; form.hidden = true; tools.append(form);
     const paletteButton = el('button', 'lnTBpaletteToggle699C', '🎨 Navrhnout paletu'); paletteButton.type = 'button';
     paletteButton.addEventListener('click', () => showPalette()); tools.append(paletteButton);
@@ -1645,6 +1749,7 @@
     const available = nacistTemata(source);
     stav.source = source; stav.temata = available; stav.drafty = new Map(); stav.history = [];
     stav.smazanaTemata = new Map(); stav.paletaOtevrena = false; stav.editaceNazvu = null;
+    stav.toneOpen = false; stav.toneTimer = 0;
     stav.vlastniStitky = new Map();
     for (const t of available) stav.drafty.set(t.id, { name: t.name, vars: new Map(t.original), overrides: new Map(), autoOverrides: new Map(),
       tagColors: new Map(t.tagColors), preservedOverrides: t.preservedOverrides, paletteName: '',
@@ -1693,6 +1798,8 @@
     // Stop selection and remove preview before restoring the original app theme.
     stav.vyberAktivni = false;
     stav.presun = null;
+    if (stav.toneTimer) { clearTimeout(stav.toneTimer); stav.toneTimer = 0; }
+    if (stav.toneOpen) { toneApi699I()?.disable(true); stav.toneOpen = false; }
     stav.panel.remove(); stav.highlight?.remove();
     document.getElementById(STYLE_ID)?.remove();
     document.removeEventListener('pointerdown', selectionHandler, true);

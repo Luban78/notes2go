@@ -9,6 +9,26 @@
   const ROOT = `body.${CLASS}:not(.secretModeActive)`;
   const STYLE = 'lnAutoToneCss699H';
   const STORE = 'lubanote_theme_auto_counterpart_699H';
+  // 699C-I: Dva sdílene parametry pro VSECHNY automaticke denni varianty.
+  // Konfigurace z projektu = stejna pro vsechna zarizeni. LocalStorage ma
+  // prednost pouze pri ladeni na konkretnim zarizeni.
+  const TUNING_STORE = 'lubanote_auto_light_tuning_699I';
+  function validValue(v, fallback) {
+    const n = Number(v);
+    return Number.isFinite(n) && v !== null && v !== undefined && v !== ''
+      ? Math.round(Math.max(0, Math.min(100, n))) : fallback;
+  }
+  function normalizeSettings(v, fallback={tint:64,depth:48}) {
+    return {tint:validValue(v?.tint,fallback.tint), depth:validValue(v?.depth,fallback.depth)};
+  }
+  const projectSettings = normalizeSettings(window.LubaNoteLiveTonePreset699I);
+  let settings = projectSettings;
+  try {
+    const saved = JSON.parse(localStorage.getItem(TUNING_STORE) || 'null');
+    if(saved && typeof saved==='object' && ['tint','depth'].every(k => Object.hasOwn(saved,k)))
+      settings = normalizeSettings(saved,projectSettings);
+  } catch (_) { /* localStorage may be disabled */ }
+
   const CARD_NAMES = ['cervena','oranzova','zluta','zelena','tyrkysova','modra','fialova','ruzova'];
   const TOKEN = /#[a-f\d]{3,8}\b|(?:rgba?|hsla?)\([^()]*\)/gi;
   let current = null;
@@ -52,14 +72,17 @@
   function rgba(hex,a) { return a>=.999?hex:`rgba(${parse(hex).rgb.map(Math.round).join(', ')}, ${Number(a.toFixed(3))})`; }
   function palette(accent,dark) {
     const {h,s}=rgbToHsl(accent);
-    // Pastel (not white) surfaces keep the original theme's hue.
-    const bg=hslHex(h,dark?.33:.22,dark?.095:.936);
-    const surface=hslHex(h,dark?.30:.16,dark?.165:.968);
-    const editor=hslHex(h,dark?.31:.17,dark?.115:.951);
+    // 699C-I: Zakladni motiv zustava nedotcen. Menime pouze algoritmem
+    // odvozenou denni variantu. Hloubka 0 = temer bila, 100 = barevna pastel.
+    const depth=settings.depth / 100, tint=settings.tint / 100;
+    const dayL = .975 - .22 * depth;
+    const bg=hslHex(h,dark?.33:.10+.55*tint,dark?.095:dayL);
+    const surface=hslHex(h,dark?.30:.07+.38*tint,dark?.165:clamp(dayL+.046));
+    const editor=hslHex(h,dark?.31:.09+.42*tint,dark?.115:clamp(dayL+.020));
     const bright=hslHex(h,clamp(s+.08,.57,.88),dark?.60:.39);
     const second=hslHex(h,clamp(s,.43,.83),dark?.63:.42);
-    const elev=hslHex(h,dark?.28:.19,dark?.23:.89);
-    const border=hslToRgb(h,dark?.48:.32,dark?.75:.32).map(Math.round);
+    const elev=hslHex(h,dark?.28:.12+.42*tint,dark?.23:clamp(dayL-.05));
+    const border=hslToRgb(h,dark?.48:.20+.36*tint,dark?.75:.32).map(Math.round);
     const p=new Map([
       ['--color-background',bg],['--color-surface',surface],['--color-surface-elevated',elev],
       ['--color-text',textFor(bg)],['--color-text-secondary',hslHex(h,dark?.24:.20,dark?.78:.30)],
@@ -69,7 +92,9 @@
       ['--color-editor-background',editor],['--color-editor-text',textFor(editor)]
     ]);
     (dark?[.90,.79,.68,.57,.47,.37,.28,.20]:[.96,.88,.79,.68,.56,.45,.35,.25]).forEach((l,i)=>{
-      p.set(`--card-${CARD_NAMES[i]}`,hslHex((h+(i-3.5)*3+360)%360,clamp(s*.69,.29,.64),l));
+      const level=dark?l:clamp(l-depth*(i<=2?.13:.06),.20,.97);
+      const saturation=dark?clamp(s*.69,.29,.64):clamp(.24+.57*tint,.19,.81);
+      p.set(`--card-${CARD_NAMES[i]}`,hslHex((h+(i-3.5)*3+360)%360,saturation,level));
     });
     return p;
   }
@@ -186,8 +211,9 @@
     if(!names.length) return '';
     const h=rgbToHsl(p.get('--color-accent')).h;
     return names.map((src,i)=>{
-      const tint=hslHex((h-12+i*24/Math.max(1,names.length-1)+360)%360,dark?.47:.43,
-        dark?.23+i*.11/Math.max(1,names.length-1):.90-i*.24/Math.max(1,names.length-1));
+      const k=i/Math.max(1,names.length-1);
+      const tint=hslHex((h-12+k*24+360)%360,dark?.47:.23+.57*(settings.tint/100),
+        dark?.23+k*.11:clamp(.90-k*.24-(settings.depth/100)*(.12-k*.03),.40,.96));
       const fg=textFor(tint),v=`[data-barva-karty="${src}" i]`,t=`[data-tag-color="${src}" i]`;
       return `${ROOT} .taskCard${v} { --luba-card-bg: ${tint} !important; --luba-tag-text-683AB: ${fg} !important; }
 body.${CLASS} .categoryTab${t},body.${CLASS} .tagOptions button${t},body.${CLASS} .manageTagColorButton${t} { background-color: ${tint} !important; --luba-tag-bg: ${tint} !important; -webkit-text-fill-color: ${fg} !important; }`;
@@ -231,12 +257,14 @@ body.${CLASS} .categoryTab${t},body.${CLASS} .tagOptions button${t},body.${CLASS
       const css=fixedColors(p);
       generatedCSS=document.getElementById(STYLE)||document.createElement('style');
       generatedCSS.id=STYLE;
-      generatedCSS.textContent=`body.${CLASS}:not(.secretModeActive) { ${vars} background:var(--color-background) !important; color:var(--color-text) !important; }
+      generatedCSS.textContent=`:root body.${CLASS}:not(.secretModeActive) { ${vars} background:var(--color-background) !important; color:var(--color-text) !important; }
 ${css}
 body.${CLASS}:not(.secretModeActive) .taskCard[data-barva-karty]:not(.cardSelected):not(.lubaSwipeDoneTarget) {background:var(--luba-card-bg) !important;}
 body.${CLASS}:not(.secretModeActive) .taskCard:not([data-barva-karty]):not(.cardSelected):not(.lubaSwipeDoneTarget) {background:var(--color-surface) !important;}
 body.${CLASS}:not(.secretModeActive) .taskCard.lubaSwipeDoneTarget::before {background:var(--luba-card-bg) !important;}`;
-      if(!generatedCSS.isConnected)document.head.appendChild(generatedCSS);
+      // Styly zivého náhledu museji byt AZ ZA Builderem (ktery sam tvori
+      // nahledove CSS), jinak se posuvniky nemusí na obrazovce projevit.
+      document.head.appendChild(generatedCSS);
       current={theme,dark,p};
       updateTagCSS(p,dark);
       document.body.classList.add(CLASS);
@@ -263,7 +291,32 @@ body.${CLASS}:not(.secretModeActive) .taskCard.lubaSwipeDoneTarget::before {back
       enable(was.theme,was.dark,false);
     }
   }
+  function getTuning(){return {...settings};}
+  function getProjectTuning(){return {...projectSettings};}
+  function reapplyTuning(){
+    if(!current) return false;
+    const {theme,dark}=current;
+    return enable(theme,dark,false);
+  }
+  function setTuning(value,refresh=true){
+    settings=normalizeSettings({...settings,...value},projectSettings);
+    try{localStorage.setItem(TUNING_STORE,JSON.stringify(settings));}catch(_){}
+    if(refresh)reapplyTuning();
+    return getTuning();
+  }
+  function resetTuning(){
+    settings={...projectSettings};
+    try{localStorage.removeItem(TUNING_STORE);}catch(_){}
+    reapplyTuning();
+    return getTuning();
+  }
+  function exportTuning(){
+    const v=getTuning();
+    return `/* LubaNote 699C-I – sdilena denni paleta. Vygenerovano v Theme Builderu. */\n`+
+      `window.LubaNoteLiveTonePreset699I = Object.freeze({ tint: ${v.tint}, depth: ${v.depth} });\n`;
+  }
   window.LubaNoteLiveTone699H={enable,disable,restore,suspend,resume,
+    getTuning,getProjectTuning,setTuning,resetTuning,reapplyTuning,exportTuning,
     isActive:theme=>!!current&&current.theme===theme,
     effectiveDark:theme=>current?.theme===theme?current.dark:null};
 })();
