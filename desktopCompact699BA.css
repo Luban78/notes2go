@@ -354,3 +354,107 @@
     padding: 2px !important;
   }
 }
+
+
+/* =============================================================
+   699BG-AC – PC pod hranicí stabilního 150% rozložení.
+   I když uživatel zatím přepíná zoom, nesmí tlačítko Nový štítek
+   ztratit vzhled ani se texty modulů lámat uvnitř slova.
+   Nativní APK a dotykové zařízení zůstávají beze změny.
+   ============================================================= */
+@media (max-width: 899px) and (hover: hover) and (pointer: fine) {
+  body:not(.nativeApp) #lnDesktopNewTag693B {
+    box-sizing: border-box !important;
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 106px !important;
+    width: auto !important;
+    min-height: 40px !important;
+    padding: 0 10px !important;
+    margin: 0 !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 12px !important;
+    appearance: none !important;
+    background: var(--color-surface) !important;
+    color: var(--color-text) !important;
+    font: inherit !important;
+    font-weight: 650 !important;
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    cursor: pointer !important;
+  }
+  body:not(.nativeApp) nav.moduleTabs .moduleTabText,
+  body:not(.nativeApp) nav.moduleTabs .lnDesktopModuleCount693A {
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+  }
+}
+
+/* Vizuálně výrazné, ale neutrální upozornění v motivu LubaNote.
+   Nezakazuje Ctrl + −, zoom Chromu ani možnost zvětšit okno. */
+#lnPcZoomSafety699BGAC[hidden] { display: none !important; }
+#lnPcZoomSafety699BGAC {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 18px;
+  background: color-mix(in srgb, var(--color-background, #111923) 91%, black);
+  color: var(--color-text, #f0f2f4);
+  text-align: center;
+}
+#lnPcZoomSafety699BGAC .lnPcZoomSafetyCard699BGAC {
+  width: min(100%, 490px);
+  box-sizing: border-box;
+  padding: clamp(24px, 5vw, 40px);
+  border: 1px solid var(--color-border, #5e7480);
+  border-radius: 20px;
+  background: var(--color-surface, #263240);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.24);
+}
+#lnPcZoomSafety699BGAC .lnPcZoomSafetySymbol699BGAC {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 16px;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--color-accent, #7cc5d5) 20%, var(--color-surface, #263240));
+  color: var(--color-accent, #7cc5d5);
+  font-size: 30px;
+  font-weight: 700;
+}
+#lnPcZoomSafety699BGAC h2 {
+  margin: 0 0 14px;
+  font-size: clamp(20px, 3vw, 26px);
+  line-height: 1.25;
+}
+#lnPcZoomSafety699BGAC p {
+  margin: 10px 0;
+  line-height: 1.5;
+}
+#lnPcZoomSafety699BGAC .lnPcZoomSafetyHint699BGAC {
+  margin-top: 22px;
+  font-weight: 650;
+}
+#lnPcZoomSafety699BGAC kbd {
+  display: inline-block;
+  min-width: 19px;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border, #5e7480);
+  border-radius: 7px;
+  background: var(--color-background, #111923);
+  font: inherit;
+  white-space: nowrap;
+}
+#lnPcZoomSafety699BGAC .lnPcZoomSafetyFoot699BGAC {
+  margin-top: 24px;
+  font-size: 0.86rem;
+  opacity: 0.72;
+}
