@@ -180,3 +180,72 @@
 #ln-theme-builder-699c .lnTBcssRow699C { flex-wrap: wrap; }
 #ln-theme-builder-699c .lnTBcssRow699C .lnTBcolorMeta699C { flex-basis: 100%; }
 .lubaTagColorOverlay683AC.lnTBpicker699C { z-index: 30100 !important; }
+
+/* 699C-B – barevné návrhy a správa témat. Vlastní ovládání v LubaNote stylu. */
+#ln-theme-builder-699c .lnTBmanage699C button { min-width: 0; }
+#ln-theme-builder-699c .lnTBnameForm699C,
+#ln-theme-builder-699c .lnTBpalette699C {
+  border: 1px solid rgba(115,219,231,.47);
+  border-radius: 12px;
+  background: #1c2735;
+  padding: 12px;
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+#ln-theme-builder-699c .lnTBnameForm699C[hidden],
+#ln-theme-builder-699c .lnTBpalette699C[hidden] { display: none !important; }
+#ln-theme-builder-699c .lnTBnameForm699C strong { font-size: 14px; }
+#ln-theme-builder-699c .lnTBnameInput699C {
+  display: block;
+  width: 100%; min-height: 42px;
+  padding: 9px 11px;
+  background: #253445;
+  border: 1px solid #618594;
+  border-radius: 10px;
+  outline-offset: 2px;
+}
+#ln-theme-builder-699c .lnTBformActions699C { display: flex; gap: 8px; }
+#ln-theme-builder-699c .lnTBformActions699C button { flex: 1; min-width: 0; }
+#ln-theme-builder-699c button.lnTBdanger699C { background: #762e3c; color: #fff; border-color: #e87888; }
+#ln-theme-builder-699c .lnTBpaletteToggle699C {
+  width: 100%;
+  min-height: 44px;
+  font-weight: 700;
+  background: #275862;
+  border-color: #77ceda;
+  color: #e1fbfe;
+}
+#ln-theme-builder-699c .lnTBpalette699C h3 { margin: 0; }
+#ln-theme-builder-699c .lnTBpaletteBase699C { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#ln-theme-builder-699c .lnTBpaletteBase699C span:first-child { font-weight: 600; }
+#ln-theme-builder-699c .lnTBpaletteBase699C code { font-size: 12px; color: #bfe9e9; }
+#ln-theme-builder-699c button.lnTBpaletteCard699C {
+  display: grid;
+  width: 100%;
+  gap: 5px;
+  padding: 10px;
+  text-align: left;
+  background: #253343;
+  border-color: #556d80;
+}
+#ln-theme-builder-699c .lnTBpaletteCard699C strong { font-size: 14px; }
+#ln-theme-builder-699c .lnTBpaletteCard699C small { font-size: 11px; }
+#ln-theme-builder-699c button.lnTBpaletteCard699C.chosen {
+  outline: 2px solid #73dbe7;
+  background: #1a3a46;
+}
+#ln-theme-builder-699c .lnTBpaletteStrip699C {
+  display: flex;
+  height: 31px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.35);
+}
+#ln-theme-builder-699c .lnTBpaletteStrip699C span { display: block; flex: 1; min-width: 0; }
+#ln-theme-builder-699c .lnTBpalette699C .lnTBhint699C { margin: 0; }
+@media (max-width: 700px) {
+  #ln-theme-builder-699c .lnTBpalette699C { padding: 9px; }
+  #ln-theme-builder-699c .lnTBpaletteBase699C { justify-content: space-between; }
+  #ln-theme-builder-699c .lnTBformActions699C button { min-height: 41px; }
+}

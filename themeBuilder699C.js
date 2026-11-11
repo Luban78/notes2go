@@ -7,6 +7,7 @@
   if (window.LubaNoteThemeBuilder699C) return;
 
   const ID = 'ln-theme-builder-699c';
+  const PUVODNI_TEMATA = new Set(['light', 'dark', 'cappuccino', 'ocean', 'darkg', 'arctic', 'violetnight', 'solar', 'retro']);
   const STYLE_ID = 'ln-theme-builder-live-699c';
   const BAREVNE_VLASTNOSTI = /(?:^color$|(?:-|^)color$|^background(?:-color|-image)?$|^border(?:-[a-z-]+)?$|^outline(?:-color)?$|^box-shadow$|^text-shadow$|^fill$|^stroke$|^caret-color$|^text-decoration(?:-color)?$|^-webkit-text-fill-color$|^-webkit-text-stroke(?:-color)?$)/i;
   const TOKEN = /#[a-f\d]{3,8}\b|(?:rgba?|hsla?)\([^()]*\)|var\(--[\w-]+(?:\s*,\s*[^()]*)?\)|\b(?:transparent|currentColor|white|black|red|blue|green|yellow|orange|purple|pink|gray|grey)\b/gi;
@@ -25,7 +26,8 @@
     vyberAktivni: false, highlight: null, panel: null, root: null,
     cssFiltr: '', cssPozice: 0, domFiltr: '', domPozice: 0,
     celekCss: 0, chybyCss: [], history: [], zmenaPriVyberu: false, nacteno: false,
-    presun: null
+    presun: null, paletaOtevrena: false, zakladBarva: '#c9384e', editaceNazvu: null,
+    smazanaTemata: new Map()
   };
 
   const el = (tag, className, content) => {
@@ -75,9 +77,19 @@
       if (!rule) continue;
       const vars = new Map();
       for (const m of rule.text.matchAll(/(--[\w-]+)\s*:\s*([^;{}]+);/g)) vars.set(m[1], m[2].trim());
-      found.push({ id, name, start: rule.start, end: rule.end, original: vars });
+      const prefix = css.slice(Math.max(0, match.index - 120), match.index)
+        .match(/\/\*\s*LN-TB-CUSTOM:\s*([a-z0-9-]+)\s*\*\/\s*$/);
+      const custom = !PUVODNI_TEMATA.has(id);
+      const markerStart = prefix?.[1] === id ? match.index - prefix[0].length : match.index;
+      found.push({ id, name, originalName: name, markerStart, markerEnd: re.lastIndex,
+        start: rule.start, end: rule.end, original: vars, custom });
     }
     if (!found.length) throw new Error('V theme.css nebyla nalezena žádná volitelná témata.');
+    const old = new Map();
+    const reOld = /\/\*\s*LN-TB-OVERRIDES:\s*([a-z0-9-]+):START\s*\*\/([\s\S]*?)\/\*\s*LN-TB-OVERRIDES:\s*\1:END\s*\*\//g;
+    let prev;
+    while ((prev = reOld.exec(css))) old.set(prev[1], prev[2]);
+    for (const t of found) t.preservedOverrides = old.get(t.id) || '';
     return found;
   }
 
@@ -182,6 +194,11 @@
     if (!d) return;
     const vars = [...d.vars].map(([name, value]) => `${name}: ${value} !important;`).join('\n');
     let css = `:root ${scope(stav.aktivni)} {\n${vars}\n}\n`;
+    if (stav.temata.some(t => t.id === stav.aktivni && t.new)) {
+      const bg = parsedFromCSS(d.vars.get('--color-background') || '')?.hex || '#ffffff';
+      css += `${scope(stav.aktivni)} #modalDate, ${scope(stav.aktivni)} #modalTime { color-scheme: ${relativeLum(bg) < .25 ? 'dark' : 'light'}; }\n`;
+    }
+    for (const o of d.autoOverrides.values()) css += makeOverrideCss(stav.aktivni, o);
     for (const o of d.overrides.values()) css += makeOverrideCss(stav.aktivni, o);
     style.textContent = css;
   }
@@ -196,9 +213,14 @@
     result.push(selector.slice(start).trim());
     return result.filter(Boolean);
   }
-  function scopedSelector(id, selector) {
+  function scopedSelector(id, selector, excludeTools = false) {
     const body = scope(id);
     return splitSelector(selector).map(s => {
+      if (excludeTools) {
+        const shield = ':not(:is(#ln-theme-builder-699c, #ln-theme-builder-699c *, .lubaTagColorOverlay683AC, .lubaTagColorOverlay683AC *))';
+        s = s.replace(/(::(?:before|after|first-letter|first-line|selection|placeholder|marker))$/i, shield + '$1');
+        if (!s.includes(shield)) s += shield;
+      }
       s = s.replace(/\bbody\.theme-[\w-]+/g, 'body');
       if (/^:root(?:\b|:)/.test(s)) return `:root:has(> ${body})${s.slice(5)}`;
       if (/^html(?:\b|:)/.test(s)) return `html:has(> ${body})${s.slice(4)}`;
@@ -207,7 +229,7 @@
     }).join(',\n');
   }
   function makeOverrideCss(id, o) {
-    const sel = scopedSelector(id, o.selector);
+    const sel = scopedSelector(id, o.selector, !!o.auto);
     const prop = o.property.replace(/[^a-zA-Z-]/g, '');
     const value = o.value.replace(/[{};]/g, '');
     let result = `${sel} { ${prop}: ${value} !important; }\n`;
@@ -457,23 +479,47 @@
   function saveUndo() {
     const d = aktualni();
     if (!d) return;
-    stav.history.push({ id: stav.aktivni, vars: new Map(d.vars), overrides: new Map(d.overrides) });
-    if (stav.history.length > 60) stav.history.shift();
+    stav.history.push({ action: 'edit', id: stav.aktivni, vars: new Map(d.vars),
+      overrides: new Map(d.overrides), autoOverrides: new Map(d.autoOverrides), preservedOverrides: d.preservedOverrides, name: d.name,
+      base: d.base, paletteName: d.paletteName });
+    if (stav.history.length > 40) stav.history.shift();
   }
   function undo() {
     const last = stav.history.pop();
     if (!last) { setStatus('Žádná starší úprava k vrácení.'); return; }
+    if (last.action === 'create') {
+      stav.drafty.delete(last.id);
+      stav.temata = stav.temata.filter(t => t.id !== last.id);
+      stav.editaceNazvu = null;
+      preview(draft(last.previous) ? last.previous : stav.temata[0].id);
+      setStatus('Vytvoření motivu bylo vráceno.'); return;
+    }
+    if (last.action === 'delete') {
+      stav.temata.splice(Math.min(last.index, stav.temata.length), 0, last.theme);
+      stav.drafty.set(last.theme.id, last.data);
+      stav.smazanaTemata.delete(last.theme.id);
+      preview(last.theme.id);
+      setStatus('Smazání motivu bylo vráceno.'); return;
+    }
     const d = draft(last.id);
-    if (!d) { setStatus('Motiv byl odstraněn.'); return; }
+    if (!d) { setStatus('Motiv již neexistuje.'); return; }
     d.vars = new Map(last.vars);
     d.overrides = new Map(last.overrides);
+    d.autoOverrides = new Map(last.autoOverrides);
+    d.preservedOverrides = last.preservedOverrides;
+    d.name = last.name;
+    d.base = last.base;
+    d.paletteName = last.paletteName;
+    const t = stav.temata.find(x => x.id === last.id);
+    if (t) t.name = last.name;
     preview(last.id);
-    setStatus('Poslední barevná úprava byla vrácena.');
+    setStatus('Poslední změna motivu byla vrácena.');
   }
   function changed() {
     updateStyle();
     renderActive();
     renderHeader();
+    if (stav.paletaOtevrena) renderPalettes();
     setStatus('Změna je pouze v živém náhledu. Pro trvalé použití exportuj theme.css.');
   }
   function nastavOtevreniNabidky(otevrit) {
@@ -486,7 +532,7 @@
   }
   function renderHeader() {
     const d = aktualni();
-    textValue(get('lnTBchanges699C'), `${d?.overrides.size || 0} výjimek · ${stav.drafty.size} motivů`);
+    textValue(get('lnTBchanges699C'), `${d?.autoOverrides.size || 0} sladěných barev · ${d?.overrides.size || 0} ručních výjimek · ${stav.drafty.size} motivů`);
     const btn = get('lnTBthemes699C');
     const menu = get('lnTBthemeMenu699C');
     if (!btn || !menu) return;
@@ -558,6 +604,244 @@
     posunPanelu(p.left, p.top);
   }
 
+  // 699C-B – paleta vzniká výhradně v paměti. Změny nezasahují do jiných motivů.
+  function hslRgb(h, s, l) {
+    const a = s * Math.min(l, 1 - l);
+    const f = n => { const k = (n + h / 30) % 12;
+      return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+    return [f(0), f(8), f(4)];
+  }
+  function hslHex(h, s, l) {
+    return '#' + hslRgb(((h % 360) + 360) % 360, s, l).map(n => n.toString(16).padStart(2, '0')).join('');
+  }
+  function rgbHsl(hex) {
+    const p = parsedColor(hex) || { hex: '#c9384e' };
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(p.hex.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
+    let h = 0, s = 0, l = (max + min) / 2;
+    if (delta) {
+      s = delta / (1 - Math.abs(2 * l - 1));
+      switch (max) {
+        case r: h = ((g - b) / delta) % 6; break;
+        case g: h = (b - r) / delta + 2; break;
+        default: h = (r - g) / delta + 4;
+      }
+      h = (h * 60 + 360) % 360;
+    }
+    return { h, s, l };
+  }
+  function relativeLum(hex) {
+    const p = parsedColor(hex);
+    if (!p) return 0;
+    const c = [1, 3, 5].map(i => parseInt(p.hex.slice(i, i + 2), 16) / 255)
+      .map(x => x <= .04045 ? x / 12.92 : Math.pow((x + .055) / 1.055, 2.4));
+    return .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+  }
+  function contrast(a, b) {
+    const x = relativeLum(a), y = relativeLum(b);
+    return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
+  }
+  function contrastFg(bg, hint) {
+    const options = ['#101724', '#ffffff', hint].filter(Boolean);
+    return options.sort((a, b) => contrast(b, bg) - contrast(a, bg))[0];
+  }
+  const PALETY = [
+    { id: 'temna', name: 'Tmavá harmonie', info: 'Tmavé panely, výrazná hlavní barva', dark: true, shift: 0 },
+    { id: 'svetla', name: 'Světlá elegance', info: 'Čisté světlé plochy a přehledné texty', dark: false, shift: 0 },
+    { id: 'analog', name: 'Jemná harmonie', info: 'Sousední odstíny a měkké akcenty', dark: true, shift: -22 },
+    { id: 'kontrast', name: 'Doplňkový kontrast', info: 'Hlavní a kontrastní doplňková barva', dark: true, shift: 180 }
+  ];
+  function paletteValues(base, mode) {
+    const { h, s } = rgbHsl(base);
+    const dark = mode.dark, alternate = (h + mode.shift + 360) % 360;
+    const accent = hslHex(h, Math.max(.57, Math.min(.88, s + .08)), dark ? .60 : .39);
+    const accentSecondary = hslHex(alternate, Math.max(.43, Math.min(.83, s)), dark ? .63 : .42);
+    const background = hslHex(alternate, dark ? .32 : .23, dark ? .095 : .963);
+    const surface = hslHex(alternate, dark ? .30 : .13, dark ? .165 : .995);
+    const elevated = hslHex(alternate, dark ? .28 : .19, dark ? .23 : .925);
+    const editorBg = hslHex(alternate, dark ? .31 : .14, dark ? .115 : .974);
+    const text = contrastFg(background, hslHex(alternate, .28, dark ? .96 : .12));
+    const textSecondary = hslHex(alternate, dark ? .24 : .20, dark ? .78 : .30);
+    const accentText = hslHex(h, dark ? .78 : .73, dark ? .78 : .29);
+    const borderRGB = hslRgb(alternate, dark ? .48 : .32, dark ? .75 : .32);
+    const vals = new Map([
+      ['--color-background', background], ['--color-surface', surface],
+      ['--color-text', text], ['--color-text-secondary', textSecondary],
+      ['--color-accent', accent], ['--color-accent-text', accentText],
+      ['--color-on-accent', contrastFg(accent)],
+      ['--color-border', `rgba(${borderRGB.join(', ')}, ${dark ? .23 : .17})`],
+      ['--color-editor-background', editorBg], ['--color-editor-text', contrastFg(editorBg)],
+      ['--color-surface-elevated', elevated], ['--color-accent-secondary', accentSecondary]
+    ]);
+    // Základní plochy i aktivní prvky zůstanou čitelné (WCAG AA pro běžný text).
+    for (const [fgKey, bgKey] of [['--color-text', '--color-background'],
+      ['--color-editor-text', '--color-editor-background'], ['--color-on-accent', '--color-accent']]) {
+      if (contrast(vals.get(fgKey), vals.get(bgKey)) < 4.5) vals.set(fgKey, contrastFg(vals.get(bgKey)));
+    }
+    return vals;
+  }
+  function harmonizeFixed(data, palette) {
+    const property = data.property.toLowerCase(), selector = data.selector.toLowerCase();
+    const src = data.src.toLowerCase();
+    if (!data.selector || /theme-|secretmodeactive|:host|:root|#ln-theme-builder-699c/.test(selector)) return null;
+    if (/(?:^|[\W])(secret|password|captcha|alert|error|success|danger|warning|critical|invalid|failed|delete|destructive)(?:$|[\W])/.test(selector)) return null;
+    if (/(?:theme|debug|tester|studio|dictionary|keyboard|generated)\w*\.css/.test(src)) return null;
+    if (/tag(?:color|pill|chip)|colorpicker|customcolor|badge.*(?:color|tag)/.test(selector)) return null;
+    if (property.startsWith('--')) return null;
+    if (/\bvar\(|\bcurrentcolor\b|\binherit\b|\burl\(/i.test(data.value)) return null;
+    if (/^(?:background-image|text-shadow|box-shadow)$/i.test(property)) return null; // zachovat přechody a stíny
+    if (/(?:^(?:color|background(?:-color)?|fill|stroke|caret-color|outline-color|text-decoration-color)$|^border(?:-[a-z-]+)?$)/.test(property) === false) return null;
+    const tokens = colors(data.value).filter(t => /^(?:#|rgb|hsl)/i.test(t.text));
+    if (!tokens.length) return null;
+    const isBg = /^background/.test(property);
+    const isBorder = /^border|^outline/.test(property);
+    const isIcon = /^(?:fill|stroke|caret-color|text-decoration-color)$/.test(property);
+    const special = /active|selected|highlight|focus|checked|primary|accent|current/.test(selector);
+    const hover = /:hover|:active/.test(selector);
+    const target = isBorder ? (special ? '--color-accent' : '--color-border') :
+      isBg ? (special || hover ? '--color-accent' : /(?:modal|dialog|panel|card|button|toolbar|menu|nav|input)/.test(selector) ? '--color-surface' : '--color-background') :
+      (special || isIcon ? '--color-accent-text' : '--color-text');
+    let i = 0;
+    const rewritten = data.value.replace(new RegExp(TOKEN.source, 'gi'), term => {
+      if (!/^(?:#|rgb|hsl)/i.test(term)) return term;
+      const parsed = parsedFromCSS(term);
+      if (!parsed) return term;
+      const originalHsl = rgbHsl(parsed.hex);
+      const useAccent = !isBorder && (isBg || isIcon) && originalHsl.s > .40 && originalHsl.l > .25 && originalHsl.l < .82;
+      let next = palette.get(useAccent ? (i++ % 2 === 0 ? '--color-accent-secondary' : '--color-accent') : target);
+      if (!next) return term;
+      const parsedNext = parsedFromCSS(next);
+      if (parsed.alpha < .998 && parsedNext) next = opacityColor(parsedNext.hex, parsed.alpha);
+      return next;
+    });
+    return rewritten !== data.value ? rewritten : null;
+  }
+  function automaticColors(palette) {
+    const output = new Map();
+    for (const x of stav.cssRadky) {
+      if (output.has(x.key)) continue;
+      const value = harmonizeFixed(x, palette);
+      if (value) output.set(x.key, { selector: x.selector, property: x.property, value, context: x.context, auto: true });
+    }
+    return output;
+  }
+  function showPalette(open = !stav.paletaOtevrena) {
+    stav.paletaOtevrena = open;
+    const panel = get('lnTBpalette699C');
+    if (panel) panel.hidden = !open;
+    if (open) renderPalettes();
+  }
+  function renderPalettes() {
+    const box = get('lnTBpalette699C'); if (!box || !stav.paletaOtevrena) return;
+    box.replaceChildren();
+    const t = stav.temata.find(x => x.id === stav.aktivni);
+    box.append(el('h3', '', '🎨 Návrhy barevných palet'));
+    if (!t?.new && !t?.custom) {
+      box.append(el('p', 'lnTBwarning699C', 'Pro ochranu původních témat vytvoř nejprve „+ Nový motiv“. Návrhy lze použít na nové a vlastní motivy.'));
+      return;
+    }
+    const baseRow = el('div', 'lnTBpaletteBase699C');
+    baseRow.append(el('span', '', 'Hlavní barva'));
+    const choose = colorButton(stav.zakladBarva, () => picker(stav.zakladBarva, 'Hlavní barva nového motivu', hex => {
+      stav.zakladBarva = hex; renderPalettes();
+    }), 'Vybrat hlavní barvu');
+    baseRow.append(choose, el('code', '', stav.zakladBarva)); box.append(baseRow);
+    box.append(el('p', 'lnTBhint699C', 'Vyber hlavní barvu a potom jednu z palet. Návrh rovnou přebarví aplikaci; jednotlivé prvky pak můžeš doladit ručně.'));
+    for (const mode of PALETY) {
+      const values = paletteValues(stav.zakladBarva, mode);
+      const btn = el('button', 'lnTBpaletteCard699C'); btn.type = 'button';
+      btn.append(el('strong', '', mode.name), el('small', '', mode.info));
+      const strip = el('span', 'lnTBpaletteStrip699C');
+      for (const k of ['--color-background', '--color-surface', '--color-accent', '--color-accent-secondary', '--color-text']) {
+        const swatch = el('span'); swatch.style.backgroundColor = values.get(k); swatch.title = `${k}: ${values.get(k)}`;
+        strip.append(swatch);
+      }
+      btn.append(strip);
+      if (aktualni()?.paletteName === mode.name && aktualni()?.base === stav.zakladBarva) btn.classList.add('chosen');
+      btn.addEventListener('click', () => {
+        if (!draft(stav.aktivni)?.name) return;
+        saveUndo();
+        const d = aktualni(); d.vars = values;
+        d.autoOverrides = automaticColors(values); d.preservedOverrides = ''; d.paletteName = mode.name; d.base = stav.zakladBarva;
+        changed(); renderPalettes();
+        setStatus(`Použita paleta „${mode.name}“. Sladěno ${d.autoOverrides.size} pevných CSS pravidel. Náhled platí pouze pro „${d.name}“.`);
+      });
+      box.append(btn);
+    }
+  }
+  function safeThemeName(input) { return String(input).replace(/[|*\n\r]/g, ' ').trim().replace(/\s+/g, ' ').slice(0, 55); }
+  function formNazev(mode) {
+    stav.editaceNazvu = mode;
+    const form = get('lnTBnameForm699C'); if (!form) return;
+    form.replaceChildren(); form.hidden = false;
+    form.append(el('strong', '', mode === 'create' ? 'Vytvořit nový motiv' : mode === 'rename' ? 'Přejmenovat motiv' : `Smazat motiv „${aktualni().name}“?`));
+    if (mode === 'delete') {
+      form.append(el('p', 'lnTBwarning699C', 'Téma se odstraní z budoucího exportu theme.css. Současná aplikace zůstane beze změny.'));
+    } else {
+      const input = el('input', 'lnTBnameInput699C'); input.id = 'lnTBnameInput699C';
+      input.type = 'text'; input.maxLength = 55;
+      input.value = mode === 'rename' ? aktualni().name : '';
+      input.placeholder = 'Název motivu';
+      form.append(input);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ulozNazev(mode); } });
+      input.focus();
+    }
+    const row = el('div', 'lnTBformActions699C');
+    const confirmButton = el('button', '', mode === 'delete' ? 'Smazat motiv' : 'Uložit');
+    confirmButton.type = 'button';
+    if (mode === 'delete') confirmButton.classList.add('lnTBdanger699C');
+    confirmButton.addEventListener('click', () => mode === 'delete' ? smazMotiv() : ulozNazev(mode));
+    const cancel = el('button', '', 'Zrušit'); cancel.type = 'button';
+    cancel.addEventListener('click', zavriFormNazvu);
+    row.append(confirmButton, cancel); form.append(row);
+  }
+  function zavriFormNazvu() {
+    stav.editaceNazvu = null;
+    const box = get('lnTBnameForm699C'); if (box) { box.replaceChildren(); box.hidden = true; }
+  }
+  function ulozNazev(mode) {
+    const name = safeThemeName(get('lnTBnameInput699C')?.value || '');
+    if (!name) return setStatus('Vyplň název motivu.');
+    if (stav.temata.some(t => t.name.toLocaleLowerCase('cs') === name.toLocaleLowerCase('cs') && (mode !== 'rename' || t.id !== stav.aktivni)))
+      return setStatus('Motiv s tímto názvem už existuje.');
+    if (mode === 'create') {
+      let id = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30);
+      if (!/^[a-z][a-z0-9-]*$/.test(id)) return setStatus('Zvol název začínající písmenem A–Z.');
+      let num = 2, candidate = id;
+      while (stav.temata.some(t => t.id === candidate) || stav.smazanaTemata.has(candidate)) candidate = `${id.slice(0, 25)}-${num++}`;
+      id = candidate;
+      const src = aktualni(), prev = stav.aktivni;
+      stav.history.push({ action: 'create', id, previous: prev });
+      stav.temata.push({ id, name, originalName: '', new: true, custom: true });
+      stav.drafty.set(id, { name, vars: new Map(src.vars), overrides: new Map(), autoOverrides: new Map(), preservedOverrides: '', base: src.vars.get('--color-accent') || stav.zakladBarva, paletteName: '' });
+      stav.zakladBarva = parsedFromCSS(src.vars.get('--color-accent') || '')?.hex || stav.zakladBarva;
+      zavriFormNazvu(); preview(id);
+      showPalette(true);
+      setStatus(`Nový motiv „${name}“ je samostatnou kopií „${src.name}“. Vyber barvu a navrhni jeho paletu.`);
+      return;
+    }
+    if (mode === 'rename') {
+      saveUndo(); aktualni().name = name;
+      const t = stav.temata.find(x => x.id === stav.aktivni); t.name = name;
+      zavriFormNazvu(); renderHeader();
+      setStatus(`Motiv přejmenován na „${name}“. Jeho technické ID ${t.id} zůstalo stejné.`);
+    }
+  }
+  function smazMotiv() {
+    const id = stav.aktivni;
+    const index = stav.temata.findIndex(t => t.id === id);
+    const t = stav.temata[index]; if (!t) return;
+    if (id === 'light' || stav.puvodniTridy.includes(`theme-${id}`) || stav.temata.length < 2) {
+      setStatus('Nelze smazat výchozí Světlý motiv ani motiv aktuálně uložený v aplikaci.');
+      zavriFormNazvu(); return;
+    }
+    stav.history.push({ action: 'delete', index, theme: t, data: draft(id) });
+    if (!t.new) stav.smazanaTemata.set(id, t);
+    stav.drafty.delete(id); stav.temata.splice(index, 1);
+    zavriFormNazvu();
+    preview(stav.temata.find(x => x.id === 'light')?.id || stav.temata[0].id);
+    setStatus(`Motiv „${t.name}“ byl označen k odstranění z budoucího exportu.`);
+  }
   function renderActive() {
     get('lnTBtabs699C')?.querySelectorAll('[data-tab]').forEach(b => {
       b.classList.toggle('active', b.dataset.tab === stav.aktivniTab);
@@ -573,43 +857,59 @@
     if (id !== 'light') document.body.classList.add(`theme-${id}`);
     stav.aktivni = id;
     updateStyle(); renderHeader(); renderActive();
+    if (stav.paletaOtevrena) renderPalettes();
     setStatus('Náhled motivu: ' + draft(id).name + '. Produkční CSS ani uložený motiv se nemění.');
   }
 
   function generateCSS() {
     let result = stav.source;
-    const original = stav.temata.filter(t => !t.new).sort((a, b) => b.start - a.start);
-    for (const t of original) {
+    // Pravidla původních témat se přepisují odzadu, aby seděly jejich indexy.
+    const orig = [...stav.temata.filter(t => !t.new), ...stav.smazanaTemata.values()]
+      .sort((a, b) => b.markerStart - a.markerStart);
+    for (const t of orig) {
+      if (stav.smazanaTemata.has(t.id)) {
+        result = result.slice(0, t.markerStart) + result.slice(t.end);
+        continue;
+      }
       const d = draft(t.id);
-      let originalBlock = result.slice(t.start, t.end);
-      originalBlock = originalBlock.replace(/(--[\w-]+\s*:\s*)([^;{}]+)(;)/g, (whole, start, current, semi) => {
-        const v = d.vars.get(start.split(':')[0].trim());
-        return v === undefined || v === current.trim() ? whole : `${start}${v}${semi}`;
+      let rule = result.slice(t.start, t.end);
+      rule = rule.replace(/(--[\w-]+\s*:\s*)([^;{}]+)(;)/g, (whole, prefix, current, semi) => {
+        const val = d.vars.get(prefix.split(':')[0].trim());
+        return val === undefined || val === current.trim() ? whole : `${prefix}${val}${semi}`;
       });
-      result = result.slice(0, t.start) + originalBlock + result.slice(t.end);
+      // Doplněné proměnné (například barva druhého akcentu) zachovat i po exportu.
+      const added = [...d.vars].filter(([key]) => !t.original.has(key));
+      if (added.length) rule = rule.replace(/}\s*$/, `  ${added.map(([key, value]) => `${key}: ${value};`).join('\n  ')}\n}`);
+      result = result.slice(0, t.markerStart) +
+        (t.custom ? `/* LN-TB-CUSTOM: ${t.id} */\n` : '') +
+        `/* THEME: ${t.id} | ${d.name.replace(/[|*\n\r]/g, ' ')} | selectable */` +
+        result.slice(t.markerEnd, t.start) + rule + result.slice(t.end);
     }
-    let extras = '\n/* =========================================================\n   LUBANOTE THEME BUILDER 699C – NOVÁ TÉMATA A BAREVNÉ VÝJIMKY\n   Export je součástí theme.css; původní pravidla zůstávají zachována.\n   ========================================================= */\n';
+    // Odstranit staré generované výjimky a místo nich vložit právě jednu aktuální sadu.
+    result = result.replace(/\/\*\s*LN-TB-OVERRIDES:\s*([a-z0-9-]+):START\s*\*\/[\s\S]*?\/\*\s*LN-TB-OVERRIDES:\s*\1:END\s*\*\//g, '');
+    result = result.replace(/\/\* =+\n   LUBANOTE THEME BUILDER 699C[\s\S]*?=+ \*\//g, '');
+    let extras = '\n/* =========================================================\n   LUBANOTE THEME BUILDER 699C – NOVÁ TÉMATA A BAREVNÉ VÝJIMKY\n   Export pochází z Theme Builderu; ostatní CSS soubory zůstávají beze změny.\n   ========================================================= */\n';
     for (const t of stav.temata.filter(x => x.new)) {
       const d = draft(t.id);
-      const safeName = t.name.replace(/[|*\n\r]/g, ' ').slice(0, 70);
-      extras += `\n/* THEME: ${t.id} | ${safeName} | selectable */\nbody.theme-${t.id} {\n`;
+      extras += `\n/* LN-TB-CUSTOM: ${t.id} */\n/* THEME: ${t.id} | ${d.name.replace(/[|*\n\r]/g, ' ')} | selectable */\nbody.theme-${t.id} {\n`;
       for (const [key, value] of d.vars) extras += `  ${key}: ${value};\n`;
       extras += '}\n';
       const bg = parsedFromCSS(d.vars.get('--color-background') || '')?.hex || '#111111';
-      const n = [1, 3, 5].map(i => parseInt(bg.slice(i, i + 2), 16));
-      if ((n[0] * 299 + n[1] * 587 + n[2] * 114) / 1000 < 128) {
-        extras += `body.theme-${t.id} #modalDate, body.theme-${t.id} #modalTime { color-scheme: dark; }\n`;
-      }
+      if (relativeLum(bg) < .25) extras += `body.theme-${t.id} #modalDate, body.theme-${t.id} #modalTime { color-scheme: dark; }\n`;
     }
     for (const t of stav.temata) {
       const d = draft(t.id);
-      if (!d.overrides.size) continue;
-      extras += `\n/* Motiv: ${t.name.replace(/\*\//g, '')} – cílené úpravy barev */\n`;
+      if (!d.overrides.size && !d.autoOverrides.size && !d.preservedOverrides) continue;
+      extras += `\n/* LN-TB-OVERRIDES: ${t.id}:START */\n`;
+      extras += `/* Motiv: ${d.name.replace(/\*\//g, '')} – automatická paleta (${d.autoOverrides.size}), ruční výjimky (${d.overrides.size}) */\n`;
+      if (d.preservedOverrides) extras += d.preservedOverrides;
+      for (const o of d.autoOverrides.values()) extras += makeOverrideCss(t.id, o);
       for (const o of d.overrides.values()) extras += makeOverrideCss(t.id, o);
+      extras += `/* LN-TB-OVERRIDES: ${t.id}:END */\n`;
     }
     const secret = result.search(/\/\*\s*=+\s*\n\s*SECRET REŽIM/i);
     if (secret >= 0) result = result.slice(0, secret) + extras + '\n' + result.slice(secret);
-    else result += extras; // guarded fallback for older theme.css layouts
+    else result += extras;
     return result;
   }
   async function copyCSS() {
@@ -636,29 +936,19 @@
     setTimeout(() => URL.revokeObjectURL(url), 1500);
     setStatus('Vygenerován kompletní theme.css. Nejdříve ho otestuj na TEST webu.');
   }
-  function createTheme() {
-    const label = prompt('Jak se má nové téma jmenovat? (např. Lesní zelená)');
-    if (label === null) return;
-    const name = label.replace(/[|*\n\r]/g, ' ').trim().slice(0, 55);
-    if (!name) return setStatus('Název nesmí být prázdný.');
-    const id = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32);
-    if (!/^[a-z][a-z0-9-]{1,31}$/.test(id)) return setStatus('Název nevytvořil platné CSS ID; zvol jiný.');
-    if (stav.temata.some(t => t.id === id)) return setStatus('Takto pojmenovaný motiv už existuje.');
-    const src = aktualni();
-    stav.temata.push({ id, name, new: true });
-    stav.drafty.set(id, { name, vars: new Map(src.vars), overrides: new Map() });
-    preview(id);
-    setStatus(`Nový motiv „${name}“ vznikl jako kopie „${src.name}“. Bude součástí exportovaného theme.css.`);
-  }
+  function createTheme() { formNazev('create'); }
   function resetTheme() {
     const t = stav.temata.find(t => t.id === stav.aktivni);
     if (!t) return;
     if (!confirm(`Opravdu zahodit všechny rozpracované barevné změny motivu „${t.name}“?`)) return;
     if (t.new) {
       stav.drafty.delete(t.id); stav.temata = stav.temata.filter(x => x !== t);
+      zavriFormNazvu();
       preview(stav.temata[0].id);
     } else {
-      stav.drafty.set(t.id, { name: t.name, vars: new Map(t.original), overrides: new Map() });
+      saveUndo();
+      t.name = t.originalName;
+      stav.drafty.set(t.id, { name: t.name, vars: new Map(t.original), overrides: new Map(), autoOverrides: new Map(), preservedOverrides: t.preservedOverrides, paletteName: '' });
       changed();
     }
     setStatus('Rozpracované změny motivu byly zahazeny.');
@@ -734,7 +1024,16 @@
     const add = el('button', '', '+ Nový motiv'); add.addEventListener('click', createTheme);
     const back = el('button', '', '↶ Zpět'); back.title = 'Vrátit poslední barevnou úpravu'; back.addEventListener('click', undo);
     const reset = el('button', '', '↺ Zahodit změny'); reset.addEventListener('click', resetTheme);
-    actions.append(add, back, reset); tools.append(actions); scrollAll.append(tools);
+    actions.append(add, back, reset); tools.append(actions);
+    const manage = el('div', 'lnTBactions699C lnTBmanage699C');
+    const rename = el('button', '', '✎ Přejmenovat'); rename.type = 'button'; rename.addEventListener('click', () => formNazev('rename'));
+    const remove = el('button', '', '♻ Smazat motiv'); remove.type = 'button'; remove.addEventListener('click', () => formNazev('delete'));
+    manage.append(rename, remove); tools.append(manage);
+    const form = el('div', 'lnTBnameForm699C'); form.id = 'lnTBnameForm699C'; form.hidden = true; tools.append(form);
+    const paletteButton = el('button', 'lnTBpaletteToggle699C', '🎨 Navrhnout paletu'); paletteButton.type = 'button';
+    paletteButton.addEventListener('click', () => showPalette()); tools.append(paletteButton);
+    const palettePanel = el('section', 'lnTBpalette699C'); palettePanel.id = 'lnTBpalette699C'; palettePanel.hidden = true;
+    tools.append(palettePanel); scrollAll.append(tools);
     const tabs = el('div', 'lnTBtabs699C'); tabs.id = 'lnTBtabs699C';
     for (const [id, label] of [['vars', 'Základní barvy'], ['css', 'Všechna CSS'], ['dom', 'Prvky']]) {
       const b = el('button', '', label); b.type = 'button'; b.dataset.tab = id;
@@ -772,7 +1071,8 @@
     const source = await cssResponse.text();
     const available = nacistTemata(source);
     stav.source = source; stav.temata = available; stav.drafty = new Map(); stav.history = [];
-    for (const t of available) stav.drafty.set(t.id, { name: t.name, vars: new Map(t.original), overrides: new Map() });
+    stav.smazanaTemata = new Map(); stav.paletaOtevrena = false; stav.editaceNazvu = null;
+    for (const t of available) stav.drafty.set(t.id, { name: t.name, vars: new Map(t.original), overrides: new Map(), autoOverrides: new Map(), preservedOverrides: t.preservedOverrides, paletteName: '' });
     stav.puvodniTridy = Array.from(document.body.classList).filter(c => c.startsWith('theme-'));
     stav.aktivni = available.find(t => t.id === (stav.puvodniTridy[0] || '').slice(6))?.id || 'light';
     if (!stav.drafty.has(stav.aktivni)) stav.aktivni = available[0].id;
@@ -798,11 +1098,11 @@
     }
   }
   function hasUnsavedChanges() {
-    if (stav.temata.some(t => t.new)) return true;
+    if (stav.temata.some(t => t.new) || stav.smazanaTemata.size) return true;
     return stav.temata.some(t => {
       const d = draft(t.id);
       if (!d) return false;
-      if (d.overrides.size) return true;
+      if (d.overrides.size || d.autoOverrides.size || d.name !== t.originalName) return true;
       for (const [key, original] of t.original) if (d.vars.get(key) !== original) return true;
       return false;
     });
