@@ -275,3 +275,82 @@
     padding-top: 4px !important;
   }
 }
+
+
+/* =============================================================
+   699BG-AB – kompaktni PC (cca 150 %) / sjednocene moduly + Plan
+   -------------------------------------------------------------
+   699BG-AA srovnal horni Y, ale Poznamky/Dokumenty zdedily vyssi
+   modulove karty. Plan mel 40 px uz z 699BG-O. Sdilena geometrie
+   pro vsechny tri obrazovky; nezasahovat do sirokeho PC ani APK.
+
+   Podnabidka Plan zustane vycentrovana, ne pres celou sirku.
+   Kalendar omezuje sirku matice a udrzuje skutecne ctvercove dny,
+   aby sest tydnu nevytlacilo agendu ani na nizkem notebooku.
+   ============================================================= */
+@media (min-width: 900px) and (max-width: 1099px) and (hover: hover) and (pointer: fine) {
+  body:not(.nativeApp) .homeHeader .moduleLogo {
+    display: none !important;
+  }
+  body:not(.nativeApp) .homeHeader .moduleBar {
+    min-height: 0 !important;
+    margin: 0 !important;
+    gap: 0 !important;
+    overflow: visible !important;
+  }
+  body:not(.nativeApp) .homeHeader nav.moduleTabs {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    gap: 6px !important;
+  }
+  body:not(.nativeApp) .homeHeader nav.moduleTabs > .moduleTab {
+    box-sizing: border-box !important;
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    padding: 3px 7px !important;
+    gap: 5px !important;
+    font-size: 0.875rem !important;
+    border-radius: 10px !important;
+  }
+
+  /* Kompaktni prepnutí Kalendar / Pripominky, ne cela sirka okna. */
+  body:not(.nativeApp):has(#plannerModuleButton.active) #plannerSubnav:not([hidden]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(520px, calc(100% - 28px)) !important;
+    max-width: 520px !important;
+    box-sizing: border-box;
+    margin: 3px auto 4px !important;
+    padding: 0 4px !important;
+    gap: 8px !important;
+  }
+
+  /* Hlavicky dnu a jejich dlazdice maji stejnou sirku/mrizku. */
+  body:not(.nativeApp) #calendarScreen:not([hidden]) .calendarWeekdays,
+  body:not(.nativeApp) #calendarScreen:not([hidden]) .calendarGrid {
+    width: 100% !important;
+    max-width: 336px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  }
+  body:not(.nativeApp) #calendarScreen:not([hidden]) .calendarGrid {
+    gap: 3px !important;
+    align-content: start;
+  }
+  body:not(.nativeApp) #calendarScreen:not([hidden]) .calendarDay {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    aspect-ratio: 1 / 1 !important;
+    padding: 2px !important;
+  }
+}
