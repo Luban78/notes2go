@@ -538,7 +538,7 @@
       }
     };
     for (const sheet of styleSheets) {
-      if (sheet.ownerNode?.id === STYLE_ID || sheet.ownerNode?.id === 'ln-theme-builder-css-699c' || /themeBuilder699C\.css/i.test(sheet.href || '')) continue;
+      if ([STYLE_ID, 'ln-theme-builder-css-699c', 'lnAutoToneCss699H', 'lnAutoToneTags699H'].includes(sheet.ownerNode?.id) || /themeBuilder699C\.css/i.test(sheet.href || '')) continue;
       const src = sheet.href ? new URL(sheet.href, location.href).pathname.split('/').pop() : 'vložené CSS';
       try { scan(sheet.cssRules, src); }
       catch (e) { blocked.push(src); }
@@ -1652,6 +1652,9 @@
     stav.puvodniTridy = Array.from(document.body.classList).filter(c => c.startsWith('theme-'));
     stav.aktivni = available.find(t => t.id === (stav.puvodniTridy[0] || '').slice(6))?.id || 'light';
     if (!stav.drafty.has(stav.aktivni)) stav.aktivni = available[0].id;
+    // 699C-H: při práci s Builderem vypni pouze přechodnou světlou/tmavou
+    // vrstvu. Všechna data a uloženou volbu uživatele zachovej.
+    window.LubaNoteLiveTone699H?.suspend();
     ui(); readCSSRules(); scanDom(); nactiVlastniStitky(); preview(stav.aktivni);
     document.addEventListener('pointerdown', selectionHandler, true);
     document.addEventListener('click', selectionHandler, true);
@@ -1700,6 +1703,7 @@
     window.removeEventListener('resize', hlidejPozici);
     document.body.classList.remove(...Array.from(document.body.classList).filter(c => c.startsWith('theme-')));
     document.body.classList.add(...stav.puvodniTridy);
+    window.LubaNoteLiveTone699H?.resume();
     stav.root = null; stav.panel = null; stav.highlight = null; stav.vybranyPrvek = null;
   }
   window.LubaNoteThemeBuilder699C = Object.freeze({ open: openBuilder, close: closeBuilder });

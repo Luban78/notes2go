@@ -43,7 +43,10 @@
   }
   function aktualizujRychlyMotiv(motiv) {
     if (!quickThemeButton) return;
-    const tmavy = jeTmavyMotiv(motiv);
+    // 699C-H: Ikona ukazuje SKUTEČNOU variantu aktuálního motivu,
+    // nikoli jen původní tmavost jeho uložené definice.
+    const automat = window.LubaNoteLiveTone699H?.effectiveDark(motiv);
+    const tmavy = typeof automat === "boolean" ? automat : jeTmavyMotiv(motiv);
     quickThemeButton.dataset.quickThemeMode = tmavy ? "night" : "day";
     const popisek = tmavy ? "Zapnout denní režim" : "Zapnout noční režim";
     quickThemeButton.setAttribute("aria-label", popisek);
@@ -398,6 +401,9 @@ const motivy = nactenaTemata.map(tema => ({
       theme
     );
   }
+  // 699C-H: Po restartu načti tónovanou variantu pouze pro
+  // stejný vybraný motiv. Při ruční změně motivu zruš živý náhled.
+  window.LubaNoteLiveTone699H?.restore(theme);
   aktualizujRychlyMotiv(theme);
 }
 
@@ -1168,11 +1174,17 @@ openReminderDelaySettingsButton?.addEventListener(
   applyTheme(ulozenyMotiv);
   nastavPopisekMotivu(ulozenyMotiv);
 
-  // 683AM: pouziva stejny applyTheme, ulozenou volbu a popisek v Nastaveni.
+  // 699C-H: Sluníčko nemění barevnou rodinu. Pokud existuje
+  // dvojice z Theme Builderu, použije ji. Jinak během jednoho kliknutí
+  // vytvoří tónovanou světlou/tmavou podobu ZVOLENÉHO motivu v paměti.
   quickThemeButton?.addEventListener("click", () => {
     const aktualni = localStorage.getItem("theme") || "light";
-    // 699C-G: u dvojice přepínej nejprve mezi jejími vlastními variantami.
-    // Nesouvisející hotové motivy používají původní chování sluníčka.
+    const live = window.LubaNoteLiveTone699H;
+    if (live?.isActive(aktualni)) {
+      live.disable();
+      aktualizujRychlyMotiv(aktualni);
+      return;
+    }
     const partner = aktualni.endsWith("-dark")
       ? `${aktualni.slice(0, -5)}-light`
       : (aktualni.endsWith("-light") ? `${aktualni.slice(0, -6)}-dark` : null);
@@ -1182,17 +1194,13 @@ openReminderDelaySettingsButton?.addEventListener(
       nastavPopisekMotivu(partner);
       return;
     }
-    const cilJeTmavy = !jeTmavyMotiv(aktualni);
-    const ulozenyCil = localStorage.getItem(
-      cilJeTmavy ? quickThemeNightKey : quickThemeDayKey
-    );
-    const jePlatnyCil = motivy.some(polozka => polozka.hodnota === ulozenyCil);
-    const cil = jePlatnyCil && jeTmavyMotiv(ulozenyCil) === cilJeTmavy
-      ? ulozenyCil
-      : (cilJeTmavy ? "dark" : "light");
-    applyTheme(cil);
-    localStorage.setItem("theme", cil);
-    nastavPopisekMotivu(cil);
+    const opačnyJeTmavy = !jeTmavyMotiv(aktualni);
+    if (live?.enable(aktualni, opačnyJeTmavy)) {
+      aktualizujRychlyMotiv(aktualni);
+      return;
+    }
+    // Žádný tichý přechod na nesouvisející fialový motiv.
+    window.LubaNoteMessage?.show?.("Tónovanou variantu tohoto motivu se nepodařilo vytvořit.");
   });
 
   const ulozenyStylIkon =
