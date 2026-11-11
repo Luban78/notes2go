@@ -167,6 +167,7 @@
     document.getElementById("adminControlMaintenanceButton");
   const controlNormalTlacitko =
     document.getElementById("adminControlNormalButton");
+  const themeBuilderTlacitko699C = document.getElementById("adminThemeBuilder699CButton");
   const visualDebugTlacitko =
     document.getElementById("adminVisualDebugToolButton");
   const debugHubTlacitko =
@@ -3327,6 +3328,19 @@
     await Promise.all([nactiUzivatele(), nactiAutoDemo699E()]);
   }
 
+  async function otevriThemeBuilder699C() {
+    if (!jeAdmin) return;
+    try {
+      await window.LubaNoteAdminLazy695A.ensureThemeBuilder();
+      if (!jeAdmin) return;
+      zavriDashboard();
+      await window.LubaNoteThemeBuilder699C.open();
+    } catch (error) {
+      console.warn("Theme Builder 699C:", error);
+      window.alert("Theme Builder se nepodařilo otevřít: " + (error?.message || error));
+    }
+  }
+
   function otevriVisualDebugZAdmina() {
     if (!jeAdmin) return;
     zavriDashboard();
@@ -3635,6 +3649,7 @@
     "click",
     () => prepniBackendZarizeni("supabaseCloud")
   );
+  themeBuilderTlacitko699C?.addEventListener("click", otevriThemeBuilder699C);
   visualDebugTlacitko.addEventListener(
     "click",
     otevriVisualDebugZAdmina

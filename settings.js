@@ -17,10 +17,29 @@
   const quickThemeButton = document.getElementById("quickThemeButton");
   const quickThemeDayKey = "lubanote_quick_theme_day_v1";
   const quickThemeNightKey = "lubanote_quick_theme_night_v1";
-  // Svetle motivy podle skutecnych barev v theme.css; ostatni volitelne jsou tmave.
+  // 699C: nové motivy vytvořené v Theme Builderu mohou být světlé i tmavé.
+  // Původní motivy zachovávají dosavadní chování; pro přidaná ID zjistíme
+  // charakter z --color-background v theme.css, bez změny uložené volby.
   const svetleMotivy = new Set(["light", "cappuccino"]);
+  const puvodniTmaveMotivy699C = new Set([
+    "dark", "ocean", "darkg", "arctic", "violetnight", "solar", "retro"
+  ]);
   function jeTmavyMotiv(motiv) {
-    return !svetleMotivy.has(motiv);
+    if (svetleMotivy.has(motiv)) return false;
+    if (puvodniTmaveMotivy699C.has(motiv)) return true;
+    try {
+      for (const sheet of document.styleSheets) {
+        if (!/\/theme\.css(?:\?|$)/.test(sheet.href || "")) continue;
+        const target = `body.theme-${motiv}`;
+        const block = Array.from(sheet.cssRules).find(rule => rule.selectorText === target);
+        const bg = block?.style?.getPropertyValue("--color-background")?.trim() || "";
+        const match = /^#([0-9a-f]{6})$/i.exec(bg);
+        if (!match) break;
+        const rgb = [0, 2, 4].map(i => parseInt(match[1].slice(i, i + 2), 16));
+        return (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000 < 128;
+      }
+    } catch (_) { /* bezpečný fallback */ }
+    return true;
   }
   function aktualizujRychlyMotiv(motiv) {
     if (!quickThemeButton) return;

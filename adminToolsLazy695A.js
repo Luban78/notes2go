@@ -8,7 +8,8 @@
   const assets = {
     svg: ['adminSvgStudio693R.css?v=696F-object-relief-shading', 'adminSvgStudio693R.js?v=696F-object-relief-shading'],
     visual: ['visualDebug.css?v=658be-global-rem-font-scale', 'visualDebug.js?v=690Q-dock-verification'],
-    hub: ['debugHub.css?v=699M-feedback-rollback', 'debugHub.js?v=699M-feedback-rollback']
+    hub: ['debugHub.css?v=699M-feedback-rollback', 'debugHub.js?v=699M-feedback-rollback'],
+    theme: ['themeBuilder699C.css?v=699C-01', 'themeBuilder699C.js?v=699C-01']
   };
   const jobs = new Map();
 
@@ -50,6 +51,7 @@
     // 695D: remove historical pan diagnostic panel (not the Pan tool).
     document.getElementById('lnSvgDiag693Z')?.remove();
   }
+  async function ensureThemeBuilder() { await ensure('theme'); }
   async function ensureVisualDebug() { await ensure('visual'); }
   async function showDock() {
     if (!allowed()) return false;
@@ -79,6 +81,6 @@
     } catch (error) { console.warn('Debug Hub 695A:', error); return false; }
   }
   window.LubaNoteAdminLazy695A = Object.freeze({
-    ensureSvgStudio, ensureVisualDebug, showDock, openVisualDebug, openDebugHub
+    ensureSvgStudio, ensureVisualDebug, ensureThemeBuilder, showDock, openVisualDebug, openDebugHub
   });
 })();
