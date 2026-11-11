@@ -24,7 +24,8 @@
     puvodniTridy: [], cssRadky: [], cssVyjimky: [], prvky: [], vybranyPrvek: null,
     vyberAktivni: false, highlight: null, panel: null, root: null,
     cssFiltr: '', cssPozice: 0, domFiltr: '', domPozice: 0,
-    celekCss: 0, chybyCss: [], history: [], zmenaPriVyberu: false, nacteno: false
+    celekCss: 0, chybyCss: [], history: [], zmenaPriVyberu: false, nacteno: false,
+    presun: null
   };
 
   const el = (tag, className, content) => {
@@ -475,19 +476,88 @@
     renderHeader();
     setStatus('Změna je pouze v živém náhledu. Pro trvalé použití exportuj theme.css.');
   }
+  function nastavOtevreniNabidky(otevrit) {
+    const menu = get('lnTBthemeMenu699C');
+    const btn = get('lnTBthemes699C');
+    if (!menu || !btn) return;
+    menu.hidden = !otevrit;
+    btn.setAttribute('aria-expanded', String(otevrit));
+    if (otevrit) menu.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+  }
   function renderHeader() {
     const d = aktualni();
     textValue(get('lnTBchanges699C'), `${d?.overrides.size || 0} výjimek · ${stav.drafty.size} motivů`);
-    const picker = get('lnTBthemes699C');
-    if (picker) {
-      const chosen = picker.value;
-      picker.replaceChildren();
-      for (const t of stav.temata) {
-        const o = el('option', '', t.name); o.value = t.id; picker.append(o);
-      }
-      picker.value = stav.aktivni || chosen;
+    const btn = get('lnTBthemes699C');
+    const menu = get('lnTBthemeMenu699C');
+    if (!btn || !menu) return;
+    textValue(get('lnTBthemeName699C'), d?.name || 'Vybrat motiv');
+    menu.replaceChildren();
+    for (const t of stav.temata) {
+      const item = el('button', 'lnTBthemeOption699C');
+      item.type = 'button'; item.dataset.themeId = t.id;
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', String(t.id === stav.aktivni));
+      item.append(el('span', '', t.name), el('span', 'lnTBthemeCheck699C', t.id === stav.aktivni ? '✓' : ''));
+      item.addEventListener('click', () => { nastavOtevreniNabidky(false); preview(t.id); });
+      menu.append(item);
     }
   }
+  function posunPanelu(left, top) {
+    const panel = stav.panel;
+    if (!panel) return;
+    panel.style.setProperty('left', `${Math.round(left)}px`, 'important');
+    panel.style.setProperty('top', `${Math.round(top)}px`, 'important');
+    panel.style.setProperty('right', 'auto', 'important');
+    panel.style.setProperty('bottom', 'auto', 'important');
+  }
+  function omezPozici(left, top, width, height) {
+    // Stejně jako Debug Hub lze panel z velké části odsunout za bok nebo dolů.
+    // Vždy ale zůstane alespoň 72px plocha pro navrácení. Horní hrana zůstává na displeji.
+    const vw = window.innerWidth, vh = window.innerHeight;
+    // Zleva je vždy dostupné levé madlo, zprava pravé madlo vedle Zavřít.
+    const keepSide = Math.min(76, width);
+    // Na Androidu ponech prostor i NAD systémovou navigací.
+    const keepBottom = Math.min(height, vw <= 700 ? 136 : 80);
+    return {
+      left: Math.max(Math.min(0, keepSide - width), Math.min(Math.max(0, vw - keepSide), left)),
+      top: Math.max(0, Math.min(Math.max(0, vh - keepBottom), top))
+    };
+  }
+  function zacniPresun(event) {
+    if (event.button != null && event.button !== 0) return;
+    if (event.target.closest('button, input, select, textarea, a')) return;
+    const panel = stav.panel;
+    if (!panel || stav.presun) return;
+    nastavOtevreniNabidky(false);
+    const rect = panel.getBoundingClientRect();
+    // Ukotvení zajistí, že už neplatí původní media-query bottom/right.
+    posunPanelu(rect.left, rect.top);
+    stav.presun = { id: event.pointerId, x: event.clientX, y: event.clientY,
+      left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+    panel.classList.add('lnTBdragging699C');
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch (_) {}
+    event.preventDefault();
+  }
+  function presunPanel(event) {
+    const drag = stav.presun;
+    if (!drag || (drag.id != null && event.pointerId !== drag.id)) return;
+    const p = omezPozici(drag.left + event.clientX - drag.x,
+      drag.top + event.clientY - drag.y, drag.width, drag.height);
+    posunPanelu(p.left, p.top);
+    event.preventDefault();
+  }
+  function konecPresunu(event) {
+    if (!stav.presun || (event?.pointerId != null && event.pointerId !== stav.presun.id)) return;
+    stav.presun = null;
+    stav.panel?.classList.remove('lnTBdragging699C');
+  }
+  function hlidejPozici() {
+    if (!stav.panel?.isConnected) return;
+    const rect = stav.panel.getBoundingClientRect();
+    const p = omezPozici(rect.left, rect.top, rect.width, rect.height);
+    posunPanelu(p.left, p.top);
+  }
+
   function renderActive() {
     get('lnTBtabs699C')?.querySelectorAll('[data-tab]').forEach(b => {
       b.classList.toggle('active', b.dataset.tab === stav.aktivniTab);
@@ -626,30 +696,57 @@
     const panel = el('aside', 'lnTBpanel699C'); panel.id = ID;
     panel.setAttribute('role', 'region'); panel.setAttribute('aria-label', 'LubaNote Theme Builder');
     const hdr = el('div', 'lnTBheader699C');
-    const brand = el('div'); brand.append(el('h2', '', '🎨 Theme Builder'), el('small', '', 'LubaNote · pouze živý náhled'));
+    hdr.title = 'Podrž a táhni pro přesun Theme Builderu';
+    const handle = el('span', 'lnTBhandle699C', '⠿'); handle.setAttribute('aria-hidden', 'true');
+    const brand = el('div', 'lnTBbrand699C');
+    brand.append(el('h2', '', '🎨 Theme Builder'), el('small', '', 'LubaNote · táhni hlavičku pro přesun'));
+    const copyFast = el('button', 'lnTBcopyFast699C', '⧉ CSS');
+    copyFast.title = 'Zkopírovat celý theme.css do schránky'; copyFast.type = 'button';
+    copyFast.addEventListener('click', copyCSS);
     const close = el('button', 'lnTBclose699C', '×'); close.title = 'Zavřít Theme Builder'; close.type = 'button';
-    close.addEventListener('click', closeBuilder); hdr.append(brand, close); panel.append(hdr);
+    close.addEventListener('click', closeBuilder);
+    const rightHandle = el('span', 'lnTBhandle699C lnTBhandleRight699C', '⠿');
+    rightHandle.setAttribute('aria-hidden', 'true');
+    hdr.append(handle, brand, copyFast, close, rightHandle); panel.append(hdr);
+    hdr.addEventListener('pointerdown', zacniPresun);
+    hdr.addEventListener('pointermove', presunPanel);
+    hdr.addEventListener('pointerup', konecPresunu);
+    hdr.addEventListener('pointercancel', konecPresunu);
+    hdr.addEventListener('lostpointercapture', konecPresunu);
+
+    // Jeden hlavní scroll: ovládací prvky, barvy i export jsou plně dosažitelné.
+    const scrollAll = el('div', 'lnTBscroll699C'); scrollAll.id = 'lnTBscroll699C';
     const tools = el('div', 'lnTBtools699C');
-    const selLabel = el('label', '', 'Barevný motiv');
-    const sel = el('select'); sel.id = 'lnTBthemes699C'; sel.addEventListener('change', () => preview(sel.value));
-    selLabel.append(sel); tools.append(selLabel);
+    const selLabel = el('div', 'lnTBthemeLabel699C', 'Barevný motiv');
+    const pickerBox = el('div', 'lnTBthemePicker699C');
+    const themeButton = el('button', 'lnTBthemeTrigger699C'); themeButton.id = 'lnTBthemes699C';
+    themeButton.type = 'button'; themeButton.setAttribute('aria-haspopup', 'listbox');
+    themeButton.setAttribute('aria-expanded', 'false');
+    const themeName = el('span'); themeName.id = 'lnTBthemeName699C';
+    themeButton.append(themeName, el('span', 'lnTBchevron699C', '⌄'));
+    const themeMenu = el('div', 'lnTBthemeMenu699C'); themeMenu.id = 'lnTBthemeMenu699C';
+    themeMenu.setAttribute('role', 'listbox'); themeMenu.setAttribute('aria-label', 'Barevné motivy');
+    themeMenu.hidden = true;
+    themeButton.addEventListener('click', () => nastavOtevreniNabidky(themeMenu.hidden));
+    pickerBox.append(themeButton, themeMenu);
+    tools.append(selLabel, pickerBox);
     const actions = el('div', 'lnTBactions699C');
     const add = el('button', '', '+ Nový motiv'); add.addEventListener('click', createTheme);
     const back = el('button', '', '↶ Zpět'); back.title = 'Vrátit poslední barevnou úpravu'; back.addEventListener('click', undo);
     const reset = el('button', '', '↺ Zahodit změny'); reset.addEventListener('click', resetTheme);
-    actions.append(add, back, reset); tools.append(actions); panel.append(tools);
+    actions.append(add, back, reset); tools.append(actions); scrollAll.append(tools);
     const tabs = el('div', 'lnTBtabs699C'); tabs.id = 'lnTBtabs699C';
     for (const [id, label] of [['vars', 'Základní barvy'], ['css', 'Všechna CSS'], ['dom', 'Prvky']]) {
       const b = el('button', '', label); b.type = 'button'; b.dataset.tab = id;
       b.addEventListener('click', () => { stav.aktivniTab = id; renderActive(); }); tabs.append(b);
     }
-    panel.append(tabs);
+    scrollAll.append(tabs);
     const pick = el('button', 'lnTBpick699C', '🎯 Vybrat prvek kliknutím'); pick.id = 'lnTBpick699C'; pick.type = 'button';
-    pick.addEventListener('click', togglePick); panel.append(pick);
+    pick.addEventListener('click', togglePick); scrollAll.append(pick);
     const refresh = el('button', 'lnTBrefresh699C', '↻ Obnovit přehled CSS a prvků'); refresh.type = 'button';
     refresh.addEventListener('click', () => { readCSSRules(); scanDom(); renderActive(); setStatus('Katalog obnoven pro aktuální obrazovku.'); });
-    panel.append(refresh);
-    const scroll = el('div', 'lnTBbody699C'); scroll.id = 'lnTBbody699C'; panel.append(scroll);
+    scrollAll.append(refresh);
+    const body = el('div', 'lnTBbody699C'); body.id = 'lnTBbody699C'; scrollAll.append(body);
     const footer = el('div', 'lnTBfooter699C');
     const count = el('small'); count.id = 'lnTBchanges699C'; footer.append(count);
     const exportBtn = el('button', 'lnTBexport699C', '⬇ Exportovat kompletní theme.css');
@@ -657,7 +754,7 @@
     const copyBtn = el('button', 'lnTBcopy699C', '⧉ Kopírovat celý CSS do schránky');
     copyBtn.addEventListener('click', copyCSS); footer.append(copyBtn);
     const status = el('small', 'lnTBstatus699C'); status.id = 'lnTBstatus699C'; status.setAttribute('role', 'status'); footer.append(status);
-    panel.append(footer);
+    scrollAll.append(footer); panel.append(scrollAll);
     stav.root = panel; stav.panel = panel;
     document.body.append(panel);
     const highlight = el('div', 'lnTBhighlight699C'); highlight.hidden = true; stav.highlight = highlight;
@@ -684,9 +781,18 @@
     document.addEventListener('click', selectionHandler, true);
     document.addEventListener('pointermove', moveHighlight, true);
     document.addEventListener('keydown', escKey, true);
+    document.addEventListener('pointerdown', zavriNabidkuMimo, true);
+    window.addEventListener('resize', hlidejPozici);
     return true;
   }
+  function zavriNabidkuMimo(event) {
+    if (get('lnTBthemeMenu699C')?.hidden) return;
+    if (!event.target?.closest?.('.lnTBthemePicker699C')) nastavOtevreniNabidky(false);
+  }
   function escKey(event) {
+    if (event.key === 'Escape' && !get('lnTBthemeMenu699C')?.hidden) {
+      nastavOtevreniNabidky(false); return;
+    }
     if (event.key === 'Escape' && stav.vyberAktivni) {
       event.stopPropagation(); togglePick();
     }
@@ -706,12 +812,15 @@
     if (hasUnsavedChanges() && !confirm('Zavřít Theme Builder? Rozpracované změny, které jsi neexportoval, se zahodí.')) return;
     // Stop selection and remove preview before restoring the original app theme.
     stav.vyberAktivni = false;
+    stav.presun = null;
     stav.panel.remove(); stav.highlight?.remove();
     document.getElementById(STYLE_ID)?.remove();
     document.removeEventListener('pointerdown', selectionHandler, true);
     document.removeEventListener('click', selectionHandler, true);
     document.removeEventListener('pointermove', moveHighlight, true);
     document.removeEventListener('keydown', escKey, true);
+    document.removeEventListener('pointerdown', zavriNabidkuMimo, true);
+    window.removeEventListener('resize', hlidejPozici);
     document.body.classList.remove(...Array.from(document.body.classList).filter(c => c.startsWith('theme-')));
     document.body.classList.add(...stav.puvodniTridy);
     stav.root = null; stav.panel = null; stav.highlight = null; stav.vybranyPrvek = null;
