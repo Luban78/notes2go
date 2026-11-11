@@ -1171,6 +1171,17 @@ openReminderDelaySettingsButton?.addEventListener(
   // 683AM: pouziva stejny applyTheme, ulozenou volbu a popisek v Nastaveni.
   quickThemeButton?.addEventListener("click", () => {
     const aktualni = localStorage.getItem("theme") || "light";
+    // 699C-G: u dvojice přepínej nejprve mezi jejími vlastními variantami.
+    // Nesouvisející hotové motivy používají původní chování sluníčka.
+    const partner = aktualni.endsWith("-dark")
+      ? `${aktualni.slice(0, -5)}-light`
+      : (aktualni.endsWith("-light") ? `${aktualni.slice(0, -6)}-dark` : null);
+    if (partner && motivy.some(polozka => polozka.hodnota === partner)) {
+      applyTheme(partner);
+      localStorage.setItem("theme", partner);
+      nastavPopisekMotivu(partner);
+      return;
+    }
     const cilJeTmavy = !jeTmavyMotiv(aktualni);
     const ulozenyCil = localStorage.getItem(
       cilJeTmavy ? quickThemeNightKey : quickThemeDayKey
