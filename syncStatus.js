@@ -542,6 +542,14 @@
       .lnSupportActions699DF{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
       .lnSupportActions699DF button,.lnSupportButton699DF{padding:10px 12px;min-height:40px;border-radius:10px;border:1px solid var(--color-border,#667);background:var(--color-surface,#18333f);color:var(--color-text,#fff);font:600 13px system-ui,sans-serif}
       .lnSupportActions699DF button:first-child{background:var(--color-accent,#237aa5);color:#fff}
+      /* 699D-F1 – tlačítko reportu ve Stavu LubaNote má stejné téma jako Aktualizovat.
+         Pouze vzhled: žádný zásah do reportu, auth ani syncu. */
+      #lnSupportStatus699DF{appearance:none;box-sizing:border-box;max-width:100%;
+        min-height:42px;padding:10px 11px;border:0;border-radius:11px;
+        background:var(--color-accent,#237aa5);color:var(--color-on-accent,#fff);
+        font:600 .9rem/1.2 system-ui,sans-serif;text-align:center;
+        white-space:normal;overflow-wrap:normal;cursor:pointer}
+      #lnSupportStatus699DF:focus-visible{outline:2px solid var(--color-text,#fff);outline-offset:2px}
       .lnSupportCopyState699DF{min-height:20px}
       #lnSupportAuth699DF{position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:2147482990;box-shadow:0 2px 10px #0007}
     `;
