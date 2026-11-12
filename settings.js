@@ -351,6 +351,18 @@ const motivy = nactenaTemata.map(tema => ({
   popisek: tema.nazev
 }));
 
+// 699D-G: Staré samostatné denní motivy převeď na denní režim jejich
+// tmavého základu. Konverze je lokální a jednorázová; bez zápisu na server.
+const aliasyDennichMotivu699DG = new Map();
+for (const tema of nactenaTemata) {
+  for (const stareId of tema.legacyLightIds || []) {
+    if (stareId !== tema.id) aliasyDennichMotivu699DG.set(stareId, tema.id);
+  }
+}
+const puvodneUlozenyMotiv699DG = localStorage.getItem('theme') || 'light';
+const prevedenyMotiv699DG = aliasyDennichMotivu699DG.get(puvodneUlozenyMotiv699DG);
+if (prevedenyMotiv699DG) localStorage.setItem('theme', prevedenyMotiv699DG);
+
 
   let currentFontSize = Number(
     localStorage.getItem("fontSize") || 16
@@ -1173,25 +1185,19 @@ openReminderDelaySettingsButton?.addEventListener(
 
   applyTheme(ulozenyMotiv);
   nastavPopisekMotivu(ulozenyMotiv);
+  // Převod staré -light volby nesmí náhle změnit vzhled na tmavý.
+  if (prevedenyMotiv699DG && window.LubaNoteLiveTone699H?.enable(ulozenyMotiv, false)) {
+    aktualizujRychlyMotiv(ulozenyMotiv);
+  }
 
-  // 699C-H: Sluníčko nemění barevnou rodinu. Pokud existuje
-  // dvojice z Theme Builderu, použije ji. Jinak během jednoho kliknutí
-  // vytvoří tónovanou světlou/tmavou podobu ZVOLENÉHO motivu v paměti.
+  // 699D-G: Sluníčko vždy mění pouze živý vzhled stejného ID.
+  // Žádné další položky -light v seznamu motivů ani v localStorage.theme.
   quickThemeButton?.addEventListener("click", () => {
     const aktualni = localStorage.getItem("theme") || "light";
     const live = window.LubaNoteLiveTone699H;
     if (live?.isActive(aktualni)) {
       live.disable();
       aktualizujRychlyMotiv(aktualni);
-      return;
-    }
-    const partner = aktualni.endsWith("-dark")
-      ? `${aktualni.slice(0, -5)}-light`
-      : (aktualni.endsWith("-light") ? `${aktualni.slice(0, -6)}-dark` : null);
-    if (partner && motivy.some(polozka => polozka.hodnota === partner)) {
-      applyTheme(partner);
-      localStorage.setItem("theme", partner);
-      nastavPopisekMotivu(partner);
       return;
     }
     const opačnyJeTmavy = !jeTmavyMotiv(aktualni);

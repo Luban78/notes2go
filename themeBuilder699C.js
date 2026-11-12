@@ -39,6 +39,7 @@
     celekCss: 0, chybyCss: [], history: [], zmenaPriVyberu: false, nacteno: false,
     presun: null, paletaOtevrena: false, zakladBarva: '#c9384e', editaceNazvu: null,
     smazanaTemata: new Map(), vlastniStitky: new Map(),
+    legacyPairLights699DG: [],
     toneOpen: false, toneTimer: 0
   };
 
@@ -1206,33 +1207,10 @@
     setStatus(`Vytvořena světlá varianta „${name}“. Původní „${dark.name}“ se nemění.`);
   }
   function renderPairControls() {
-    const place = get('lnTBpair699CG'); if (!place) return;
-    const current = stav.temata.find(t => t.id === stav.aktivni);
-    const other = current?.pairId && stav.temata.find(t => t.id === current.pairId);
-    const canAttach = !other && current?.custom && current.id.endsWith('-dark')
-      && !stav.temata.some(t => t.id === `${current.id.slice(0, -5)}-light`);
-    place.hidden = !other && !canAttach;
-    if (!other) {
-      place.replaceChildren();
-      if (canAttach) {
-        place.append(el('div', 'lnTBhint699C', 'K tomuto vlastnímu motivu můžeš přidat světlou dvojici. Tmavý motiv zůstane beze změny.'));
-        const btn = el('button', 'lnTBpaletteToggle699C', '☀️ Vytvořit světlou variantu');
-        btn.type = 'button'; btn.addEventListener('click', addLightCompanion);
-        place.append(btn);
-      }
-      return;
-    }
-    const light = draft(current.variant === 'light' ? current.id : other.id);
-    place.replaceChildren();
-    const info = el('div', 'lnTBhint699C', light?.lightLocked
-      ? '☀️ Světlá varianta je ručně doladěná – automaticky ji nepřepíšu.'
-      : '☀️ Světlá varianta je automaticky sladěná, s jemně tónovaným pozadím.');
-    const btns = el('div', 'lnTBactions699C');
-    const switchBtn = el('button', '', current.variant === 'dark' ? '☀️ Světlá varianta' : '🌙 Tmavá varianta');
-    switchBtn.type = 'button'; switchBtn.addEventListener('click', () => preview(other.id));
-    const regenerate = el('button', '', '↻ Obnovit světlou');
-    regenerate.type = 'button'; regenerate.addEventListener('click', regenerateLight);
-    btns.append(switchBtn, regenerate); place.append(info, btns);
+    // 699D-G: uživatelské motivy mají jedno ID. Světlou podobu vytvoří
+    // až sluníčko v aplikaci. Starý ovladač „Vytvořit světlou“ zrušen.
+    const place = get('lnTBpair699CG');
+    if (place) { place.hidden = true; place.replaceChildren(); }
   }
   function renderPalettes() {
     const box = get('lnTBpalette699C'); if (!box || !stav.paletaOtevrena) return;
@@ -1251,9 +1229,8 @@
     baseRow.append(choose, el('code', '', stav.zakladBarva)); box.append(baseRow);
     box.append(el('p', 'lnTBhint699C', 'Vyber hlavní barvu a potom jednu z palet. Návrh rovnou přebarví aplikaci; jednotlivé prvky pak můžeš doladit ručně.'));
     const activeDraft = aktualni();
-    const modes = activeDraft?.pairId
-      ? (activeDraft.variant === 'light' ? [PALETY[1]] : PALETY.filter(x => x.dark))
-      : PALETY;
+    // Nové a vlastní motivy mají jen tmavé zdrojové palety.
+    const modes = (t?.custom || t?.new) ? PALETY.filter(x => x.dark) : PALETY;
     for (const selected of modes) {
       const mode = activeDraft?.variant === 'light' ? { ...selected, tinted: true } : selected;
       const values = paletteValues(stav.zakladBarva, mode);
@@ -1287,7 +1264,7 @@
     stav.editaceNazvu = mode;
     const form = get('lnTBnameForm699C'); if (!form) return;
     form.replaceChildren(); form.hidden = false;
-    form.append(el('strong', '', mode === 'create' ? 'Vytvořit tmavou a světlou variantu' : mode === 'rename' ? 'Přejmenovat motiv nebo dvojici' : `Smazat motiv „${aktualni().name}“${aktualni().pairId ? ' včetně jeho dvojice' : ''}?`));
+    form.append(el('strong', '', mode === 'create' ? 'Vytvořit tmavý motiv (denní podobu vytvoří sluníčko)' : mode === 'rename' ? 'Přejmenovat motiv' : `Smazat motiv „${aktualni().name}“?`));
     if (mode === 'delete') {
       form.append(el('p', 'lnTBwarning699C', 'Téma se odstraní z budoucího exportu theme.css. Současná aplikace zůstane beze změny.'));
     } else {
@@ -1327,31 +1304,22 @@
       while (exists(`${baseId}-dark`) || exists(`${baseId}-light`)) {
         suffix++; baseId = `${rawId.slice(0, 19)}-${suffix}`;
       }
-      const darkId = `${baseId}-dark`, lightId = `${baseId}-light`;
+      const darkId = `${baseId}-dark`;
       const previous = stav.aktivni, source = aktualni();
       const baseColor = parsedFromCSS(source?.vars.get('--color-accent') || '')?.hex || stav.zakladBarva;
       const darkMode = PALETY[0];
       const darkVars = paletteValues(baseColor, darkMode);
-      const names = [`${baseName} Dark`, `${baseName} Light`];
-      if (stav.temata.some(t => names.some(n => t.name.toLocaleLowerCase('cs') === n.toLocaleLowerCase('cs'))))
-        return setStatus('Název už je obsazený. Zvol jiný základní název dvojice.');
-      stav.history.push({ action: 'createPair', ids: [darkId, lightId], previous });
-      const dark = { id: darkId, name: names[0], originalName: '', new: true, custom: true,
-        pairId: lightId, variant: 'dark' };
-      const light = { id: lightId, name: names[1], originalName: '', new: true, custom: true,
-        pairId: darkId, variant: 'light', lightLocked: false };
-      stav.temata.push(dark, light);
+      stav.history.push({ action: 'createPair', ids: [darkId], previous }); // původní undo pro vytvoření
+      const dark = { id: darkId, name: baseName, originalName: '', new: true, custom: true,
+        pairId: null, variant: 'dark' };
+      stav.temata.push(dark);
       stav.drafty.set(darkId, { name: dark.name, vars: darkVars, overrides: new Map(),
         autoOverrides: automaticColors(darkVars), tagColors: autoCustomTagColors(baseColor, darkMode),
         preservedOverrides: '', base: baseColor, paletteName: darkMode.name,
-        pairId: lightId, variant: 'dark', lightLocked: false });
-      stav.drafty.set(lightId, { name: light.name, vars: new Map(), overrides: new Map(),
-        autoOverrides: new Map(), tagColors: new Map(), preservedOverrides: '',
-        base: baseColor, paletteName: '', pairId: darkId, variant: 'light', lightLocked: false });
-      generateLightFromDark(darkId, true);
+        pairId: null, variant: 'dark', lightLocked: false });
       stav.zakladBarva = baseColor;
       zavriFormNazvu(); preview(darkId); showPalette(true);
-      setStatus(`Vytvořeny dvě varianty „${baseName}“: 🌙 Dark a ☀️ Light. Obě jsou zatím jen v náhledu.`);
+      setStatus(`Vytvořen tmavý motiv „${baseName}“. Světlou podobu automaticky vytvoří sluníčko. Zatím jen v náhledu.`);
       return;
     }
     if (mode === 'rename') {
@@ -1428,10 +1396,12 @@
   function generateCSS() {
     let result = stav.source;
     // Pravidla původních témat se přepisují odzadu, aby seděly jejich indexy.
-    const orig = [...stav.temata.filter(t => !t.new), ...stav.smazanaTemata.values()]
+    const staraSvetlaId699DG = new Set(stav.legacyPairLights699DG.map(t => t.id));
+    const orig = [...stav.temata.filter(t => !t.new), ...stav.smazanaTemata.values(),
+      ...stav.legacyPairLights699DG]
       .sort((a, b) => b.markerStart - a.markerStart);
     for (const t of orig) {
-      if (stav.smazanaTemata.has(t.id)) {
+      if (stav.smazanaTemata.has(t.id) || staraSvetlaId699DG.has(t.id)) {
         result = result.slice(0, t.markerStart) + result.slice(t.end);
         continue;
       }
@@ -1453,11 +1423,23 @@
     result = result.replace(/\/\*\s*LN-TB-OVERRIDES:\s*([a-z0-9-]+):START\s*\*\/[\s\S]*?\/\*\s*LN-TB-OVERRIDES:\s*\1:END\s*\*\//g, '');
     result = result.replace(/\/\* =+\n   LUBANOTE THEME BUILDER 699C[\s\S]*?=+ \*\//g, '');
     let extras = '\n/* =========================================================\n   LUBANOTE THEME BUILDER 699C – NOVÁ TÉMATA A BAREVNÉ VÝJIMKY\n   Export pochází z Theme Builderu; ostatní CSS soubory zůstávají beze změny.\n   ========================================================= */\n';
-    // Při opakovaném exportu se metadata dvojice nepřidávají opakovaně.
+    // 699D-G: Staré dvojice po exportu nahraď aliasy. Žádné nové -light CSS.
     result = result.replace(/\/\*\s*LN-TB-PAIR:\s*[a-z0-9-]+\s*\|\s*[a-z0-9-]+\s*\|\s*(?:AUTO|LOCK)\s*\*\/\s*/gi, '');
-    for (const t of stav.temata.filter(t => t.variant === 'dark' && t.pairId && stav.temata.some(o => o.id === t.pairId))) {
-      const light = draft(t.pairId);
-      extras += `\n/* LN-TB-PAIR: ${t.id} | ${t.pairId} | ${light?.lightLocked ? 'LOCK' : 'AUTO'} */\n`;
+    const aliasy = new Map();
+    for (const m of stav.source.matchAll(/\/\*\s*LN-TB-LIGHT-ALIAS:\s*([a-z0-9-]+)\s*\|\s*([a-z0-9-]+)\s*\*\//gi)) {
+      aliasy.set(m[1], m[2]);
+    }
+    for (const t of stav.legacyPairLights699DG) aliasy.set(t.id, t.pairId);
+    result = result.replace(/\/\*\s*LN-TB-LIGHT-ALIAS:\s*[a-z0-9-]+\s*\|\s*[a-z0-9-]+\s*\*\/\s*/gi, '');
+    for (const [lightId, darkId] of aliasy) {
+      if (stav.temata.some(t => t.id === darkId)) {
+        extras += `\n/* LN-TB-LIGHT-ALIAS: ${lightId} | ${darkId} */\n`;
+      }
+    }
+    // Zastaralé doprovodné color-scheme pravidlo staré světlé verze.
+    for (const t of stav.legacyPairLights699DG) {
+      const exp = new RegExp(`^body\\.theme-${t.id}\\s+#modalDate,\\s*body\\.theme-${t.id}\\s+#modalTime\\s*\\{[^\\n]*\\}\\n?`, 'gm');
+      result = result.replace(exp, '');
     }
     for (const t of stav.temata.filter(x => x.new)) {
       const d = draft(t.id);
@@ -1619,7 +1601,7 @@
   function tonePanel699I() {
     const box = el('section', 'lnTBtonePanel699I'); box.id = 'lnTBtone699I'; box.hidden = true;
     box.append(el('strong', '', '☀️ Společná automatická denní paleta'));
-    box.append(el('p', 'lnTBhint699C', 'Tyto posuvníky ovlivňují všechny automatické světlé varianty. Hotové tmavé motivy i ručně vytvořené světlé dvojice zůstanou stejné.'));
+    box.append(el('p', 'lnTBhint699C', 'Tyto posuvníky ovlivňují všechny automatické světlé varianty. Hotové tmavé motivy se těmito posuvníky nemění.'));
     for (const [key, name, help] of [
       ['depth', 'Hloubka světlých barev', '100 % = původní maximum; 200 % = hlubší barvy, pořád denní režim'],
       ['tint', 'Síla barevného nádechu', '100 % = původní maximum; 200 % = ještě výraznější nádech motivu']
@@ -1747,16 +1729,31 @@
     if (!cssResponse.ok) throw new Error('Nelze načíst theme.css (HTTP ' + cssResponse.status + ').');
     const source = await cssResponse.text();
     const available = nacistTemata(source);
-    stav.source = source; stav.temata = available; stav.drafty = new Map(); stav.history = [];
+    // 699D-G: původní dvojice bylo možné editovat jako dvě položky.
+    // Nyní v Builderu zůstává jen tmavý zdroj a při exportu se starý -light
+    // blok odstraní. Barvy tmavého motivu a všechny ostatní motivy zachováme.
+    const legacyLights = available.filter(t => t.variant === 'light' && t.pairId &&
+      available.some(d => d.id === t.pairId && d.variant === 'dark'));
+    const legacyIds = new Set(legacyLights.map(t => t.id));
+    for (const light of legacyLights) {
+      const dark = available.find(t => t.id === light.pairId);
+      if (!dark) continue;
+      dark.name = dark.name.replace(/\s+(?:Dark|Tmavý)$/i, '').trim() || dark.name;
+      dark.originalName = dark.name;
+      dark.pairId = null;
+    }
+    stav.legacyPairLights699DG = legacyLights;
+    stav.source = source; stav.temata = available.filter(t => !legacyIds.has(t.id));
+    stav.drafty = new Map(); stav.history = [];
     stav.smazanaTemata = new Map(); stav.paletaOtevrena = false; stav.editaceNazvu = null;
     stav.toneOpen = false; stav.toneTimer = 0;
     stav.vlastniStitky = new Map();
-    for (const t of available) stav.drafty.set(t.id, { name: t.name, vars: new Map(t.original), overrides: new Map(), autoOverrides: new Map(),
+    for (const t of stav.temata) stav.drafty.set(t.id, { name: t.name, vars: new Map(t.original), overrides: new Map(), autoOverrides: new Map(),
       tagColors: new Map(t.tagColors), preservedOverrides: t.preservedOverrides, paletteName: '',
       pairId: t.pairId || null, variant: t.variant || null, lightLocked: !!t.lightLocked });
     stav.puvodniTridy = Array.from(document.body.classList).filter(c => c.startsWith('theme-'));
-    stav.aktivni = available.find(t => t.id === (stav.puvodniTridy[0] || '').slice(6))?.id || 'light';
-    if (!stav.drafty.has(stav.aktivni)) stav.aktivni = available[0].id;
+    stav.aktivni = stav.temata.find(t => t.id === (stav.puvodniTridy[0] || '').slice(6))?.id || 'light';
+    if (!stav.drafty.has(stav.aktivni)) stav.aktivni = stav.temata[0].id;
     // 699C-H: při práci s Builderem vypni pouze přechodnou světlou/tmavou
     // vrstvu. Všechna data a uloženou volbu uživatele zachovej.
     window.LubaNoteLiveTone699H?.suspend();
