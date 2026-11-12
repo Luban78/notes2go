@@ -22,6 +22,13 @@
     });
   }
 
+  /* 699D-H: Informace o Demu ma byt uplne prvni polozka tri tecek.
+   * Predchozi sestaveni samo preskladava rychle volby PRED demo, proto
+   * presun provedeme AZ po serazeni. Pri skrytem/Full planu neni videt.
+   * Existujici prvek a vsechny jeho aktualizace ze serveru zustavaji. */
+  const planInfo = document.getElementById('accountPlanMenuInfo');
+  if (planInfo?.parentElement === menu) menu.insertBefore(planInfo, menu.firstChild);
+
   const radek = document.createElement('div');
   radek.className = 'themeSetting ln683BMCardSortRow';
   radek.id = 'ln683BMCardSortSettings';

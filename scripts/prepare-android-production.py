@@ -166,6 +166,17 @@ def stage_web(web: Path) -> None:
         html = remove_section(html, section_id,
                               KEEP_UI_PLACEHOLDER if section_id == 'adminUiView' else '')
 
+    # 699D-H: The legacy RX/TX/E diagnostic strip is obsolete in PROD.
+    # Retain its DOM and syncStatusText: syncTraffic.js and syncStatus.js
+    # still use these nodes. An !important inline display:none guarantees
+    # that account refreshes cannot unhide it. DEV HTML stays unchanged.
+    html = require_exact(
+        html,
+        '<div id="syncTrafficBar" class="syncTrafficBar" data-sync-active="0" aria-live="polite" hidden>',
+        '<div id="syncTrafficBar" class="syncTrafficBar" data-sync-active="0" aria-live="polite" hidden style="display:none !important">',
+        'PROD 699D-H legacy RX/TX/E bar',
+    )
+
     # Keep admin accounts/server but eliminate DEV-specific hard prerequisites.
     for guard in ("    !uiTlacitko ||\n", "    !visualDebugTlacitko ||\n",
                   "    !debugHubTlacitko ||\n"):
@@ -332,6 +343,11 @@ def verify_web(web: Path) -> None:
             raise RuntimeError(f'index.html refers to missing packaged asset: {filename}')
     if (web / 'lubaAutoTester.js').exists():
         raise RuntimeError('AutoTester unexpectedly packaged')
+    # 699D-H: Fail closed if the legacy strip could reappear in PROD.
+    if '<div id="syncTrafficBar" class="syncTrafficBar" data-sync-active="0" aria-live="polite" hidden style="display:none !important">' not in html:
+        raise RuntimeError('PROD 699D-H: legacy RX/TX/E panel is not hidden')
+    if 'id="syncStatusText"' not in html:
+        raise RuntimeError('PROD 699D-H: syncStatusText removed with legacy panel')
     verify_critical_runtime(web, html)
     print('[PROD 699D] Web guard: PASS (developer assets absent; core assets preserved)')
 
