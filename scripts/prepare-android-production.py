@@ -52,7 +52,8 @@ APPROVED_PROD_ASSETS = frozenset("""
     editorCoreV2.css editorCoreV2.js editorCoreV2Bridge.css editorCoreV2Bridge.js
     editorDateTime683BJ.js editorDocuments.js editorFind.js editorHandoff.js
     editorKeyboardPreferences683BN.css editorKeyboardPreferences683BN.js
-    editorMediaV2.js epubReader.js externalOpen699AS.js fontAssets683BQ.css
+    editorMediaV2.js editorFont683BP.css editorFont683BP.js
+    epubReader.js externalOpen699AS.js fontAssets683BQ.css
     globalFonts683BQ.css globalFonts683BQ.js homeDateTime683BC.js
     homeDateTimeAndStatus683BC.css homeToolbarPreferences.css
     homeToolbarPreferences.js i18n.js iconPreference.css lang-cs.js lang-de.js
