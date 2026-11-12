@@ -16,7 +16,7 @@
   function validValue(v, fallback) {
     const n = Number(v);
     return Number.isFinite(n) && v !== null && v !== undefined && v !== ''
-      ? Math.round(Math.max(0, Math.min(100, n))) : fallback;
+      ? Math.round(Math.max(0, Math.min(200, n))) : fallback;
   }
   function normalizeSettings(v, fallback={tint:64,depth:48}) {
     return {tint:validValue(v?.tint,fallback.tint), depth:validValue(v?.depth,fallback.depth)};
@@ -72,17 +72,22 @@
   function rgba(hex,a) { return a>=.999?hex:`rgba(${parse(hex).rgb.map(Math.round).join(', ')}, ${Number(a.toFixed(3))})`; }
   function palette(accent,dark) {
     const {h,s}=rgbToHsl(accent);
-    // 699C-I: Zakladni motiv zustava nedotcen. Menime pouze algoritmem
-    // odvozenou denni variantu. Hloubka 0 = temer bila, 100 = barevna pastel.
-    const depth=settings.depth / 100, tint=settings.tint / 100;
-    const dayL = .975 - .22 * depth;
-    const bg=hslHex(h,dark?.33:.10+.55*tint,dark?.095:dayL);
-    const surface=hslHex(h,dark?.30:.07+.38*tint,dark?.165:clamp(dayL+.046));
-    const editor=hslHex(h,dark?.31:.09+.42*tint,dark?.115:clamp(dayL+.020));
+    // 699C-J: 0-100 % je beze zmeny. 100-200 % je novy rozsah pro
+    // vyraznejsi svetle motivy. Nelze jen zvysit maximum posuvniku:
+    // bez tohoto rozdeleni by sytost narazila na limit a karta by tmavla
+    // prilis rychle. Tmave motivy zustavaji zcela beze zmeny.
+    const depth = Math.min(settings.depth, 100) / 100;
+    const depthPlus = Math.max(0, settings.depth - 100) / 100;
+    const tint = Math.min(settings.tint, 100) / 100;
+    const tintPlus = Math.max(0, settings.tint - 100) / 100;
+    const dayL = .975 - .22 * depth - .115 * depthPlus;
+    const bg=hslHex(h,dark?.33:.10+.55*tint+.12*tintPlus,dark?.095:dayL);
+    const surface=hslHex(h,dark?.30:.07+.38*tint+.14*tintPlus,dark?.165:clamp(dayL+.046));
+    const editor=hslHex(h,dark?.31:.09+.42*tint+.13*tintPlus,dark?.115:clamp(dayL+.020));
     const bright=hslHex(h,clamp(s+.08,.57,.88),dark?.60:.39);
     const second=hslHex(h,clamp(s,.43,.83),dark?.63:.42);
-    const elev=hslHex(h,dark?.28:.12+.42*tint,dark?.23:clamp(dayL-.05));
-    const border=hslToRgb(h,dark?.48:.20+.36*tint,dark?.75:.32).map(Math.round);
+    const elev=hslHex(h,dark?.28:.12+.42*tint+.12*tintPlus,dark?.23:clamp(dayL-.05));
+    const border=hslToRgb(h,dark?.48:.20+.36*tint+.10*tintPlus,dark?.75:.32).map(Math.round);
     const p=new Map([
       ['--color-background',bg],['--color-surface',surface],['--color-surface-elevated',elev],
       ['--color-text',textFor(bg)],['--color-text-secondary',hslHex(h,dark?.24:.20,dark?.78:.30)],
@@ -92,8 +97,8 @@
       ['--color-editor-background',editor],['--color-editor-text',textFor(editor)]
     ]);
     (dark?[.90,.79,.68,.57,.47,.37,.28,.20]:[.96,.88,.79,.68,.56,.45,.35,.25]).forEach((l,i)=>{
-      const level=dark?l:clamp(l-depth*(i<=2?.13:.06),.20,.97);
-      const saturation=dark?clamp(s*.69,.29,.64):clamp(.24+.57*tint,.19,.81);
+      const level=dark?l:clamp(l-depth*(i<=2?.13:.06)-depthPlus*(i<=2?.095:.055),.18,.97);
+      const saturation=dark?clamp(s*.69,.29,.64):clamp(.24+.57*tint+.10*tintPlus,.19,.94);
       p.set(`--card-${CARD_NAMES[i]}`,hslHex((h+(i-3.5)*3+360)%360,saturation,level));
     });
     return p;
@@ -212,8 +217,14 @@
     const h=rgbToHsl(p.get('--color-accent')).h;
     return names.map((src,i)=>{
       const k=i/Math.max(1,names.length-1);
-      const tint=hslHex((h-12+k*24+360)%360,dark?.47:.23+.57*(settings.tint/100),
-        dark?.23+k*.11:clamp(.90-k*.24-(settings.depth/100)*(.12-k*.03),.40,.96));
+      // Vlastni stitky pouzivaji stejnou dvoufazovou skalu jako pozadi.
+      // I nad 100 % musi byt barva celych karet shodna se stitkem.
+      const tintBase = Math.min(settings.tint, 100) / 100;
+      const tPlus = Math.max(0, settings.tint - 100) / 100;
+      const d = Math.min(settings.depth, 100) / 100;
+      const dPlus = Math.max(0, settings.depth - 100) / 100;
+      const tint=hslHex((h-12+k*24+360)%360,dark?.47:.23+.57*tintBase+.12*tPlus,
+        dark?.23+k*.11:clamp(.90-k*.24-d*(.12-k*.03)-dPlus*(.10-k*.03),.40,.96));
       const fg=textFor(tint),v=`[data-barva-karty="${src}" i]`,t=`[data-tag-color="${src}" i]`;
       return `${ROOT} .taskCard${v} { --luba-card-bg: ${tint} !important; --luba-tag-text-683AB: ${fg} !important; }
 body.${CLASS} .categoryTab${t},body.${CLASS} .tagOptions button${t},body.${CLASS} .manageTagColorButton${t} { background-color: ${tint} !important; --luba-tag-bg: ${tint} !important; -webkit-text-fill-color: ${fg} !important; }`;

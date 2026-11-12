@@ -1621,8 +1621,8 @@
     box.append(el('strong', '', '☀️ Společná automatická denní paleta'));
     box.append(el('p', 'lnTBhint699C', 'Tyto posuvníky ovlivňují všechny automatické světlé varianty. Hotové tmavé motivy i ručně vytvořené světlé dvojice zůstanou stejné.'));
     for (const [key, name, help] of [
-      ['depth', 'Hloubka světlých barev', '0 % = skoro bílé, 100 % = výraznější pastelové pozadí a karty'],
-      ['tint', 'Síla barevného nádechu', '0 % = téměř neutrální, 100 % = sytější odstín zvoleného motivu']
+      ['depth', 'Hloubka světlých barev', '100 % = původní maximum; 200 % = hlubší barvy, pořád denní režim'],
+      ['tint', 'Síla barevného nádechu', '100 % = původní maximum; 200 % = ještě výraznější nádech motivu']
     ]) {
       const row = el('div', 'lnTBtoneRow699I');
       const heading = el('div', 'lnTBtoneLabel699I');
@@ -1630,7 +1630,7 @@
       const value = el('output', '', ''); value.id = 'lnTBtone' + key + 'Value699I';
       heading.append(label, value);
       const range = el('input', 'lnTBtoneRange699I'); range.type = 'range';
-      range.id = 'lnTBtone' + key + '699I'; range.min = '0'; range.max = '100'; range.step = '1';
+      range.id = 'lnTBtone' + key + '699I'; range.min = '0'; range.max = '200'; range.step = '1';
       range.addEventListener('input', () => toneMove699I(key, range.value));
       range.addEventListener('change', () => toneMove699I(key, range.value, true));
       row.append(heading, range, el('small', '', help)); box.append(row);
