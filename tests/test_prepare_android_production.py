@@ -36,6 +36,11 @@ def mock_html():
 <link rel="stylesheet" href="lubaAutoTester.css?v=1">
 </head><body>
 {buttons}{sections}
+<div id="syncTrafficBar" class="syncTrafficBar" data-sync-active="0" aria-live="polite" hidden>
+  <span id="syncTrafficRx">↓ 0 B</span><span id="syncTrafficTx">↑ 0 B</span>
+  <span id="syncTrafficEgress">E —</span>
+  <span id="syncStatusText" hidden aria-hidden="true"></span>
+</div>
 <script src="startupDiagnostics.js?v=1"></script>
 <script src="lubaAutoTester.js?v=2"></script>
 <script src="script.js?v=1"></script>
@@ -144,6 +149,31 @@ class ProductionTests(unittest.TestCase):
         gradle = (self.android / 'app/build.gradle').read_text()
         self.assertIn('versionCode 100001', gradle)
         self.assertIn('versionName "1.0.1"', gradle)
+
+    def test_prod_legacy_rx_panel_hidden_but_sync_status_retained(self):
+        mod.stage_web(self.web)
+        html = (self.web / 'index.html').read_text(encoding='utf-8')
+        self.assertIn('id="syncTrafficBar"', html)
+        self.assertIn('style="display:none !important"', html)
+        self.assertIn('id="syncStatusText"', html)
+        mod.verify_web(self.web)
+
+    def test_dev_source_rx_panel_remains_untouched(self):
+        original = (self.web / 'index.html').read_text(encoding='utf-8')
+        self.assertIn('id="syncTrafficBar"', original)
+        self.assertNotIn('style="display:none !important"', original)
+
+    def test_prod_rx_dom_anchor_change_fails_closed(self):
+        p = self.web / 'index.html'
+        p.write_text(p.read_text().replace('data-sync-active="0"', 'data-sync-active="x"'))
+        with self.assertRaisesRegex(RuntimeError, 'legacy RX/TX/E bar'):
+            mod.stage_web(self.web)
+
+    def test_quick_menu_moves_existing_demo_info_first(self):
+        code = (HERE / 'quickMenu683BM.js').read_text(encoding='utf-8')
+        self.assertIn("menu.insertBefore(planInfo, menu.firstChild)", code)
+        self.assertLess(code.index('if (pred)'), code.index('menu.insertBefore(planInfo, menu.firstChild)'))
+        self.assertNotIn('planInfo.cloneNode', code)
 
     def test_dev_tag_with_attributes_is_removed(self):
         p = self.web / 'index.html'
