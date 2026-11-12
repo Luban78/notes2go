@@ -677,6 +677,10 @@
     const old = localStorage.getItem("theme") || "light";
     const at = themes.findIndex(item => item.id === old);
     const next = themes[(at + 1) % themes.length];
+    // 699C-K: Vyber jineho motivu musi zrusit docasny denni/nocni
+    // nahled, jinak jeho !important barvy prekryji nove vybrane tema.
+    // disable() zaroven vymaze ulozenou docasnou variantu, aby se nevratila po reloadu.
+    window.LubaNoteLiveTone699H?.disable?.();
     // Stejná pravidla aplikace motivu jako v settings.js, bez nového registru témat.
     for (const name of [...document.body.classList]) {
       if (name.startsWith("theme-")) document.body.classList.remove(name);
@@ -691,7 +695,10 @@
     );
     const label = document.getElementById("currentThemeLabel");
     if (label) label.textContent = next.nazev || next.id;
-    const dark = !["light","cappuccino"].includes(next.id);
+    // U paru vytvorenych Theme Builderem rozhoduje koncovka varianty.
+    const dark = next.id.endsWith("-light") ? false
+      : next.id.endsWith("-dark") ? true
+      : !["light","cappuccino"].includes(next.id);
     moon.dataset.quickThemeMode = dark ? "night" : "day";
     moon.title = dark ? "Zapnout denní režim" : "Zapnout noční režim";
     moon.setAttribute("aria-label",moon.title);
