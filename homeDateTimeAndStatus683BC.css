@@ -115,14 +115,18 @@
   }
 }
 
-/* 683BG – skryt hodinovy overlay, pokud je opravdu zobrazen RX/TX/E panel
- * nebo je otevrena systemova Android lista. Hodiny nezabiraji misto v layoutu.
- * Respektujeme uzivatelske skryti RX panelu (679C) i Visual Debug CSS.
+/* 683BG / 699D-I – datum/cas skryj pri skutecne viditelnem RX/TX/E
+ * panelu nebo pri systemove Android liste. V ciste PROD APK 699D-H zustava
+ * RX bar v DOM (kvuli starym listenerum), ale ma inline display:none
+ * !important. JavaScript mu muze smazat atribut hidden – to nesmi
+ * omylem schovat nove datum, SYNC, paletu, slunicko ani cas.
+ * Respektujeme uzivatelske skryti RX i format inline style s/bez mezery.
  */
 @media (max-width: 899px) {
   .lnHomeDateTime683BC.ln683BG-system-overlay,
-  body:not(.lubaSyncTrafficUserHidden):has(#syncTrafficBar:not([hidden]))
-    .lnHomeDateTime683BC {
+  body:not(.lubaSyncTrafficUserHidden):has(
+    #syncTrafficBar:not([hidden]):not([style*="display:none"]):not([style*="display: none"])
+  ) .lnHomeDateTime683BC {
     visibility: hidden !important;
   }
 }
