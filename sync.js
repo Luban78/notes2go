@@ -2915,6 +2915,10 @@ function vytvorKonfliktniKopiiBeznePoznamky(
   kopie.title = `${puvodniNazev} ⚠️ konfliktní kopie`;
   kopie.updatedAt = cas;
   kopie.isSecret = false;
+  /* 699D-D: Na více zařízeních by se nový konflikt hned šířil dál.
+   * Uchováme celou odlišnou verzi na zařízení, nikoli v cloudu.
+   * Uživatel ji smí následně zkontrolovat/exportovat a případně převést. */
+  kopie.storageScope = "local";
 
   /* Konfliktní kopie zachovává text, TODO, štítky a další obsah,
      ale nesmí vytvořit duplicitní systémovou notifikaci ani
@@ -5283,8 +5287,12 @@ async function spustExistingClientReconcileV2(
             return false;
           }
 
+          /* 699D-D: Nouzově zachované lokální konfliktní verze
+           * nesmějí vstoupit do cloudového RECONCILE uploadu. */
           for (const note of noveKopie) {
-            localUploadIds.add(String(note.id));
+            if (note.storageScope !== "local") {
+              localUploadIds.add(String(note.id));
+            }
           }
         }
       }
@@ -6310,37 +6318,31 @@ async function vyresCilenyKonfliktBeznePoznamkyV2(
       }
     }
 
-    await ulozBeznePoznamkyPrimo(aktualni);
+    const ulozeno = await ulozBeznePoznamkyPrimo(aktualni);
+    if (ulozeno === false) {
+      return false;
+    }
 
     ulozPrijateCloudMetaPoMerge(
       [row],
       prijmoutCloudMetaId
     );
 
-    /*
-     * Konfliktní kopie je nová běžná poznámka. Uložíme ji targeted
-     * cestou také samostatně; nikdy kvůli ní nepouštíme full snapshot.
-     */
-    for (const kopie of konfliktniKopie) {
-      const detailKopie =
-        await uploadLocalNoteToSupabase(
-          kopie,
-          {
-            cilenyV2: true,
-            vratitDetailV2: true
-          }
-        );
-
-      if (detailKopie?.ok !== true) {
-        return false;
-      }
+    /* 699D-D: Odlišná verze už je bezpečně uložena v lokálním prostoru.
+     * NIKDY ji neodeslat jako další cloudovou poznámku automaticky.
+     * Cloudová původní revize zůstane autoritativní, ostatní zařízení
+     * neobdrží nové duplicity. Ani jedna uživatelská verze se nesmaže. */
+    if (konfliktniKopie.length > 0) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2", `699D-D CONFLICT LOCAL-ONLY | copies=${konfliktniKopie.length}`
+      );
     }
 
     if (
       konfliktniKopie.length > 0 &&
       typeof showToast === "function"
     ) {
-      showToast("Obě verze poznámky byly zachovány");
+      showToast("Konfliktní kopie je jen v zařízení – zazálohuj ji.");
     }
 
     if (typeof renderTasks === "function") {
@@ -6357,7 +6359,7 @@ async function vyresCilenyKonfliktBeznePoznamkyV2(
 
     window.LubaNoteStartupDiag?.zapis?.(
       "V2",
-      `TARGET CONFLICT RESOLVED | id=${noteId} copies=${konfliktniKopie.length}`
+      `699D-D TARGET CONFLICT PRESERVED LOCAL | id=${noteId} copies=${konfliktniKopie.length}`
     );
 
     return true;
@@ -7482,8 +7484,8 @@ async function syncNotes(moznosti = {}) {
     ) {
       showToast(
         konfliktniKopie.length === 1
-          ? "Obě verze poznámky byly zachovány"
-          : `Zachovány obě verze ${konfliktniKopie.length} poznámek`
+          ? "Konfliktní kopie je jen v zařízení – zazálohuj ji."
+          : `${konfliktniKopie.length} konfliktních kopií je jen v zařízení – zazálohuj je.`
       );
     }
 
@@ -8984,6 +8986,17 @@ function zaregistrujCileneZmenyPoLokalniAkciV2(
     const po = snapshotPo.get(id);
 
     if ((pred?.otisk || "") === (po?.otisk || "")) {
+      continue;
+    }
+
+    /* 699D-D: Technické změny po reinstalaci (updatedAt, notificationId,
+     * syncConflict) NEJSOU editace obsahu. Zachovat existující revize,
+     * neposílat falešný TARGET a nevyvolávat konfliktní kopie. */
+    if (pred?.note && po?.note &&
+        majiStejnySkutecnyObsahPoznamky(pred.note, po.note, id)) {
+      window.LubaNoteStartupDiag?.zapis?.(
+        "V2", `699D-D TARGET META-ONLY SKIP | id=${id}`
+      );
       continue;
     }
 
