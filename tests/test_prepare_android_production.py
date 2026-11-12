@@ -18,6 +18,8 @@ CORE = (
     'lubaKeyboard.js', 'lubaKeyboardPreview691BJ.js', 'mobileHeader693J.js',
     'planner.js', 'reminders.js', 'theme.css', 'debugMobileGenerated.css',
     'debugTabletGenerated.css', 'debugDesktopGenerated.css', 'adminDashboard.js',
+    'supabaseClient.js', 'secret.js', 'mediaCrypto.js', 'e2eCore.js',
+    'e2eNotesCrypto.js', 'e2eDeviceGuard688T.js',
 )
 
 
@@ -37,6 +39,13 @@ def mock_html():
 <script src="startupDiagnostics.js?v=1"></script>
 <script src="lubaAutoTester.js?v=2"></script>
 <script src="script.js?v=1"></script>
+<script src="supabaseClient.js?v=1"></script>
+<script src="secret.js?v=1"></script>
+<script src="mediaCrypto.js?v=1"></script>
+<script src="e2eCore.js?v=1"></script>
+<script src="e2eNotesCrypto.js?v=1"></script>
+<script src="e2eDeviceGuard688T.js?v=1"></script>
+<script src="sync.js?v=1"></script>
 <script src="adminDashboard.js?v=1"></script>
 </body></html>'''
 
@@ -85,6 +94,10 @@ class ProductionTests(unittest.TestCase):
         self.web.mkdir()
         for name in CORE:
             (self.web / name).write_text('/* placeholder */', encoding='utf-8')
+        # Critical release guards are tested against the actual repository
+        # source, rather than fabricated code that could pass after a regression.
+        for name in ('sync.js', 'supabaseClient.js'):
+            (self.web / name).write_bytes((HERE / name).read_bytes())
         (self.web / 'index.html').write_text(mock_html(), encoding='utf-8')
         (self.web / 'adminDashboard.js').write_text(mock_admin(), encoding='utf-8')
         for name in ('lubaAutoTester.css', 'lubaAutoTester.js', 'startupDiagnostics.js',
@@ -148,6 +161,37 @@ class ProductionTests(unittest.TestCase):
     def test_missing_required_runtime_fails_closed(self):
         (self.web / 'sync.js').unlink()
         with self.assertRaisesRegex(RuntimeError, 'Required runtime assets'):
+            mod.stage_web(self.web)
+
+    def test_production_missing_e2e_script_fails_closed(self):
+        p = self.web / 'index.html'
+        p.write_text(p.read_text().replace(
+            '<script src="e2eDeviceGuard688T.js?v=1"></script>', ''))
+        with self.assertRaisesRegex(RuntimeError, 'does not load e2eDeviceGuard688T.js'):
+            mod.stage_web(self.web)
+
+    def test_production_lost_master_password_gate_fails_closed(self):
+        p = self.web / 'supabaseClient.js'
+        p.write_text(p.read_text().replace(
+            'await maZarizeniPripravenyMediaKlic();',
+            'await simulatedBypassOfMediaKey();'))
+        with self.assertRaisesRegex(RuntimeError, 'mandatory E2E login gate changed'):
+            mod.stage_web(self.web)
+
+    def test_production_old_sync_hotfix_fails_closed(self):
+        p = self.web / 'sync.js'
+        p.write_text(p.read_text().replace('kopie.storageScope = "local";',
+                                           'kopie.storageScope = "cloud";'))
+        with self.assertRaisesRegex(RuntimeError, '699D-D sync safety hotfix is missing'):
+            mod.stage_web(self.web)
+
+    def test_production_conflict_copy_reupload_fails_closed(self):
+        p = self.web / 'sync.js'
+        data = p.read_text()
+        target = 'async function vyresCilenyKonfliktBeznePoznamkyV2('
+        self.assertEqual(data.count(target), 1)
+        p.write_text(data.replace(target, target + '\n  /* Regression fixture */\n  await uploadLocalNoteToSupabase(kopie);\n', 1))
+        with self.assertRaisesRegex(RuntimeError, 'conflict copy cloud re-upload'):
             mod.stage_web(self.web)
 
     def test_native_tester_missing_fails_closed(self):

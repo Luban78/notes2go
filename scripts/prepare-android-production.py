@@ -332,7 +332,68 @@ def verify_web(web: Path) -> None:
             raise RuntimeError(f'index.html refers to missing packaged asset: {filename}')
     if (web / 'lubaAutoTester.js').exists():
         raise RuntimeError('AutoTester unexpectedly packaged')
+    verify_critical_runtime(web, html)
     print('[PROD 699D] Web guard: PASS (developer assets absent; core assets preserved)')
+
+
+
+def verify_critical_runtime(web: Path, html: str) -> None:
+    """699D-E: fail-closed guards for E2E onboarding and conflict hotfix.
+
+    Static release checks, NOT a substitute for login/sync testing on a fresh
+    Android device. Never read credentials or user data, only bundled source.
+    """
+    required_scripts = (
+        "supabaseClient.js", "secret.js", "mediaCrypto.js", "e2eCore.js",
+        "e2eNotesCrypto.js", "e2eDeviceGuard688T.js", "sync.js",
+    )
+    for name in required_scripts:
+        if not (web / name).is_file():
+            raise RuntimeError(f"PROD 699D-E: missing required E2E/sync asset {name}")
+        # A file existing in the APK is not enough: index.html must load it.
+        script_tag = re.compile(
+            r'<script\b[^>]*\bsrc=[\'"]' + re.escape(name) +
+            r'(?:\?[^\'"]*)?[\'"][^>]*>', re.I,
+        )
+        if not script_tag.search(html):
+            raise RuntimeError(f"PROD 699D-E: index.html does not load {name}")
+
+    auth = (web / "supabaseClient.js").read_text(encoding="utf-8")
+    required_auth_markers = (
+        "await maUcetNastaveneHlavniHeslo(user?.id);",
+        "if (maHlavniHeslo === false) {",
+        'rezim: "vytvorit"',
+        "if (maHlavniHeslo === true) {",
+        "await gate.overAktualnost(user.id, { vynutit: true })",
+        "await maZarizeniPripravenyMediaKlic();",
+        "if (!mediaKlicPripraven) {",
+        'rezim: "zarizeni"',
+    )
+    for marker in required_auth_markers:
+        if marker not in auth:
+            raise RuntimeError(f"PROD 699D-E: mandatory E2E login gate changed: {marker}")
+
+    sync = (web / "sync.js").read_text(encoding="utf-8")
+    required_conflict_markers = (
+        'kopie.storageScope = "local";',
+        'if (note.storageScope !== "local") {',
+        "699D-D CONFLICT LOCAL-ONLY",
+        "699D-D TARGET META-ONLY SKIP",
+    )
+    for marker in required_conflict_markers:
+        if marker not in sync:
+            raise RuntimeError(f"PROD 699D-E: 699D-D sync safety hotfix is missing: {marker}")
+
+    # The old targeted path uploaded the newly generated conflict copy again.
+    # This would redistribute the duplicates to other signed-in devices.
+    resolver = sync.split("async function vyresCilenyKonfliktBeznePoznamkyV2(", 1)
+    if len(resolver) != 2:
+        raise RuntimeError("PROD 699D-E: targeted conflict resolver missing")
+    resolver = resolver[1].split("/*\n * OPRAVA JIŽ VZNIKLÝCH LEGACY DUPLIKÁTŮ", 1)[0]
+    if "await uploadLocalNoteToSupabase(" in resolver:
+        raise RuntimeError("PROD 699D-E: conflict copy cloud re-upload reintroduced")
+
+    print("[PROD 699D-E] PASS: mandatory E2E password-onboarding and 699D-D conflict protection present")
 
 
 def verify_android(android: Path) -> None:
