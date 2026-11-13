@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<full-backup-content>
+<full-backup-content xmlns:tools="http://schemas.android.com/tools">
   <!-- 699D-M: No implicit restoration of stale WebView/localStorage, IndexedDB,
        encrypted local vault, auth/session or revision metadata.
        Reinstall must start clean and restore synced data through LubaServer.
@@ -9,8 +9,10 @@
   <exclude domain="database" path="." />
   <exclude domain="sharedpref" path="." />
   <exclude domain="external" path="." />
-  <exclude domain="device_root" path="." />
-  <exclude domain="device_file" path="." />
-  <exclude domain="device_database" path="." />
-  <exclude domain="device_sharedpref" path="." />
+  <!-- 699D-P: Android docs support device_* domains, but installed AGP Lint
+       FullBackupContent falsely rejects them. Suppress only these entries. -->
+  <exclude domain="device_root" path="." tools:ignore="FullBackupContent" />
+  <exclude domain="device_file" path="." tools:ignore="FullBackupContent" />
+  <exclude domain="device_database" path="." tools:ignore="FullBackupContent" />
+  <exclude domain="device_sharedpref" path="." tools:ignore="FullBackupContent" />
 </full-backup-content>

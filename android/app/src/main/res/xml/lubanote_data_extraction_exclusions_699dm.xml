@@ -1,19 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<data-extraction-rules>
+<data-extraction-rules xmlns:tools="http://schemas.android.com/tools">
   <!-- 699D-M: No implicit restoration of stale WebView/localStorage, IndexedDB,
        encrypted local vault, auth/session or revision metadata.
        Reinstall must start clean and restore synced data through LubaServer.
        Local-only notes require a user-controlled export before uninstall. -->
+  <!-- 699D-P: device_* domains are documented; older AGP Lint requires
+       targeted FullBackupContent suppression on each such exclusion. -->
   <cloud-backup>
     <exclude domain="root" path="." />
     <exclude domain="file" path="." />
     <exclude domain="database" path="." />
     <exclude domain="sharedpref" path="." />
     <exclude domain="external" path="." />
-    <exclude domain="device_root" path="." />
-    <exclude domain="device_file" path="." />
-    <exclude domain="device_database" path="." />
-    <exclude domain="device_sharedpref" path="." />
+    <exclude domain="device_root" path="." tools:ignore="FullBackupContent" />
+    <exclude domain="device_file" path="." tools:ignore="FullBackupContent" />
+    <exclude domain="device_database" path="." tools:ignore="FullBackupContent" />
+    <exclude domain="device_sharedpref" path="." tools:ignore="FullBackupContent" />
   </cloud-backup>
   <device-transfer>
     <exclude domain="root" path="." />
@@ -21,9 +23,9 @@
     <exclude domain="database" path="." />
     <exclude domain="sharedpref" path="." />
     <exclude domain="external" path="." />
-    <exclude domain="device_root" path="." />
-    <exclude domain="device_file" path="." />
-    <exclude domain="device_database" path="." />
-    <exclude domain="device_sharedpref" path="." />
+    <exclude domain="device_root" path="." tools:ignore="FullBackupContent" />
+    <exclude domain="device_file" path="." tools:ignore="FullBackupContent" />
+    <exclude domain="device_database" path="." tools:ignore="FullBackupContent" />
+    <exclude domain="device_sharedpref" path="." tools:ignore="FullBackupContent" />
   </device-transfer>
 </data-extraction-rules>
