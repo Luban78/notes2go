@@ -1,6 +1,25 @@
 /* 699D-G: Jedna volitelná tmavá definice, světlou podobu vytváří sluníčko.
  * Staré páry v theme.css se při čtení pouze skryjí; barvy se nemažou.
  * ALIAS po bezpečném exportu zachová obnovu dříve uloženého -light ID. */
+/* 699D-N: Na čisté instalaci použij Grafit místo fialového Světlého.
+ * Uložený výběr uživatele NIKDY neměň. Nastav ještě před asynchronním
+ * načtením seznamu motivů, aby se nový výchozí motiv nepřekresloval.
+ * Bez zásahu do CSS definic nebo přepínání den/noc. */
+(() => {
+  // Na PC/PWA ponech dosavadní výchozí motiv; oprava míří na čistou APK.
+  if (!window.Capacitor?.isNativePlatform?.()) return;
+  try {
+    let motiv = localStorage.getItem('theme');
+    if (!motiv) {
+      motiv = 'darkg';
+      localStorage.setItem('theme', motiv);
+    }
+    if (motiv !== 'light' && /^[a-z0-9-]{1,64}$/i.test(motiv)) {
+      document.body?.classList.add(`theme-${motiv}`);
+    }
+  } catch (_) { /* Ukládání je nedostupné: původní chování aplikace. */ }
+})();
+
 async function nactiTemata() {
   const odpoved = await fetch("theme.css?v=656-theme-pack");
   if (!odpoved.ok) throw new Error(`Motivy nejsou dostupné (HTTP ${odpoved.status}).`);

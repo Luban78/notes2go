@@ -21,7 +21,7 @@
   // No Android or manufacturer-specific hidden setting is reported as verified.
   const guides = {
     samsung: 'Nastavení → Baterie → Limity využití na pozadí → Aplikace, které nikdy nespí → + → LubaNote. Zkontroluj také seznam Spící / Hluboce spící aplikace.',
-    xiaomi: 'Nastavení → Aplikace → Správa aplikací → LubaNote → Baterie. Pokud vidíš „Povolit používání aplikace na pozadí“, klepni na CELÝ ŘÁDEK, nejen na přepínač. V další nabídce vyber „Neomezeno“ místo „Optimalizováno“.',
+    xiaomi: 'Nejrychleji: podrž ikonu LubaNote → Informace o aplikaci → Napájení → Žádné omezení. Pokud vidíš „Povolit používání aplikace na pozadí“, otevři CELÝ ŘÁDEK (nejen přepínač) a zvol „Neomezeno“ místo „Optimalizováno“. Alternativa: Nastavení → Aplikace → Správa aplikací → LubaNote → Baterie.',
     pixel: 'Nastavení → Aplikace → LubaNote → Využití baterie aplikací → Povolit používání na pozadí → otevři také detail a vyber „Bez omezení“, pokud je dostupný.',
     oneplus: 'Nastavení → Aplikace → LubaNote → Využití baterie → Povolit aktivitu na pozadí / Bez optimalizace. V nastavení automatického spouštění ověř povolení LubaNote.',
     oppo: 'Nastavení → Aplikace → Správa aplikací → LubaNote → Využití baterie → Povolit aktivitu na pozadí. Ověř také automatické spouštění, pokud je dostupné.',
@@ -181,7 +181,11 @@
         model.detail==='exact' ? t('Přesné alarmy','Exact alarms') : t('Oznámení','Notifications');
       note(dialog,'h3',label);
       const s=current;
-      if (s) note(dialog,'p',`${s.manufacturer || s.brand || t('Android telefon','Android phone')} ${s.model || ''} · Android ${s.androidApi || '?'}`,'ln699DLMuted');
+      if (s) {
+        const api = Number(s.androidApi);
+        const verze = {36:'16',35:'15',34:'14',33:'13',32:'12L',31:'12',30:'11',29:'10',28:'9'}[api];
+        note(dialog,'p',`${s.manufacturer || s.brand || t('Android telefon','Android phone')} ${s.model || ''} · Android ${verze || '?'} (API ${s.androidApi || '?'})`,'ln699DLMuted');
+      }
       note(dialog,'p',guideFor(s,model.detail),'ln699DLMuted');
       note(dialog,'p',t('Postup je orientační. Výrobci a aktualizace mohou názvy položek změnit. Pokud přesná stránka není dostupná, LubaNote ji nebude nahrazovat matoucí obrazovkou informací o aplikaci.',
         'Steps vary by manufacturer and Android version. LubaNote will not substitute an unrelated settings page.'),'ln699DLMuted');
