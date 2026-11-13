@@ -21,7 +21,7 @@
   // No Android or manufacturer-specific hidden setting is reported as verified.
   const guides = {
     samsung: 'Nastavení → Baterie → Limity využití na pozadí → Aplikace, které nikdy nespí → + → LubaNote. Zkontroluj také seznam Spící / Hluboce spící aplikace.',
-    xiaomi: 'Nejrychleji: podrž ikonu LubaNote → Informace o aplikaci → Napájení → Žádné omezení. Pokud vidíš „Povolit používání aplikace na pozadí“, otevři CELÝ ŘÁDEK (nejen přepínač) a zvol „Neomezeno“ místo „Optimalizováno“. Alternativa: Nastavení → Aplikace → Správa aplikací → LubaNote → Baterie.',
+    xiaomi: 'Podrž ikonu LubaNote → Informace o aplikaci → Napájení → Žádné omezení.',
     pixel: 'Nastavení → Aplikace → LubaNote → Využití baterie aplikací → Povolit používání na pozadí → otevři také detail a vyber „Bez omezení“, pokud je dostupný.',
     oneplus: 'Nastavení → Aplikace → LubaNote → Využití baterie → Povolit aktivitu na pozadí / Bez optimalizace. V nastavení automatického spouštění ověř povolení LubaNote.',
     oppo: 'Nastavení → Aplikace → Správa aplikací → LubaNote → Využití baterie → Povolit aktivitu na pozadí. Ověř také automatické spouštění, pokud je dostupné.',
@@ -187,8 +187,8 @@
         note(dialog,'p',`${s.manufacturer || s.brand || t('Android telefon','Android phone')} ${s.model || ''} · Android ${verze || '?'} (API ${s.androidApi || '?'})`,'ln699DLMuted');
       }
       note(dialog,'p',guideFor(s,model.detail),'ln699DLMuted');
-      note(dialog,'p',t('Postup je orientační. Výrobci a aktualizace mohou názvy položek změnit. Pokud přesná stránka není dostupná, LubaNote ji nebude nahrazovat matoucí obrazovkou informací o aplikaci.',
-        'Steps vary by manufacturer and Android version. LubaNote will not substitute an unrelated settings page.'),'ln699DLMuted');
+      note(dialog,'p',t('Názvy nastavení se mohou podle verze Androidu lišit.',
+        'Setting names may vary by Android version.'),'ln699DLMuted');
       const actions=note(dialog,'div','','ln699DLButtons');
       button(actions,t('Zpět','Back'),()=>{model={screen:'list'};draw();});
       if (model.detail!=='battery') button(actions,t('Otevřít nastavení','Open settings'),()=>{void repair(model.detail);},'primary');
@@ -209,12 +209,21 @@
       button(row,t('Opravit','Fix'),()=>{void repair(item.id);},'primary');
       button(row,'ⓘ Info',()=>info(item.id));
     }
-    const b=note(dialog,'section','','ln699DLItem');
-    note(b,'strong',t('Další omezení telefonu','Other device restrictions'));
-    note(b,'p',t('Výrobce může používat další skrytou optimalizaci, kterou standardní Android API neumí ověřit. Její vypnutí nelze prohlásit za potvrzené.',
-      'Manufacturers may enforce restrictions that Android does not report. Their status cannot be verified automatically.'));
-    const row=note(b,'div','','ln699DLButtons');
-    button(row,'ⓘ '+t('Návod pro můj telefon','Guide for my phone'),()=>info('battery'));
+    if (problems.length > 0) {
+      // Omezena oprávnění: zachovej kontext i návod k dalším omezením.
+      const b=note(dialog,'section','','ln699DLItem');
+      note(b,'strong',t('Další omezení telefonu','Other device restrictions'));
+      note(b,'p',t('Výrobce může používat další skrytou optimalizaci, kterou standardní Android API neumí ověřit. Její vypnutí nelze prohlásit za potvrzené.',
+        'Manufacturers may enforce restrictions that Android does not report. Their status cannot be verified automatically.'));
+      const row=note(b,'div','','ln699DLButtons');
+      button(row,'ⓘ '+t('Návod pro můj telefon','Guide for my phone'),()=>info('battery'));
+    } else if (current?.nativeHealthAvailable) {
+      // Nula zjištěných problémů: bez dlouhého varovného panelu.
+      // Návod zůstává dostupný na vyžádání, protože skrytá omezení
+      // výrobců nemusí standardní Android rozhraní hlásit.
+      const row=note(dialog,'div','','ln699DLButtons');
+      button(row,'ⓘ '+t('Návod pro můj telefon','Guide for my phone'),()=>info('battery'));
+    }
     const end=note(dialog,'div','','ln699DLButtons');
     button(end,t('Zkontrolovat znovu','Check again'),()=>{void refresh(true);},'primary');
   }
