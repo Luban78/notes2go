@@ -120,13 +120,15 @@
 
   const aktualizujKonflikty = () => {
     const pocet = nactiKonflikty().length;
+    const problemy = Math.max(0, Number(window.LubaNoteProblems699DL?.count || 0));
+    const celkem = pocet + problemy;
     const jazyk = slova();
     popis.textContent = `${jazyk[0]} (${pocet})`;
     if (hlavniTlacitko) {
-      pocitadlo.hidden = pocet === 0;
-      pocitadlo.style.display = pocet ? 'block' : 'none';
-      pocitadlo.textContent = pocet > 99 ? '99+' : String(pocet);
-      hlavniTlacitko.setAttribute('aria-label', pocet ? `${jazyk[4]} – ${jazyk[0]}: ${pocet}` : puvodniAria);
+      pocitadlo.hidden = celkem === 0;
+      pocitadlo.style.display = celkem ? 'block' : 'none';
+      pocitadlo.textContent = celkem > 99 ? '99+' : String(celkem);
+      hlavniTlacitko.setAttribute('aria-label', celkem ? `${jazyk[4]} – ${jazyk[0]}: ${pocet}, problémy: ${problemy}` : puvodniAria);
     }
   };
 
@@ -158,6 +160,7 @@
   window.addEventListener('lubanote:sync-state', (e) => {
     if (e?.detail?.state === 'synced' || e?.detail?.stav === 'synced') aktualizujKonflikty();
   });
+  window.addEventListener('lubanote:problems-updated', aktualizujKonflikty);
   window.addEventListener('lubanote:account-active', aktualizujKonflikty);
   window.addEventListener('lubanote:language-change', aktualizujKonflikty);
   window.addEventListener('focus', aktualizujKonflikty);

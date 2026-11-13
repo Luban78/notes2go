@@ -156,8 +156,68 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     });
   }
 
+  /* 699D-L: Read-only Android permissions health. The battery allowlist is
+   * NOT evidence that a manufacturer-specific background mode is unrestricted. */
+  @PluginMethod public void getReminderHealth699DL(PluginCall call) {
+    JSObject result = new JSObject();
+    android.app.NotificationManager notifications =
+        (android.app.NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+    android.os.PowerManager power =
+        (android.os.PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+    boolean notificationAllowed = notifications != null &&
+        (Build.VERSION.SDK_INT < 24 || notifications.areNotificationsEnabled());
+    if (notificationAllowed && Build.VERSION.SDK_INT >= 26 && notifications != null) {
+      android.app.NotificationChannel channel = notifications.getNotificationChannel("reminders");
+      if (channel != null && channel.getImportance() == android.app.NotificationManager.IMPORTANCE_NONE) {
+        notificationAllowed = false;
+      }
+    }
+    boolean batteryExempt = Build.VERSION.SDK_INT < 23 ||
+        (power != null && power.isIgnoringBatteryOptimizations(getContext().getPackageName()));
+    result.put("notificationsAllowed", notificationAllowed);
+    result.put("exactAllowed", canScheduleExact692R());
+    result.put("batteryExempt", batteryExempt);
+    result.put("powerSave", power != null && power.isPowerSaveMode());
+    result.put("manufacturer", Build.MANUFACTURER);
+    result.put("brand", Build.BRAND);
+    result.put("model", Build.MODEL);
+    result.put("androidApi", Build.VERSION.SDK_INT);
+    call.resolve(result);
+  }
+
+  /* 699D-L: Open ONLY the corresponding Android permission destination.
+   * Never fall back to generic app info, which falsely looks like a fix.
+   * Direct Doze exemption request is user-initiated and Android-controlled. */
+  @PluginMethod public void openReminderPermission699DL(PluginCall call) {
+    final String kind = call.getString("kind", "");
+    final String pkg = getContext().getPackageName();
+    getActivity().runOnUiThread(() -> {
+      if (getActivity().isFinishing() || getActivity().isDestroyed()) {
+        call.reject("ACTIVITY_NOT_AVAILABLE"); return;
+      }
+      final Intent target;
+      if ("exact".equals(kind) && Build.VERSION.SDK_INT >= 31) {
+        target = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + pkg));
+      } else if ("notifications".equals(kind) && Build.VERSION.SDK_INT >= 26) {
+        target = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+        target.putExtra(Settings.EXTRA_APP_PACKAGE, pkg);
+      } else if ("battery".equals(kind) && Build.VERSION.SDK_INT >= 23) {
+        target = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            Uri.parse("package:" + pkg));
+      } else {
+        call.reject("SPECIFIC_SETTINGS_NOT_AVAILABLE"); return;
+      }
+      try {
+        getActivity().startActivity(target);
+        JSObject result = new JSObject(); result.put("opened", true);
+        call.resolve(result);
+      } catch (Exception error) {
+        call.reject("SPECIFIC_SETTINGS_NOT_AVAILABLE");
+      }
+    });
+  }
+
   // 692T: Consume only after the original reminders screen actually opened.
-  // The same token is retained across a cold start and sync retries.
   @PluginMethod public void getPendingRemoteOpen(PluginCall call) {
     SharedPreferences prefs = getContext().getSharedPreferences(LubaNoteRemoteOpen692T.PREF, Context.MODE_PRIVATE);
     String id = prefs.getString(LubaNoteRemoteOpen692T.NOTE, "");
