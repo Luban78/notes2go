@@ -1532,23 +1532,49 @@
     return { node: blokEl, offset: blokEl.childNodes.length };
   }
 
-  function nastavVyberModelu(zacatek, konec = zacatek, mer699DAB = null) {
+  function nastavVyberModelu(zacatek, konec = zacatek, mer699DAB = null, primeSbaleni699DAC = false) {
     if (!editor) return;
     const domZacatek = najdiDomBod(zacatek.blok, zacatek.offset);
     const domKonec = najdiDomBod(konec.blok, konec.offset);
     mer699DAB?.("selectionMapMs");
     if (!domZacatek || !domKonec) return;
 
-    const range = document.createRange();
-    range.setStart(domZacatek.node, domZacatek.offset);
-    range.setEnd(domKonec.node, domKonec.offset);
+    /* 699D-AC: opt in only from the guarded local insertion path.
+       Do not remove a live collapsed selection in the same verified text
+       node just to recreate it. Check exact DOM position synchronously;
+       otherwise fall back to the original Range restoration. */
+    let primoHotovo699DAC = false;
+    if (primeSbaleni699DAC && zacatek.blok === konec.blok && zacatek.offset === konec.offset &&
+        domZacatek.node === domKonec.node && domZacatek.offset === domKonec.offset &&
+        domKonec.node.nodeType === Node.TEXT_NODE && editor.contains(domKonec.node)) {
+      const vyber = window.getSelection();
+      if (vyber?.rangeCount === 1 && vyber.isCollapsed &&
+          vyber.anchorNode === domKonec.node && vyber.focusNode === domKonec.node &&
+          typeof vyber.collapse === 'function') {
+        let provedeno = false;
+        try {
+          vyber.collapse(domKonec.node, domKonec.offset);
+          provedeno = true;
+        } catch (_error) { /* original Range fallback below */ }
+        mer699DAB?.("selectionCollapseMs");
+        primoHotovo699DAC = provedeno && vyber.rangeCount === 1 && vyber.isCollapsed &&
+          vyber.anchorNode === domKonec.node && vyber.focusNode === domKonec.node &&
+          vyber.anchorOffset === domKonec.offset && vyber.focusOffset === domKonec.offset;
+        mer699DAB?.("selectionCollapseVerifyMs");
+      }
+    }
+    if (!primoHotovo699DAC) {
+      const range = document.createRange();
+      range.setStart(domZacatek.node, domZacatek.offset);
+      range.setEnd(domKonec.node, domKonec.offset);
 
-    mer699DAB?.("selectionRangeMs");
-    const vyber = window.getSelection();
-    vyber.removeAllRanges();
-    mer699DAB?.("selectionClearMs");
-    vyber.addRange(range);
-    mer699DAB?.("selectionAddMs");
+      mer699DAB?.("selectionRangeMs");
+      const vyber = window.getSelection();
+      vyber.removeAllRanges();
+      mer699DAB?.("selectionClearMs");
+      vyber.addRange(range);
+      mer699DAB?.("selectionAddMs");
+    }
     posledniPozice = { ...konec };
     posledniVyber = {
       zacatek: { ...zacatek },
@@ -1873,7 +1899,7 @@
       mer699DAB?.("textMutationMs");
       if (node.data !== freshText) return fail('insert-result');
       mer699DAB?.("mutationVerifyMs");
-      nastavVyberModelu(selection.zacatek, selection.konec, mer699DAB);
+      nastavVyberModelu(selection.zacatek, selection.konec, mer699DAB, true);
     } catch (_error) { return fail('insert-exception'); }
     finally {
       observerDomu?.observe(currentEditor, { childList: true, subtree: true, attributes: true, characterData: true });
