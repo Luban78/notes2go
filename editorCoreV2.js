@@ -1832,9 +1832,21 @@
     const row = editor.children[pred.index];
     if (!row?.matches('.ln-v2-odstavec[data-ln-v2-blok]') || row.dataset.lnV2Blok !== pred.id ||
         row.dataset.typ !== 'odstavec' || row.hidden) return fail('row-shape');
-    if (row.childNodes.length !== 1) return fail('row-children');
-    const span = row.firstElementChild;
-    if (!span?.matches('span.ln-v2-cast[data-ln-v2-segment="0"]')) return fail('segment-shape');
+    /* 699D-AA – 683U anchors the actual caret and its handle inside the
+       active row. Permit only these two owned, non-editable UI helpers;
+       reject any additional text, segment, or foreign element. */
+    let span = null;
+    for (const child of row.childNodes) {
+      if (child.nodeType === Node.ELEMENT_NODE &&
+          child.matches('span.ln-v2-cast[data-ln-v2-segment="0"]') && !span) {
+        span = child;
+        continue;
+      }
+      const ownedHelper = (child === v2LubaCaret && child.matches('.ln-v2-luba-caret.ln-v2-caret-scroll-anchored')) ||
+        (child === v2SingleCaretHandle && child.matches('.ln-v2-single-caret-handle.ln-v2-caret-scroll-anchored'));
+      if (!ownedHelper || child.contentEditable !== 'false' || child.textContent !== '') return fail('row-children');
+    }
+    if (!span) return fail('segment-shape');
     if (span.childNodes.length !== 1) return fail('segment-children');
     const node = span.firstChild;
     if (node?.nodeType !== Node.TEXT_NODE) return fail('text-node');
