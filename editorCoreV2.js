@@ -134,7 +134,7 @@
       }
       v2LubaCaretScrollAktivni = false;
       v2LubaCaretScrollTimer = 0;
-      naplanujV2LubaCaret(posledniVyber);
+      naplanujV2LubaCaret(posledniVyber, "scroll-settled");
     }, 140);
   }
 
@@ -417,7 +417,9 @@
     }
 
     const caret = zajistiV2LubaCaret();
-    caret.style.height = `${vyskaCaretu}px`;
+    if (!pouzivaV2UkotvenyCaret() || caret.style.height !== `${vyskaCaretu}px`) {
+      caret.style.height = `${vyskaCaretu}px`;
+    }
     /* 683U – kapka i caret jsou umístěné ve stejném TEXTOVÉM řádku.
        Prohlížeč je tím pádem scrolluje SPOLEČNĚ s textem již při
        compositor scrollu. Nečekáme na scroll-event/RAF a neschováváme
@@ -430,16 +432,20 @@
       const x = Math.round(rect.left - radekRect.left);
       const y = Math.round(rect.top - radekRect.top);
       merOdlozenouOperaci699DAE('caret:anchoredWrites', () => {
-        caret.classList.add("ln-v2-caret-scroll-anchored");
-        caret.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-        radek.appendChild(caret);
+        /* 699D-AG – preserve the actual anchored helper nodes. A repeated
+           appendChild on the same parent is still a DOM remove/insert.
+           Skip unchanged inline values and do not detach the drag handle. */
+        if (!caret.classList.contains("ln-v2-caret-scroll-anchored")) caret.classList.add("ln-v2-caret-scroll-anchored");
+        const transform = `translate3d(${x}px, ${y}px, 0px)`;
+        if (caret.style.transform !== transform) caret.style.transform = transform;
+        if (caret.parentNode !== radek) merOdlozenouOperaci699DAE('caret:moveCaret', () => radek.appendChild(caret));
         const uchyt = ziskejV2SingleCaretHandle();
-        uchyt.classList.add("ln-v2-caret-scroll-anchored");
-        uchyt.style.left = `${x}px`;
-        uchyt.style.top = `${y + vyskaCaretu}px`;
-        radek.appendChild(uchyt);
-        caret.hidden = false;
-        uchyt.hidden = false;
+        if (!uchyt.classList.contains("ln-v2-caret-scroll-anchored")) uchyt.classList.add("ln-v2-caret-scroll-anchored");
+        if (uchyt.style.left !== `${x}px`) uchyt.style.left = `${x}px`;
+        if (uchyt.style.top !== `${y + vyskaCaretu}px`) uchyt.style.top = `${y + vyskaCaretu}px`;
+        if (uchyt.parentNode !== radek) merOdlozenouOperaci699DAE('caret:moveHandle', () => radek.appendChild(uchyt));
+        if (caret.hidden) caret.hidden = false;
+        if (uchyt.hidden) uchyt.hidden = false;
       });
       return;
     }
@@ -459,7 +465,7 @@
       a.konec.offset === b.konec.offset);
   }
 
-  function naplanujV2LubaCaret(vyber = posledniVyber) {
+  function naplanujV2LubaCaret(vyber = posledniVyber, zdroj699DAG = "other") {
     cancelAnimationFrame(v2LubaCaretRaf);
     const snapshot = vyber ? klonVyberu(vyber) : null;
     v2LubaCaretRaf = requestAnimationFrame(() => {
@@ -485,13 +491,15 @@
               posunV2CaretPoVstupuDoViditelneOblasti(snapshot, geometrie));
             // Even a clamped scroll is treated as invalidation. Read fresh
             // coordinates if the original scroll routine requested a move.
-            merOdlozenouOperaci699DAE('caret:raf', () =>
-              vykresliV2LubaCaret(snapshot, posun ? null : geometrie));
+            merOdlozenouOperaci699DAE('caret:source:' + zdroj699DAG, () =>
+              merOdlozenouOperaci699DAE('caret:raf', () =>
+                vykresliV2LubaCaret(snapshot, posun ? null : geometrie)));
           });
           return;
         }
       }
-      merOdlozenouOperaci699DAE('caret:raf', () => vykresliV2LubaCaret(snapshot));
+      merOdlozenouOperaci699DAE('caret:source:' + zdroj699DAG, () =>
+        merOdlozenouOperaci699DAE('caret:raf', () => vykresliV2LubaCaret(snapshot)));
     });
   }
 
@@ -1614,7 +1622,7 @@
     ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
     mer699DAB?.("selectionStateMs");
     naplanujV2SelectionOverlay(posledniVyber);
-    naplanujV2LubaCaret(posledniVyber);
+    naplanujV2LubaCaret(posledniVyber, "model-selection");
     mer699DAB?.("scheduleCaretMs");
   }
 
@@ -4538,7 +4546,7 @@
         posledniVyber.konec.blok === pozice.blok &&
         posledniVyber.konec.offset === pozice.offset) {
       v2LubaCaretCekaNaNovyTapPoMove = false;
-      naplanujV2LubaCaret(posledniVyber);
+      naplanujV2LubaCaret(posledniVyber, "tap-after-move");
     }
     aktivniFormatPsani = null;
     aktivniFormatPozice = klicPozice(pozice);
@@ -6111,7 +6119,7 @@
         posledniPozice = { ...zachovany.model.konec };
         ulozenyFormatovaciVyber = klonVyberu(zachovany.model);
         naplanujV2SelectionOverlay(posledniVyber);
-        naplanujV2LubaCaret(posledniVyber);
+        naplanujV2LubaCaret(posledniVyber, "marker-restore");
         if (editor.scrollTop !== scrollPred) editor.scrollTop = scrollPred;
       } catch (_error) { /* Pozice nesmi zmenit obsah ani rozbit toggle. */ }
     };
@@ -8101,7 +8109,7 @@
         !v2DragSeznamu?.pripraven && !v2DragSeznamu?.aktivni &&
         posledniVyber?.sbaleny) {
       v2LubaCaretCekaNaNovyTapPoMove = false;
-      naplanujV2LubaCaret(posledniVyber);
+      naplanujV2LubaCaret(posledniVyber, "input-after-move");
     }
     /*
      * V2 záměrně preventDefault()uje browserový beforeinput, takže Android
@@ -8123,7 +8131,7 @@
       if (lokalni699DAF && editor === puvodniEditor699DAF && dokument === puvodniDokument699DAF &&
           snapshot?.sbaleny && pouzivaV2UkotvenyCaret() && lubaCaretMaBytViditelny()) {
         v2CaretScroll699DAF = { editor, doc: dokument, vyber: snapshot };
-        naplanujV2LubaCaret(snapshot);
+        naplanujV2LubaCaret(snapshot, "local-input-shared");
       } else {
         requestAnimationFrame(() => {
           merOdlozenouOperaci699DAE('scroll:raf', () => posunV2CaretPoVstupuDoViditelneOblasti(snapshot));
@@ -10758,7 +10766,7 @@
       }
       aktualizujToolbarVelikosti(modelovyVyber);
       naplanujV2SelectionOverlay(modelovyVyber);
-      naplanujV2LubaCaret(modelovyVyber);
+      naplanujV2LubaCaret(modelovyVyber, "selectionchange");
     });
 
     /* PATCH 673G11 – selection overlay při scrollu dál sleduje Range, ale
@@ -10799,7 +10807,7 @@
     poslouchej(document, "touchcancel", ukonciV2LubaCaretTouch, { passive: true });
     poslouchej(window, "resize", () => {
       naplanujV2SelectionOverlay(posledniVyber);
-      naplanujV2LubaCaret(posledniVyber);
+      naplanujV2LubaCaret(posledniVyber, "resize");
     });
 
     /*
@@ -10820,14 +10828,14 @@
         return;
       }
 
-      naplanujV2LubaCaret(posledniVyber);
+      naplanujV2LubaCaret(posledniVyber, "keyboard-state");
       if (!detail.open || detail.source !== "luba" || detail.target !== "body") return;
 
       const dorovnejPoOtevreni = () => {
         if (!editor?.isConnected || !lubaCaretMaBytViditelny()) return;
         const aktualni = aktualniVyberModelu();
         posunV2CaretPoVstupuDoViditelneOblasti(aktualni);
-        naplanujV2LubaCaret(aktualni);
+        naplanujV2LubaCaret(aktualni, "keyboard-open-align");
       };
 
       requestAnimationFrame(() => {
