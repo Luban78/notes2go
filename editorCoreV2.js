@@ -104,6 +104,7 @@
      čistě vizuální a nic nemění v modelu, historii ani DOM obsahu. */
   let v2LubaCaret = null;
   let v2LubaCaretRaf = 0;
+  let v2CaretScroll699DAF = null;
   /* 683O – pouze JEDEN náš vlastní úchyt pro collapsed caret.
      Native handle je odstraněn ne-editovatelným režimem DOM v APK.
      Výběr dvou slovních úchytů z Bridge je nezávislý. */
@@ -228,6 +229,7 @@
   function skryjV2LubaCaret() {
     cancelAnimationFrame(v2LubaCaretRaf);
     v2LubaCaretRaf = 0;
+    v2CaretScroll699DAF = null;
     if (v2LubaCaret) v2LubaCaret.hidden = true;
     if (v2SingleCaretHandle) v2SingleCaretHandle.hidden = true;
   }
@@ -372,12 +374,12 @@
     finally { try { api.end(token); } catch (_error) {} }
   }
 
-  function vykresliV2LubaCaret(vyber = posledniVyber) {
+  function vykresliV2LubaCaret(vyber = posledniVyber, geometrie699DAF = null) {
     if (!lubaCaretMaBytViditelny() || !vyber?.sbaleny) {
       skryjV2LubaCaret();
       return;
     }
-    const rect = merOdlozenouOperaci699DAE('caret:geometry', () => rectV2LubaCaretu(vyber.konec));
+    const rect = geometrie699DAF ? geometrie699DAF.rect : merOdlozenouOperaci699DAE('caret:geometry', () => rectV2LubaCaretu(vyber.konec));
     if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.top)) {
       skryjV2LubaCaret();
       return;
@@ -386,7 +388,7 @@
        jeho modelová pozice ležet mimo viditelný viewport editoru; v takovém
        případě ho NESMÍME vykreslit nad titulkem/datovým panelem. Selection ani
        scroll tím neměníme, jde pouze o ořez vizuálního caretu na editor. */
-    const rectEditoru = merOdlozenouOperaci699DAE('caret:editorBounds', () => editor.getBoundingClientRect());
+    const rectEditoru = geometrie699DAF ? geometrie699DAF.bounds : merOdlozenouOperaci699DAE('caret:editorBounds', () => editor.getBoundingClientRect());
     const vyskaCaretu = Math.max(12, Math.round(rect.height || 20));
     const spodekCaretu = rect.top + vyskaCaretu;
 
@@ -448,11 +450,47 @@
     if (v2SingleCaretHandle) v2SingleCaretHandle.hidden = true;
   }
 
+  /* 699D-AF – merge only the guarded local LubaKeyboard input's scroll
+     check with its visual caret frame. No persistent rectangle cache:
+     the geometry is valid only inside this synchronous callback. A real
+     scroll invalidates it; other selection paths keep the old renderer. */
+  function stejneMisto699DAF(a, b) {
+    return Boolean(a?.sbaleny && b?.sbaleny && a.konec.blok === b.konec.blok &&
+      a.konec.offset === b.konec.offset);
+  }
+
   function naplanujV2LubaCaret(vyber = posledniVyber) {
     cancelAnimationFrame(v2LubaCaretRaf);
     const snapshot = vyber ? klonVyberu(vyber) : null;
     v2LubaCaretRaf = requestAnimationFrame(() => {
       v2LubaCaretRaf = 0;
+      const pending = v2CaretScroll699DAF;
+      v2CaretScroll699DAF = null;
+      if (pending && pending.editor === editor && pending.doc === dokument &&
+          stejneMisto699DAF(snapshot, pending.vyber) && stejneMisto699DAF(snapshot, posledniVyber) &&
+          pouzivaV2UkotvenyCaret() && lubaCaretMaBytViditelny()) {
+        // Verify the live DOM selection too; never auto-scroll a stale edit
+        // after a tap, selection replacement, or switch to another note.
+        const bod = najdiDomBod(snapshot.konec.blok, snapshot.konec.offset);
+        const sel = window.getSelection();
+        if (bod && sel?.rangeCount === 1 && sel.isCollapsed &&
+            sel.anchorNode === bod.node && sel.focusNode === bod.node &&
+            sel.anchorOffset === bod.offset && sel.focusOffset === bod.offset) {
+          merOdlozenouOperaci699DAE('shared:raf', () => {
+            const geometrie = {
+              rect: merOdlozenouOperaci699DAE('shared:geometry', () => rectV2LubaCaretu(snapshot.konec)),
+              bounds: merOdlozenouOperaci699DAE('shared:editorBounds', () => editor.getBoundingClientRect())
+            };
+            const posun = merOdlozenouOperaci699DAE('scroll:raf', () =>
+              posunV2CaretPoVstupuDoViditelneOblasti(snapshot, geometrie));
+            // Even a clamped scroll is treated as invalidation. Read fresh
+            // coordinates if the original scroll routine requested a move.
+            merOdlozenouOperaci699DAE('caret:raf', () =>
+              vykresliV2LubaCaret(snapshot, posun ? null : geometrie));
+          });
+          return;
+        }
+      }
       merOdlozenouOperaci699DAE('caret:raf', () => vykresliV2LubaCaret(snapshot));
     });
   }
@@ -464,7 +502,7 @@
    * přetahovat poznámku k caretu. Viditelnost řádku řešíme pouze jednou po
    * skutečném textovém vstupu v oznamModelovyTextovyVstup().
    */
-  function posunV2CaretPoVstupuDoViditelneOblasti(vyber = posledniVyber) {
+  function posunV2CaretPoVstupuDoViditelneOblasti(vyber = posledniVyber, geometrie699DAF = null) {
     if (
       !lubaCaretMaBytViditelny() ||
       !vyber?.sbaleny ||
@@ -473,8 +511,8 @@
       return false;
     }
 
-    const rectCaretu = merOdlozenouOperaci699DAE('scroll:geometry', () => rectV2LubaCaretu(vyber.konec));
-    const rectEditoru = merOdlozenouOperaci699DAE('scroll:editorBounds', () => editor.getBoundingClientRect());
+    const rectCaretu = geometrie699DAF ? geometrie699DAF.rect : merOdlozenouOperaci699DAE('scroll:geometry', () => rectV2LubaCaretu(vyber.konec));
+    const rectEditoru = geometrie699DAF ? geometrie699DAF.bounds : merOdlozenouOperaci699DAE('scroll:editorBounds', () => editor.getBoundingClientRect());
 
     if (
       !rectCaretu ||
@@ -8029,7 +8067,7 @@
     const insertDone699DY = !bxDone && vykresliVlozeni699DY(vlozeni699DY, novyVyber, merRender699DAB);
     if (!bxDone && !insertDone699DY) vykresli(novyVyber);
     const poRenderu691BQ = meriAkci691BQ ? performance.now() : 0;
-    oznamModelovyTextovyVstup(inputType);
+    oznamModelovyTextovyVstup(inputType, Boolean(bxDone || insertDone699DY));
     nastavStav(`LubaKeyboard: ${inputType}`);
     zapisDebug?.(`EDITOR V2 | LubaKeyboard | ${inputType} | blok=${caret.blok} offset=${caret.offset}`);
     if (meriAkci691BQ) {
@@ -8053,7 +8091,9 @@
   }
 
 
-  function oznamModelovyTextovyVstup(inputType = "") {
+  function oznamModelovyTextovyVstup(inputType = "", lokalni699DAF = false) {
+    const puvodniEditor699DAF = editor;
+    const puvodniDokument699DAF = dokument;
     /* 691BO – if the user types instead of tapping after MOVE, the model
        already contains the new insertion. Re-enable its visual caret only
        after this actual text-input operation (never on MOVE drop). */
@@ -8080,9 +8120,15 @@
          skutečném modelovém vstupu. Scroll sám další vstup nevytvoří, takže
          zde nevzniká řetězec render -> selection -> scroll -> ... */
       const snapshot = posledniVyber ? klonVyberu(posledniVyber) : null;
-      requestAnimationFrame(() => {
-        merOdlozenouOperaci699DAE('scroll:raf', () => posunV2CaretPoVstupuDoViditelneOblasti(snapshot));
-      });
+      if (lokalni699DAF && editor === puvodniEditor699DAF && dokument === puvodniDokument699DAF &&
+          snapshot?.sbaleny && pouzivaV2UkotvenyCaret() && lubaCaretMaBytViditelny()) {
+        v2CaretScroll699DAF = { editor, doc: dokument, vyber: snapshot };
+        naplanujV2LubaCaret(snapshot);
+      } else {
+        requestAnimationFrame(() => {
+          merOdlozenouOperaci699DAE('scroll:raf', () => posunV2CaretPoVstupuDoViditelneOblasti(snapshot));
+        });
+      }
     });
   }
 
