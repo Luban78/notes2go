@@ -1791,58 +1791,66 @@
      Never use this path for selection replacement, empty rows, rich links,
      lists, images, code blocks or a changed format. Everything else uses
      the unchanged full renderer. */
+  /* 699D-Z – DEV benchmark only: categorical rejection reasons, no content,
+     identifiers, cursor offsets or user text leave Core V2. */
+  function odmitniVlozeni699DZ(reason) {
+    try { window.LubaNoteKeyboardCompare699DQ?.localInsertReject?.(reason); } catch (_) {}
+    return null;
+  }
   function zachytVlozeni699DY(typ, data, vyber) {
-    if (typ !== "text" || !vyber?.sbaleny || v2ImeKompozice?.aktivni ||
-        jeV2InterakcePresunuSeznamu()) return null;
+    if (typ !== "text") return null;
+    if (!vyber?.sbaleny) return odmitniVlozeni699DZ('capture:selection');
+    if (v2ImeKompozice?.aktivni) return odmitniVlozeni699DZ('capture:composition');
+    if (jeV2InterakcePresunuSeznamu()) return odmitniVlozeni699DZ('capture:drag');
     const text = String(data ?? "");
-    // One Unicode code point, no whitespace/newline/control character.
-    if (Array.from(text).length !== 1 || /[\s\p{C}]/u.test(text)) return null;
+    if (Array.from(text).length !== 1 || /[\s\p{C}]/u.test(text)) return odmitniVlozeni699DZ('capture:input-kind');
     const index = vyber.konec.blok;
     const block = dokument?.bloky?.[index];
-    const cast = block?.obsah?.[0];
-    if (!block || block.typ !== "odstavec" || block.legacyPre || block.legacyHr ||
-        block.legacyBlockquote || block.obsah?.length !== 1 || !cast?.text ||
-        typeof cast.text !== "string" || block.obrazky?.length ||
-        cast.format?.odkaz || cast.format?.interniOdkazId || cast.format?.planOdkazId || cast.format?.kod) return null;
+    if (!block || block.typ !== "odstavec" || block.legacyPre || block.legacyHr || block.legacyBlockquote) return odmitniVlozeni699DZ('capture:block-type');
+    if (block.obsah?.length !== 1 || !block.obsah[0]?.text || typeof block.obsah[0].text !== 'string') return odmitniVlozeni699DZ('capture:segments');
+    const cast = block.obsah[0];
+    if (block.obrazky?.length || cast.format?.odkaz || cast.format?.interniOdkazId || cast.format?.planOdkazId || cast.format?.kod) return odmitniVlozeni699DZ('capture:rich-content');
     const offset = vyber.konec.offset;
-    if (!Number.isInteger(offset) || offset < 0 || offset > cast.text.length) return null;
+    if (!Number.isInteger(offset) || offset < 0 || offset > cast.text.length) return odmitniVlozeni699DZ('capture:offset');
     return { doc: dokument, block, index, id: block.id, count: dokument.bloky.length,
       offset, text, oldText: cast.text, format: kopieFormatu(cast.format) };
   }
 
   function vykresliVlozeni699DY(pred, selection) {
-    if (!pred || !editor?.isConnected || dokument !== pred.doc ||
-        dokument.bloky.length !== pred.count || editor.children.length !== pred.count ||
-        !selection?.sbaleny || selection.konec.blok !== pred.index ||
-        selection.konec.offset !== pred.offset + pred.text.length) return false;
+    if (!pred) return false;
+    const fail = reason => odmitniVlozeni699DZ('render:' + reason);
+    if (!editor?.isConnected) return fail('editor');
+    if (dokument !== pred.doc) return fail('document-changed');
+    if (dokument.bloky.length !== pred.count || editor.children.length !== pred.count) return fail('block-count');
+    if (!selection?.sbaleny || selection.konec.blok !== pred.index ||
+        selection.konec.offset !== pred.offset + pred.text.length) return fail('caret');
     const block = dokument.bloky[pred.index];
-    if (block !== pred.block || block.id !== pred.id || block.typ !== "odstavec" ||
-        block.obsah?.length !== 1 || !stejneFormaty(pred.format, block.obsah[0].format)) return false;
+    if (block !== pred.block || block.id !== pred.id || block.typ !== 'odstavec' || block.obsah?.length !== 1) return fail('block-changed');
+    if (!stejneFormaty(pred.format, block.obsah[0].format)) return fail('format-changed');
     const freshText = block.obsah[0].text;
-    if (freshText !== pred.oldText.slice(0, pred.offset) + pred.text + pred.oldText.slice(pred.offset)) return false;
+    if (freshText !== pred.oldText.slice(0, pred.offset) + pred.text + pred.oldText.slice(pred.offset)) return fail('text-mismatch');
     const row = editor.children[pred.index];
     if (!row?.matches('.ln-v2-odstavec[data-ln-v2-blok]') || row.dataset.lnV2Blok !== pred.id ||
-        row.dataset.typ !== 'odstavec' || row.hidden || row.childNodes.length !== 1) return false;
+        row.dataset.typ !== 'odstavec' || row.hidden) return fail('row-shape');
+    if (row.childNodes.length !== 1) return fail('row-children');
     const span = row.firstElementChild;
-    if (!span?.matches('span.ln-v2-cast[data-ln-v2-segment="0"]') || span.childNodes.length !== 1) return false;
+    if (!span?.matches('span.ln-v2-cast[data-ln-v2-segment="0"]')) return fail('segment-shape');
+    if (span.childNodes.length !== 1) return fail('segment-children');
     const node = span.firstChild;
-    if (node?.nodeType !== Node.TEXT_NODE || node.data !== pred.oldText) return false;
-    // Do not discard pending external DOM changes. Let the frozen renderer
-    // repair the complete projection instead of hiding a DOM Guard mismatch.
-    if (observerDomu?.takeRecords().length) return false;
+    if (node?.nodeType !== Node.TEXT_NODE) return fail('text-node');
+    if (node.data !== pred.oldText) return fail('dom-text-mismatch');
+    if (observerDomu?.takeRecords().length) return fail('pending-mutations');
     const currentEditor = editor;
     observerDomu?.disconnect();
     try {
       node.insertData(pred.offset, pred.text);
-      if (node.data !== freshText) return false;
+      if (node.data !== freshText) return fail('insert-result');
       nastavVyberModelu(selection.zacatek, selection.konec);
-    } catch (_error) { return false; }
+    } catch (_error) { return fail('insert-exception'); }
     finally {
       observerDomu?.observe(currentEditor, { childList: true, subtree: true, attributes: true, characterData: true });
     }
     aktualizujModelPanel();
-    // Selection was restored synchronously for bursts. Do not restore a
-    // stale position after another command or a different note was opened.
     queueMicrotask(() => {
       try {
         if (editor !== currentEditor || dokument !== pred.doc || !node.isConnected ||
