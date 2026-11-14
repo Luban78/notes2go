@@ -1688,7 +1688,8 @@
       return;
     }
 
-    const navrhy = vypocitejNavrhy();
+    // 699D-S: temporary DEV A/B/C isolation; keep smartbar geometry.
+    const navrhy = window.LubaNoteKeyboardCompare699DQ?.predictionDisabled === true ? [] : vypocitejNavrhy();
     while (navrhy.length < 3) navrhy.push("");
     // Identické návrhy = identické DOM. Přeskočíme zbytečný replaceChildren,
     // který jinak při každé aktualizaci invaliduje layout smartbaru.
@@ -4886,6 +4887,7 @@
     nastavZdroj: nastavZdrojKlavesnice,
     jeOtevrena: () => Boolean(panel && !panel.hidden),
     ziskejCilPsani: () => aktivniCilPsani,
+    obnovNavrhy699DS: () => { if (panel && !panel.hidden && ziskejZdrojKlavesnice() === "luba") aktualizujNavrhy(); },
     vlozUnicode: (codePoint) => {
       const cp = Number(codePoint);
       if (!Number.isInteger(cp) || cp < 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) return false;
