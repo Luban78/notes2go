@@ -1056,7 +1056,7 @@
   const isEdit=p=>p.kind==='typing'||p.kind==='delete';
   // 699D-X: same 40-input test and metrics, only omit redundant phases.
   const quickPhases=fullPhases.filter(p=>p.group==='luba'&&isEdit(p));
-  const diagPhases=[{...quickPhases[0],label:'Diagnostika 5× a',help:'Na konci zkušební poznámky stiskni přesně 5× malé a. Měření se samo zastaví po 5 znacích. Pak zkopíruj report. Zadaná písmena můžeš ručně smazat až po dokončení.'}];
+  const diagPhases=[{...quickPhases[0],label:'Diagnostika 5× a',help:'Na konci zkušební poznámky stiskni přesně 5× malé a. Měření se samo zastaví po 5 znacích. Pokračuj na další krok.'},{...quickPhases[1],label:'Diagnostika 5× Backspace',help:'Smaž právě přidaných pět písmen jednotlivými stisky Backspace. Měření se samo zastaví. Pak zkopíruj report.'}];
   let phases=fullPhases, testMode='FULL';
   const expectedType=p=>p.kind==='typing'?'insertText':'deleteContentBackward';
   const phaseName=p=>p.group==='luba-off'?'LubaKeyboard bez predikce':p.source==='luba'?'LubaKeyboard':'Systémová';
@@ -1192,8 +1192,8 @@
     host.setAttribute('aria-label','Porovnání klávesnic');host.removeAttribute('aria-labelledby');
     const entry=mk('div','',host);entry.className='ln-kc-entry';
     const heading=mk('strong','Porovnání klávesnic · FPS',entry);heading.style.fontSize='16px';
-    mk('p','Diagnostika lokálního překreslení: 5× a. Rychlé ladění: 40× a + 40× Backspace. Kompletní srovnání: 12 kroků.',entry);
-    const diagBtn=mk('button','🔎 Diagnostika lokálního vykreslení · 5× a',entry);
+    mk('p','Diagnostika lokálního překreslení: 5× a + 5× Backspace. Rychlé ladění: 40× a + 40× Backspace. Kompletní srovnání: 12 kroků.',entry);
+    const diagBtn=mk('button','🔎 Diagnostika lokálního vykreslení · 5 + 5',entry);
     diagBtn.type='button';diagBtn.addEventListener('click',()=>start('DIAG5'));
     const quickBtn=mk('button','⚡ Rychlý test · 2 kroky',entry);
     quickBtn.type='button';quickBtn.id='ln-keyboard-compare-quick-699dx';
@@ -1366,6 +1366,16 @@
     const edits=s.inputs.length, timing={};
     for(const [name,values] of Object.entries(s.timings)){const xs=values.map(x=>x.ms);timing[name]={n:xs.length,avg:avg(xs),p95:p95(xs),max:max(xs)};}
     const core={};for(const field of ['totalMs','snapshotMs','modelMs','historyMs','renderMs','extraMs']){const xs=s.core.map(x=>x[field]).filter(Number.isFinite);core[field]={n:xs.length,avg:avg(xs),p95:p95(xs),max:max(xs)};}
+    // 699D-AB – aggregate successful local paths only, independently.
+    const renderDetails={};
+    const detailFields=['checksMs','observerDisconnectMs','textMutationMs','mutationVerifyMs','selectionMapMs','selectionRangeMs','selectionClearMs','selectionAddMs','selectionStateMs','scheduleCaretMs','observerReconnectMs','modelPanelMs','scheduleMicrotaskMs'];
+    for(const path of ['local-insert','local-delete']){
+      const samples=s.core.filter(m=>m.renderPath===path&&m.renderDetail);
+      if(!samples.length)continue;
+      const stats={};
+      for(const field of detailFields){const xs=samples.map(m=>m.renderDetail[field]).filter(v=>Number.isFinite(v)&&v>=0);if(xs.length)stats[field]={n:xs.length,avg:avg(xs),p95:p95(xs),max:max(xs)};}
+      renderDetails[path]=stats;
+    }
     const renderPaths={};
     for(const m of s.core){const k=['local-insert','local-delete','full'].includes(m.renderPath)?m.renderPath:'unknown';renderPaths[k]=(renderPaths[k]||0)+1;}
     const coverage=measured.reduce((a,b)=>a+b.dt,0);
@@ -1381,7 +1391,7 @@
     if(s.p.kind==='layout'&&s.p.source==='system'){issues.push('nativní Shift není vidět v WebView; manuální scénář');if(quality==='CHECKED')quality='MANUAL';}
     if(s.p.kind==='layout'&&s.p.source==='luba'&&!Object.entries(timing).some(([k,v])=>/^key:(shift|symbols|symbols-more|letters-699j|numbers-699j)$/.test(k)&&v.n>=2)){issues.push('málo zachycených přepnutí');quality='PARTIAL';}
     if(quality==='PARTIAL')lockedStep=null; // enable manual correction
-    const r={p:s.p,localRejects:{...s.localRejects},quality,issues,all,act,early,late,blockedAfterTarget:s.blockedAfterTarget||0,tailClipped:Boolean(s.blockedAt),matched:s.matched,stopReason:s.stopReason||'TIMED',lateInputs:s.lateInputs,integrity,fixtureMatches:s.fixtureAgrees,unexpected:s.unexpected,delta,before:s.before,after,inputs:counts(s.inputs),native:counts(s.native),timing,core,renderPaths,long:{supported:Boolean(s.observer),n:s.long.length,max:max(s.long)},coverage,height:s.height,viewport:s.viewport,editorHeight:s.editorHeight};
+    const r={p:s.p,localRejects:{...s.localRejects},quality,issues,all,act,early,late,blockedAfterTarget:s.blockedAfterTarget||0,tailClipped:Boolean(s.blockedAt),matched:s.matched,stopReason:s.stopReason||'TIMED',lateInputs:s.lateInputs,integrity,fixtureMatches:s.fixtureAgrees,unexpected:s.unexpected,delta,before:s.before,after,inputs:counts(s.inputs),native:counts(s.native),timing,core,renderPaths,renderDetails,long:{supported:Boolean(s.observer),n:s.long.length,max:max(s.long)},coverage,height:s.height,viewport:s.viewport,editorHeight:s.editorHeight};
     results[index]=r;
     setStatus(`${index+1}/${phases.length} · ${s.p.label}: ${fmt(all.fps)} FPS`);
     instructions.textContent=`${quality} · změna délky: ${delta} · vstupů modelu: ${edits}\n${issues.join('; ')||'Měření uloženo.'}${s.blockedAfterTarget?' · Další stisky zablokovány: '+s.blockedAfterTarget:''}\n`+(s.p.kind==='layout'?'Před pokračováním vrať rozložení na písmena.':'');
@@ -1392,13 +1402,14 @@
   function restoreSource(){if(originalSource&&K()?.ziskejZdroj?.()!==originalSource)K()?.nastavZdroj?.(originalSource);}
   function cancel(){lockedStep=null;if(run){run.cancelled=true;stopRun(run);}running=false;restoreSource();panel.hidden=true;testEditor=null;testToken=null;fixtureText=null;pairTexts=null;refreshPredictions();}
   function report(){
-    const lines=[`LUBANOTE KEYBOARD / 699D-AA · ${target()} INPUTS`,`MODE=${testMode} steps=${phases.length}${testMode==='QUICK'?' · LubaKeyboard only; compare full baseline separately':testMode==='DIAG5'?' · only 5 manual a; no FPS comparison':''}`,'READ-ONLY measurements; manual typing only in test note; no content, IDs or key values.','FPS = WebView requestAnimationFrame, not physical screen/IME FPS.','Active frames: within 240 ms of observed editor input or Luba layout action. Native IME Shift is not observable. Fixture: Core V2 plain-text model, not DOM.',`Build=${String(window.LUBANOTE_VERSION||'?')} date=${new Date().toISOString()}`,`Fixture=${baseInfo?.chars} chars / ${baseInfo?.blocks} blocks, layout=${baseInfo?.layout}, screen=${baseInfo?.width}x${baseInfo?.height}, DPR=${baseInfo?.dpr}`];
+    const lines=[`LUBANOTE KEYBOARD / 699D-AB · ${target()} INPUTS`,`MODE=${testMode} steps=${phases.length}${testMode==='QUICK'?' · LubaKeyboard only; compare full baseline separately':testMode==='DIAG5'?' · 5 manual a + 5 Backspace; no FPS comparison':''}`,'READ-ONLY measurements; manual typing only in test note; no content, IDs or key values.','FPS = WebView requestAnimationFrame, not physical screen/IME FPS.','Active frames: within 240 ms of observed editor input or Luba layout action. Native IME Shift is not observable. Fixture: Core V2 plain-text model, not DOM.',`Build=${String(window.LUBANOTE_VERSION||'?')} date=${new Date().toISOString()}`,`Fixture=${baseInfo?.chars} chars / ${baseInfo?.blocks} blocks, layout=${baseInfo?.layout}, screen=${baseInfo?.width}x${baseInfo?.height}, DPR=${baseInfo?.dpr}`];
     for(const r of results.filter(Boolean)){
       lines.push(`\n${r.p.group.toUpperCase()} / ${r.p.kind} · prediction=${r.p.prediction} | ${r.quality} | ${r.issues.join('; ')||'-'}`,`WINDOW=${fmt(r.coverage,0)}ms rAF=${fmt(r.all.fps)} FPS frames=${r.all.n} p95=${fmt(r.all.p95)}ms max=${fmt(r.all.max)}ms`, `ACTIVE=${fmt(r.act.fps)} FPS frames=${r.act.n} p95=${fmt(r.act.p95)}ms max=${fmt(r.act.max)}ms`, `chars=${r.before}->${r.after} (delta ${r.delta}) model=${JSON.stringify(r.inputs)} nativeBeforeInput=${JSON.stringify(r.native)}`,`longtasks=${r.long.supported?r.long.n:'N/A'} max=${fmt(r.long.max)}ms viewport=${fmt(r.viewport,0)} editorHeight=${r.editorHeight} windowHeight=${r.height}`);
       if(isEdit(r.p))lines.push(`TARGET=${r.matched}/${target()} stop=${r.stopReason} extra=${r.lateInputs} blocked=${r.blockedAfterTarget} tailClipped=${r.tailClipped} fixtureExact=${r.integrity} fixtureBeforeMatches=${r.fixtureMatches} unexpected=${r.unexpected}`+(testMode==='DIAG5'?'':` | ACTIVE 1–20=${fmt(r.early.fps)} FPS (n=${r.early.n}, p95=${fmt(r.early.p95)}ms) | ACTIVE 21–40=${fmt(r.late.fps)} FPS (n=${r.late.n}, p95=${fmt(r.late.p95)}ms)` ));
       for(const [name,v] of Object.entries(r.timing))lines.push(`LUBA_SYNC ${name} n=${v.n} avg=${fmt(v.avg,2)}ms p95=${fmt(v.p95,2)}ms max=${fmt(v.max,2)}ms`);
       if(Object.keys(r.renderPaths).length)lines.push(`LUBA_CORE renderPaths=${JSON.stringify(r.renderPaths)}`);
       if(Object.keys(r.localRejects).length)lines.push(`LUBA_CORE localInsertRejects=${JSON.stringify(r.localRejects)}`);
+      for(const [path,stats] of Object.entries(r.renderDetails))for(const [name,v] of Object.entries(stats))lines.push(`LUBA_RENDER ${path} ${name} n=${v.n} avg=${fmt(v.avg,2)}ms p95=${fmt(v.p95,2)}ms max=${fmt(v.max,2)}ms`);
       for(const [name,v] of Object.entries(r.core))if(v.n)lines.push(`LUBA_CORE ${name} n=${v.n} avg=${fmt(v.avg,2)}ms p95=${fmt(v.p95,2)}ms max=${fmt(v.max,2)}ms`);
     }
     for(const group of (testMode==='FULL'?['system','luba-off']:[])){

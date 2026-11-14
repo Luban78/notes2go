@@ -1532,19 +1532,23 @@
     return { node: blokEl, offset: blokEl.childNodes.length };
   }
 
-  function nastavVyberModelu(zacatek, konec = zacatek) {
+  function nastavVyberModelu(zacatek, konec = zacatek, mer699DAB = null) {
     if (!editor) return;
     const domZacatek = najdiDomBod(zacatek.blok, zacatek.offset);
     const domKonec = najdiDomBod(konec.blok, konec.offset);
+    mer699DAB?.("selectionMapMs");
     if (!domZacatek || !domKonec) return;
 
     const range = document.createRange();
     range.setStart(domZacatek.node, domZacatek.offset);
     range.setEnd(domKonec.node, domKonec.offset);
 
+    mer699DAB?.("selectionRangeMs");
     const vyber = window.getSelection();
     vyber.removeAllRanges();
+    mer699DAB?.("selectionClearMs");
     vyber.addRange(range);
+    mer699DAB?.("selectionAddMs");
     posledniPozice = { ...konec };
     posledniVyber = {
       zacatek: { ...zacatek },
@@ -1552,8 +1556,10 @@
       sbaleny: zacatek.blok === konec.blok && zacatek.offset === konec.offset
     };
     ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
+    mer699DAB?.("selectionStateMs");
     naplanujV2SelectionOverlay(posledniVyber);
     naplanujV2LubaCaret(posledniVyber);
+    mer699DAB?.("scheduleCaretMs");
   }
 
   function ziskejFormatovaciVyber() {
@@ -1734,7 +1740,7 @@
      A second synchronous keyboard command then deletes at the WRONG offset.
      Use targeted deleteData with exact text validation; all other cases use
      the existing full renderer. Lists/ToDo are deliberately not eligible. */
-  function vykresliJenZmenenyText691BX(index, blockId, previousLength, selection) {
+  function vykresliJenZmenenyText691BX(index, blockId, previousLength, selection, mer699DAB = null) {
     const block = dokument?.bloky?.[index];
     if (!editor || !block || block.id !== blockId || block.typ !== 'odstavec' ||
         !Array.isArray(block.obsah) || block.obsah.length !== 1 ||
@@ -1759,21 +1765,26 @@
     if (!Number.isInteger(deletionStart) || deletionStart < 0 ||
         deletionStart + removedLength > previousLength ||
         oldText.slice(0, deletionStart) + oldText.slice(deletionStart + removedLength) !== freshText) return false;
+    mer699DAB?.("checksMs");
     observerDomu?.disconnect();
+    mer699DAB?.("observerDisconnectMs");
     try {
       // deleteData adjusts an existing DOM Range's caret offset immediately;
       // assigning .data resets the offset to zero in Chromium/WebView.
       textNode.deleteData(deletionStart, removedLength);
+      mer699DAB?.("textMutationMs");
       if (textNode.data !== freshText) return false;
       // Consecutive LubaKeyboard commands may arrive before the microtask runs.
       // Restore the actual DOM selection now; overlay/toolbar remain deferred.
-      nastavVyberModelu(selection.zacatek, selection.konec);
+      mer699DAB?.("mutationVerifyMs");
+      nastavVyberModelu(selection.zacatek, selection.konec, mer699DAB);
     } catch (_error) { return false; }
     finally {
       observerDomu?.observe(editor, {
         childList: true, subtree: true, attributes: true, characterData: true
       });
     }
+    mer699DAB?.("observerReconnectMs");
     // Keep the usual deferred toolbar/selection refresh; consecutive commands
     // already see the correct caret from the synchronous restoration above.
     queueMicrotask(() => {
@@ -1783,6 +1794,7 @@
         aktualizujToolbarVelikosti(selection);
       } catch (_error) {}
     });
+    mer699DAB?.("scheduleMicrotaskMs");
     return true;
   }
 
@@ -1816,7 +1828,7 @@
       offset, text, oldText: cast.text, format: kopieFormatu(cast.format) };
   }
 
-  function vykresliVlozeni699DY(pred, selection) {
+  function vykresliVlozeni699DY(pred, selection, mer699DAB = null) {
     if (!pred) return false;
     const fail = reason => odmitniVlozeni699DZ('render:' + reason);
     if (!editor?.isConnected) return fail('editor');
@@ -1853,16 +1865,22 @@
     if (node.data !== pred.oldText) return fail('dom-text-mismatch');
     if (observerDomu?.takeRecords().length) return fail('pending-mutations');
     const currentEditor = editor;
+    mer699DAB?.("checksMs");
     observerDomu?.disconnect();
+    mer699DAB?.("observerDisconnectMs");
     try {
       node.insertData(pred.offset, pred.text);
+      mer699DAB?.("textMutationMs");
       if (node.data !== freshText) return fail('insert-result');
-      nastavVyberModelu(selection.zacatek, selection.konec);
+      mer699DAB?.("mutationVerifyMs");
+      nastavVyberModelu(selection.zacatek, selection.konec, mer699DAB);
     } catch (_error) { return fail('insert-exception'); }
     finally {
       observerDomu?.observe(currentEditor, { childList: true, subtree: true, attributes: true, characterData: true });
     }
+    mer699DAB?.("observerReconnectMs");
     aktualizujModelPanel();
+    mer699DAB?.("modelPanelMs");
     queueMicrotask(() => {
       try {
         if (editor !== currentEditor || dokument !== pred.doc || !node.isConnected ||
@@ -1872,6 +1890,7 @@
         aktualizujToolbarVelikosti(selection);
       } catch (_error) {}
     });
+    mer699DAB?.("scheduleMicrotaskMs");
     return true;
   }
 
@@ -7974,12 +7993,22 @@
     ulozenyFormatovaciVyber = klonVyberu(novyVyber);
 
     const predRenderem691BQ = meriAkci691BQ ? performance.now() : 0;
+    /* 699D-AB – synchronous stage timings, only during an active keyboard
+       comparison. No user content and no changes to the render/selection path.
+       Deferred callbacks themselves are not included in these measurements. */
+    const renderDetail699DAB = meriAkci691BQ && window.LubaNoteKeyboardCompare699DQ?.wantCore?.(typ) === true ? {} : null;
+    let renderMark699DAB = predRenderem691BQ;
+    const merRender699DAB = renderDetail699DAB ? (name) => {
+      const now = performance.now();
+      renderDetail699DAB[name] = now - renderMark699DAB;
+      renderMark699DAB = now;
+    } : null;
     /* 691BX: Never rebuild the entire document for a single deletion inside
        one existing, one-segment, non-empty row. Any mismatch uses the frozen
        full renderer. Undo/history/model remain unchanged. */
     const bxDone = bxSingle && bxOldId && caret.blok === bxIndex &&
-      vykresliJenZmenenyText691BX(bxIndex, bxOldId, bxOldTextLength, novyVyber);
-    const insertDone699DY = !bxDone && vykresliVlozeni699DY(vlozeni699DY, novyVyber);
+      vykresliJenZmenenyText691BX(bxIndex, bxOldId, bxOldTextLength, novyVyber, merRender699DAB);
+    const insertDone699DY = !bxDone && vykresliVlozeni699DY(vlozeni699DY, novyVyber, merRender699DAB);
     if (!bxDone && !insertDone699DY) vykresli(novyVyber);
     const poRenderu691BQ = meriAkci691BQ ? performance.now() : 0;
     oznamModelovyTextovyVstup(inputType);
@@ -7996,6 +8025,7 @@
           historyMs: poHistorii691BQ - poModelu691BQ,
           renderMs: poRenderu691BQ - predRenderem691BQ,
           renderPath: insertDone699DY ? "local-insert" : bxDone ? "local-delete" : "full",
+          renderDetail: (insertDone699DY || bxDone) ? renderDetail699DAB : null,
           extraMs: predRenderem691BQ - poHistorii691BQ,
           blockCount: dokument?.bloky?.length || 0
         });
