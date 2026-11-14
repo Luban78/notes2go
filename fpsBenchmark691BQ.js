@@ -1362,6 +1362,8 @@
     const edits=s.inputs.length, timing={};
     for(const [name,values] of Object.entries(s.timings)){const xs=values.map(x=>x.ms);timing[name]={n:xs.length,avg:avg(xs),p95:p95(xs),max:max(xs)};}
     const core={};for(const field of ['totalMs','snapshotMs','modelMs','historyMs','renderMs','extraMs']){const xs=s.core.map(x=>x[field]).filter(Number.isFinite);core[field]={n:xs.length,avg:avg(xs),p95:p95(xs),max:max(xs)};}
+    const renderPaths={};
+    for(const m of s.core){const k=['local-insert','local-delete','full'].includes(m.renderPath)?m.renderPath:'unknown';renderPaths[k]=(renderPaths[k]||0)+1;}
     const coverage=measured.reduce((a,b)=>a+b.dt,0);
     const expectedMs=isEdit(s.p)&&s.firstInputAt?Math.max(1,Math.min(s.deadline,cutoff)-s.firstInputAt):s.p.ms;
     let quality='CHECKED';const issues=[];
@@ -1375,7 +1377,7 @@
     if(s.p.kind==='layout'&&s.p.source==='system'){issues.push('nativní Shift není vidět v WebView; manuální scénář');if(quality==='CHECKED')quality='MANUAL';}
     if(s.p.kind==='layout'&&s.p.source==='luba'&&!Object.entries(timing).some(([k,v])=>/^key:(shift|symbols|symbols-more|letters-699j|numbers-699j)$/.test(k)&&v.n>=2)){issues.push('málo zachycených přepnutí');quality='PARTIAL';}
     if(quality==='PARTIAL')lockedStep=null; // enable manual correction
-    const r={p:s.p,quality,issues,all,act,early,late,blockedAfterTarget:s.blockedAfterTarget||0,tailClipped:Boolean(s.blockedAt),matched:s.matched,stopReason:s.stopReason||'TIMED',lateInputs:s.lateInputs,integrity,fixtureMatches:s.fixtureAgrees,unexpected:s.unexpected,delta,before:s.before,after,inputs:counts(s.inputs),native:counts(s.native),timing,core,long:{supported:Boolean(s.observer),n:s.long.length,max:max(s.long)},coverage,height:s.height,viewport:s.viewport,editorHeight:s.editorHeight};
+    const r={p:s.p,quality,issues,all,act,early,late,blockedAfterTarget:s.blockedAfterTarget||0,tailClipped:Boolean(s.blockedAt),matched:s.matched,stopReason:s.stopReason||'TIMED',lateInputs:s.lateInputs,integrity,fixtureMatches:s.fixtureAgrees,unexpected:s.unexpected,delta,before:s.before,after,inputs:counts(s.inputs),native:counts(s.native),timing,core,renderPaths,long:{supported:Boolean(s.observer),n:s.long.length,max:max(s.long)},coverage,height:s.height,viewport:s.viewport,editorHeight:s.editorHeight};
     results[index]=r;
     setStatus(`${index+1}/${phases.length} · ${s.p.label}: ${fmt(all.fps)} FPS`);
     instructions.textContent=`${quality} · změna délky: ${delta} · vstupů modelu: ${edits}\n${issues.join('; ')||'Měření uloženo.'}${s.blockedAfterTarget?' · Další stisky zablokovány: '+s.blockedAfterTarget:''}\n`+(s.p.kind==='layout'?'Před pokračováním vrať rozložení na písmena.':'');
@@ -1386,11 +1388,12 @@
   function restoreSource(){if(originalSource&&K()?.ziskejZdroj?.()!==originalSource)K()?.nastavZdroj?.(originalSource);}
   function cancel(){lockedStep=null;if(run){run.cancelled=true;stopRun(run);}running=false;restoreSource();panel.hidden=true;testEditor=null;testToken=null;fixtureText=null;pairTexts=null;refreshPredictions();}
   function report(){
-    const lines=['LUBANOTE KEYBOARD / 699D-X · 40 INPUTS',`MODE=${testMode} steps=${phases.length}${testMode==='QUICK'?' · LubaKeyboard only; compare full baseline separately':''}`,'READ-ONLY measurements; manual typing only in test note; no content, IDs or key values.','FPS = WebView requestAnimationFrame, not physical screen/IME FPS.','Active frames: within 240 ms of observed editor input or Luba layout action. Native IME Shift is not observable. Fixture: Core V2 plain-text model, not DOM.',`Build=${String(window.LUBANOTE_VERSION||'?')} date=${new Date().toISOString()}`,`Fixture=${baseInfo?.chars} chars / ${baseInfo?.blocks} blocks, layout=${baseInfo?.layout}, screen=${baseInfo?.width}x${baseInfo?.height}, DPR=${baseInfo?.dpr}`];
+    const lines=['LUBANOTE KEYBOARD / 699D-Y · 40 INPUTS',`MODE=${testMode} steps=${phases.length}${testMode==='QUICK'?' · LubaKeyboard only; compare full baseline separately':''}`,'READ-ONLY measurements; manual typing only in test note; no content, IDs or key values.','FPS = WebView requestAnimationFrame, not physical screen/IME FPS.','Active frames: within 240 ms of observed editor input or Luba layout action. Native IME Shift is not observable. Fixture: Core V2 plain-text model, not DOM.',`Build=${String(window.LUBANOTE_VERSION||'?')} date=${new Date().toISOString()}`,`Fixture=${baseInfo?.chars} chars / ${baseInfo?.blocks} blocks, layout=${baseInfo?.layout}, screen=${baseInfo?.width}x${baseInfo?.height}, DPR=${baseInfo?.dpr}`];
     for(const r of results.filter(Boolean)){
       lines.push(`\n${r.p.group.toUpperCase()} / ${r.p.kind} · prediction=${r.p.prediction} | ${r.quality} | ${r.issues.join('; ')||'-'}`,`WINDOW=${fmt(r.coverage,0)}ms rAF=${fmt(r.all.fps)} FPS frames=${r.all.n} p95=${fmt(r.all.p95)}ms max=${fmt(r.all.max)}ms`, `ACTIVE=${fmt(r.act.fps)} FPS frames=${r.act.n} p95=${fmt(r.act.p95)}ms max=${fmt(r.act.max)}ms`, `chars=${r.before}->${r.after} (delta ${r.delta}) model=${JSON.stringify(r.inputs)} nativeBeforeInput=${JSON.stringify(r.native)}`,`longtasks=${r.long.supported?r.long.n:'N/A'} max=${fmt(r.long.max)}ms viewport=${fmt(r.viewport,0)} editorHeight=${r.editorHeight} windowHeight=${r.height}`);
       if(isEdit(r.p))lines.push(`TARGET=${r.matched}/${TARGET} stop=${r.stopReason} extra=${r.lateInputs} blocked=${r.blockedAfterTarget} tailClipped=${r.tailClipped} fixtureExact=${r.integrity} fixtureBeforeMatches=${r.fixtureMatches} unexpected=${r.unexpected} | ACTIVE 1–20=${fmt(r.early.fps)} FPS (n=${r.early.n}, p95=${fmt(r.early.p95)}ms) | ACTIVE 21–40=${fmt(r.late.fps)} FPS (n=${r.late.n}, p95=${fmt(r.late.p95)}ms)`);
       for(const [name,v] of Object.entries(r.timing))lines.push(`LUBA_SYNC ${name} n=${v.n} avg=${fmt(v.avg,2)}ms p95=${fmt(v.p95,2)}ms max=${fmt(v.max,2)}ms`);
+      if(Object.keys(r.renderPaths).length)lines.push(`LUBA_CORE renderPaths=${JSON.stringify(r.renderPaths)}`);
       for(const [name,v] of Object.entries(r.core))if(v.n)lines.push(`LUBA_CORE ${name} n=${v.n} avg=${fmt(v.avg,2)}ms p95=${fmt(v.p95,2)}ms max=${fmt(v.max,2)}ms`);
     }
     for(const group of (testMode==='FULL'?['system','luba-off']:[])){

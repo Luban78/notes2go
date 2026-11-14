@@ -1786,6 +1786,75 @@
     return true;
   }
 
+  /* 699D-Y – model stays authoritative. For one ordinary single-segment
+     paragraph, project an exact insertion into its existing Text node.
+     Never use this path for selection replacement, empty rows, rich links,
+     lists, images, code blocks or a changed format. Everything else uses
+     the unchanged full renderer. */
+  function zachytVlozeni699DY(typ, data, vyber) {
+    if (typ !== "text" || !vyber?.sbaleny || v2ImeKompozice?.aktivni ||
+        jeV2InterakcePresunuSeznamu()) return null;
+    const text = String(data ?? "");
+    // One Unicode code point, no whitespace/newline/control character.
+    if (Array.from(text).length !== 1 || /[\s\p{C}]/u.test(text)) return null;
+    const index = vyber.konec.blok;
+    const block = dokument?.bloky?.[index];
+    const cast = block?.obsah?.[0];
+    if (!block || block.typ !== "odstavec" || block.legacyPre || block.legacyHr ||
+        block.legacyBlockquote || block.obsah?.length !== 1 || !cast?.text ||
+        typeof cast.text !== "string" || block.obrazky?.length ||
+        cast.format?.odkaz || cast.format?.interniOdkazId || cast.format?.planOdkazId || cast.format?.kod) return null;
+    const offset = vyber.konec.offset;
+    if (!Number.isInteger(offset) || offset < 0 || offset > cast.text.length) return null;
+    return { doc: dokument, block, index, id: block.id, count: dokument.bloky.length,
+      offset, text, oldText: cast.text, format: kopieFormatu(cast.format) };
+  }
+
+  function vykresliVlozeni699DY(pred, selection) {
+    if (!pred || !editor?.isConnected || dokument !== pred.doc ||
+        dokument.bloky.length !== pred.count || editor.children.length !== pred.count ||
+        !selection?.sbaleny || selection.konec.blok !== pred.index ||
+        selection.konec.offset !== pred.offset + pred.text.length) return false;
+    const block = dokument.bloky[pred.index];
+    if (block !== pred.block || block.id !== pred.id || block.typ !== "odstavec" ||
+        block.obsah?.length !== 1 || !stejneFormaty(pred.format, block.obsah[0].format)) return false;
+    const freshText = block.obsah[0].text;
+    if (freshText !== pred.oldText.slice(0, pred.offset) + pred.text + pred.oldText.slice(pred.offset)) return false;
+    const row = editor.children[pred.index];
+    if (!row?.matches('.ln-v2-odstavec[data-ln-v2-blok]') || row.dataset.lnV2Blok !== pred.id ||
+        row.dataset.typ !== 'odstavec' || row.hidden || row.childNodes.length !== 1) return false;
+    const span = row.firstElementChild;
+    if (!span?.matches('span.ln-v2-cast[data-ln-v2-segment="0"]') || span.childNodes.length !== 1) return false;
+    const node = span.firstChild;
+    if (node?.nodeType !== Node.TEXT_NODE || node.data !== pred.oldText) return false;
+    // Do not discard pending external DOM changes. Let the frozen renderer
+    // repair the complete projection instead of hiding a DOM Guard mismatch.
+    if (observerDomu?.takeRecords().length) return false;
+    const currentEditor = editor;
+    observerDomu?.disconnect();
+    try {
+      node.insertData(pred.offset, pred.text);
+      if (node.data !== freshText) return false;
+      nastavVyberModelu(selection.zacatek, selection.konec);
+    } catch (_error) { return false; }
+    finally {
+      observerDomu?.observe(currentEditor, { childList: true, subtree: true, attributes: true, characterData: true });
+    }
+    aktualizujModelPanel();
+    // Selection was restored synchronously for bursts. Do not restore a
+    // stale position after another command or a different note was opened.
+    queueMicrotask(() => {
+      try {
+        if (editor !== currentEditor || dokument !== pred.doc || !node.isConnected ||
+            node.data !== freshText || !posledniVyber?.sbaleny ||
+            posledniVyber.konec.blok !== selection.konec.blok ||
+            posledniVyber.konec.offset !== selection.konec.offset) return;
+        aktualizujToolbarVelikosti(selection);
+      } catch (_error) {}
+    });
+    return true;
+  }
+
   function vykresli(vyberNeboCaret = posledniVyber || posledniPozice) {
     if (!editor) return;
     normalizujDokument();
@@ -7838,6 +7907,7 @@
       !v2ImeKompozice?.aktivni;
     const bxOldId = bxSingle ? bxBefore.id : null;
     const bxOldTextLength = bxSingle ? bxBefore.obsah[0].text.length : 0;
+    const vlozeni699DY = zachytVlozeni699DY(typ, data, vyber);
 
     if (typ === "text") {
       const vlozenyText = String(data ?? "");
@@ -7889,7 +7959,8 @@
        full renderer. Undo/history/model remain unchanged. */
     const bxDone = bxSingle && bxOldId && caret.blok === bxIndex &&
       vykresliJenZmenenyText691BX(bxIndex, bxOldId, bxOldTextLength, novyVyber);
-    if (!bxDone) vykresli(novyVyber);
+    const insertDone699DY = !bxDone && vykresliVlozeni699DY(vlozeni699DY, novyVyber);
+    if (!bxDone && !insertDone699DY) vykresli(novyVyber);
     const poRenderu691BQ = meriAkci691BQ ? performance.now() : 0;
     oznamModelovyTextovyVstup(inputType);
     nastavStav(`LubaKeyboard: ${inputType}`);
@@ -7904,6 +7975,7 @@
           modelMs: poModelu691BQ - poSnapshotu691BQ,
           historyMs: poHistorii691BQ - poModelu691BQ,
           renderMs: poRenderu691BQ - predRenderem691BQ,
+          renderPath: insertDone699DY ? "local-insert" : bxDone ? "local-delete" : "full",
           extraMs: predRenderem691BQ - poHistorii691BQ,
           blockCount: dokument?.bloky?.length || 0
         });
