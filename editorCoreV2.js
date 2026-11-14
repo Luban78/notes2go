@@ -105,6 +105,7 @@
   let v2LubaCaret = null;
   let v2LubaCaretRaf = 0;
   let v2CaretScroll699DAF = null;
+  let v2CaretEcho699DAH = null;
   /* 683O – pouze JEDEN náš vlastní úchyt pro collapsed caret.
      Native handle je odstraněn ne-editovatelným režimem DOM v APK.
      Výběr dvou slovních úchytů z Bridge je nezávislý. */
@@ -227,6 +228,7 @@
   }
 
   function skryjV2LubaCaret() {
+    zrusCaretEcho699DAH();
     cancelAnimationFrame(v2LubaCaretRaf);
     v2LubaCaretRaf = 0;
     v2CaretScroll699DAF = null;
@@ -465,7 +467,79 @@
       a.konec.offset === b.konec.offset);
   }
 
+  /* 699D-AH – one-shot recognition of the late selectionchange echo of
+     a completed, guarded local input. Never cache a rectangle across frames.
+     Do not suppress selectionchange itself, model/toolbar/overlay updates,
+     real scroll, gestures, a changed document/selection or future frames. */
+  function zrusCaretEcho699DAH() {
+    const echo = v2CaretEcho699DAH;
+    v2CaretEcho699DAH = null;
+    if (!echo) return;
+    echo.observer?.disconnect();
+    if (echo.expire) cancelAnimationFrame(echo.expire);
+  }
+
+  function zaznamCaretEcho699DAH(snapshot, bod, sel) {
+    zrusCaretEcho699DAH();
+    const node = bod?.node;
+    const block = dokument?.bloky?.[snapshot?.konec?.blok];
+    const row = node?.parentElement?.parentElement;
+    if (!pouzivaV2UkotvenyCaret() || !lubaCaretMaBytViditelny() ||
+        v2LubaCaretTouchAktivni || v2SingleCaretDrag || v2ImeKompozice?.aktivni ||
+        document.fonts?.status === 'loading' || typeof MutationObserver !== 'function' ||
+        block?.typ !== 'odstavec' || block.obsah?.length !== 1 || block.legacyPre ||
+        block.legacyHr || block.legacyBlockquote || block.obrazky?.length ||
+        node?.nodeType !== Node.TEXT_NODE || row?.parentNode !== editor ||
+        row.dataset.lnV2Blok !== block.id || v2LubaCaret?.parentNode !== row ||
+        v2SingleCaretHandle?.parentNode !== row || v2LubaCaret.hidden || v2SingleCaretHandle.hidden ||
+        sel?.rangeCount !== 1 || !sel.isCollapsed || sel.anchorNode !== node ||
+        sel.focusNode !== node || sel.anchorOffset !== bod.offset || sel.focusOffset !== bod.offset) return;
+    try {
+      const echo = { editor, doc: dokument, row, node, text: node.data,
+        range: sel.getRangeAt(0), offset: bod.offset, vyber: klonVyberu(snapshot),
+        caret: v2LubaCaret, handle: v2SingleCaretHandle, expire: 0, observer: null };
+      const observer = new MutationObserver(() => {
+        if (v2CaretEcho699DAH === echo) zrusCaretEcho699DAH();
+      });
+      echo.observer = observer;
+      v2CaretEcho699DAH = echo;
+      // Observe only during the short echo window, after our own caret writes.
+      // Any text, formatting, helper or ancestor-attribute mutation fails closed.
+      observer.observe(editor, { subtree: true, childList: true, attributes: true, characterData: true });
+      for (let parent = editor.parentElement; parent; parent = parent.parentElement) {
+        observer.observe(parent, { attributes: true });
+      }
+      echo.expire = requestAnimationFrame(() => {
+        if (v2CaretEcho699DAH === echo) zrusCaretEcho699DAH();
+      });
+    } catch (_error) { zrusCaretEcho699DAH(); }
+  }
+
+  function jeDuplicitniCaretEcho699DAH(vyber, sel, range) {
+    const echo = v2CaretEcho699DAH;
+    if (!echo) return false;
+    let same = false;
+    try {
+      same = echo.editor === editor && echo.doc === dokument && !v2LubaCaretRaf &&
+        !v2CaretScroll699DAF && pouzivaV2UkotvenyCaret() && lubaCaretMaBytViditelny() &&
+        !v2LubaCaretTouchAktivni && !v2SingleCaretDrag && !v2ImeKompozice?.aktivni &&
+        document.fonts?.status !== 'loading' && stejneMisto699DAF(vyber, echo.vyber) &&
+        stejneMisto699DAF(posledniVyber, echo.vyber) && sel.rangeCount === 1 && sel.isCollapsed &&
+        range === echo.range && sel.getRangeAt(0) === echo.range &&
+        sel.anchorNode === echo.node && sel.focusNode === echo.node &&
+        sel.anchorOffset === echo.offset && sel.focusOffset === echo.offset &&
+        echo.node.isConnected && echo.node.data === echo.text && echo.row.parentNode === editor &&
+        echo.node.parentElement?.parentElement === echo.row &&
+        v2LubaCaret === echo.caret && v2SingleCaretHandle === echo.handle &&
+        echo.caret.parentNode === echo.row && echo.handle.parentNode === echo.row &&
+        !echo.caret.hidden && !echo.handle.hidden && !echo.observer.takeRecords().length;
+    } catch (_error) { same = false; }
+    zrusCaretEcho699DAH(); // consumed once, including a mismatch
+    return same;
+  }
+
   function naplanujV2LubaCaret(vyber = posledniVyber, zdroj699DAG = "other") {
+    zrusCaretEcho699DAH();
     cancelAnimationFrame(v2LubaCaretRaf);
     const snapshot = vyber ? klonVyberu(vyber) : null;
     v2LubaCaretRaf = requestAnimationFrame(() => {
@@ -494,6 +568,9 @@
             merOdlozenouOperaci699DAE('caret:source:' + zdroj699DAG, () =>
               merOdlozenouOperaci699DAE('caret:raf', () =>
                 vykresliV2LubaCaret(snapshot, posun ? null : geometrie)));
+            if (!posun && zdroj699DAG === 'local-input-shared') {
+              merOdlozenouOperaci699DAE('caret:echoArm', () => zaznamCaretEcho699DAH(snapshot, bod, sel));
+            }
           });
           return;
         }
@@ -1959,6 +2036,7 @@
   }
 
   function vykresli(vyberNeboCaret = posledniVyber || posledniPozice) {
+    zrusCaretEcho699DAH();
     if (!editor) return;
     normalizujDokument();
 
@@ -10745,6 +10823,20 @@
       kontrolaDomu();
     });
 
+    /* 699D-AH – external interaction/viewport changes invalidate only the
+       one-shot visual echo token; these passive listeners alter no event. */
+    for (const event of ['pointerdown', 'touchstart', 'keydown', 'focusin', 'focusout', 'beforeinput', 'compositionstart']) {
+      poslouchej(document, event, zrusCaretEcho699DAH, { capture: true, passive: true });
+    }
+    if (window.visualViewport) {
+      poslouchej(window.visualViewport, 'resize', zrusCaretEcho699DAH, { passive: true });
+      poslouchej(window.visualViewport, 'scroll', zrusCaretEcho699DAH, { passive: true });
+    }
+    if (document.fonts?.addEventListener) {
+      poslouchej(document.fonts, 'loading', zrusCaretEcho699DAH);
+      poslouchej(document.fonts, 'loadingdone', zrusCaretEcho699DAH);
+      poslouchej(document.fonts, 'loadingerror', zrusCaretEcho699DAH);
+    }
     poslouchej(document, "selectionchange", () => {
       if (!jadroEditoru || jadroEditoru.hidden || !editor) return;
       if (v2ImeKompozice?.nativni) return;
@@ -10766,13 +10858,18 @@
       }
       aktualizujToolbarVelikosti(modelovyVyber);
       naplanujV2SelectionOverlay(modelovyVyber);
-      naplanujV2LubaCaret(modelovyVyber, "selectionchange");
+      if (jeDuplicitniCaretEcho699DAH(modelovyVyber, vyber, range)) {
+        merOdlozenouOperaci699DAE('caret:echoSkipped', () => {});
+      } else {
+        naplanujV2LubaCaret(modelovyVyber, "selectionchange");
+      }
     });
 
     /* PATCH 673G11 – selection overlay při scrollu dál sleduje Range, ale
        modelový LubaCaret (fixed overlay) se během pohybu NESMÍ překreslovat.
        Jinak kvůli zpoždění rAF opticky plave o několik řádků. */
     poslouchej(document, "scroll", () => {
+      zrusCaretEcho699DAH();
       /* 683U: v own-caret režimu se caret i úchyt scrollují s řádkem
          přímo v DOM; žádné opakované hide/show či přeskok o řádek. */
       if (!pouzivaV2UkotvenyCaret()) skryjV2LubaCaretProScroll();
