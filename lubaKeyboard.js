@@ -701,6 +701,10 @@
   let zakladniViewportTop = 0;
   let recent = nactiRecent();
   let naucenaSlova = nactiNaucenaSlova();
+  // 699D-V: pouze RAM, odděleno podle jazyka a vlastníka. Žádná změna úložiště.
+  const indexVestavenych699DV = new Map();
+  const indexNaucenych699DV = new Map();
+  let revizeSlovniku699DV = 0;
   let kandidatiSlov = nactiKandidatySlov();
   let nauceneDvojice = nactiNauceneDvojice();
   let nauceneFraze = nactiNauceneFraze();
@@ -915,6 +919,7 @@
   }
 
   function ulozNaucenaSlova() {
+    revizeSlovniku699DV++; // i pokud následný zápis do storage selže
     try { localStorage.setItem(klicNaucenychSlov(), JSON.stringify(naucenaSlova)); } catch (_error) {}
   }
 
@@ -1230,6 +1235,60 @@
     return [...fraze, ...dvojice].filter((x, i, arr) => arr.indexOf(x) === i).slice(0, 3);
   }
 
+  /* 699D-V – prefixový index. Normalizujeme slova jen jednou; oba původní
+     způsoby shody (přesná i bez diakritiky) zachováváme. Kandidáti se vracejí
+     v původním pořadí kvůli deduplikaci a stabilním shodám skóre. */
+  function sestavIndexNavrhu699DV(values, layout, learned, previous) {
+    const normal = new Map();
+    const rows = [];
+    values.forEach((value, index) => {
+      const original = String((learned ? value?.word : value) || "");
+      const word = original.trim();
+      if (!word) return;
+      let keys = normal.get(word) || previous?.normal.get(word);
+      if (!keys) {
+        const lower = lowerLocale(word, layout);
+        keys = { lower, lowerBez: bezDiakritiky(lower) };
+      }
+      normal.set(word, keys);
+      // Vestavěný slovník hodnotí původní (nikoliv trimovaný) řetězec.
+      const scoreLower = original === word ? keys.lower : lowerLocale(original, layout);
+      const scoreBez = original === word ? keys.lowerBez : bezDiakritiky(scoreLower);
+      rows.push({ word, ...keys, scoreLower, scoreBez, index,
+        score: learned ? 50000 + Number(value?.count || 0) * 100 - original.length : 0,
+        originalLength: original.length });
+    });
+    const sortBy = field => rows.slice().sort((a,b) => a[field] < b[field] ? -1 : a[field] > b[field] ? 1 : a.index-b.index);
+    return { normal, exact:sortBy("lower"), loose:sortBy("lowerBez") };
+  }
+
+  function ziskejIndexNavrhu699DV(layout, learned) {
+    const store = learned ? indexNaucenych699DV : indexVestavenych699DV;
+    const source = learned ? naucenaSlova[layout.id] : SLOVNIK_NAVRHU[layout.id];
+    const old = store.get(layout.id);
+    if (old && old.source === source && (!learned || old.revision === revizeSlovniku699DV)) return old;
+    const values = learned ? Object.values(source || {}) : (source || []);
+    const built = sestavIndexNavrhu699DV(values, layout, learned, old);
+    const result = { ...built, source, revision:revizeSlovniku699DV };
+    store.set(layout.id,result);
+    return result;
+  }
+
+  function najdiPrefix699DV(index, key, keyBez) {
+    const found = new Set();
+    function addRange(rows, field, prefix) {
+      let lo=0, hi=rows.length;
+      while (lo<hi) {
+        const mid=(lo+hi)>>>1;
+        if (rows[mid][field]<prefix) lo=mid+1; else hi=mid;
+      }
+      for (let i=lo;i<rows.length && rows[i][field].startsWith(prefix);i++) found.add(rows[i]);
+    }
+    addRange(index.exact,"lower",key);
+    addRange(index.loose,"lowerBez",keyBez);
+    return [...found].sort((a,b)=>a.index-b.index);
+  }
+
   function vypocitejNavrhy() {
     if (jeAktivniTextovePole() && aktivniTextovePole.type === 'password') return [];
     const layout = aktualniLayout();
@@ -1247,15 +1306,14 @@
 
     const key = lowerLocale(prefix, layout);
     const keyBez = bezDiakritiky(key);
-    const mapa = naucenaSlova[layout.id] || {};
     const kandidati = [];
     const seen = new Set();
 
-    const pridej = (word, score = 0) => {
+    const pridej = (word, score = 0, normalized = null) => {
       const raw = String(word || "").trim();
       if (!raw) return;
-      const lower = lowerLocale(raw, layout);
-      const lowerBez = bezDiakritiky(lower);
+      const lower = normalized ? normalized.lower : lowerLocale(raw, layout);
+      const lowerBez = normalized ? normalized.lowerBez : bezDiakritiky(lower);
       if (!lower.startsWith(key) && !lowerBez.startsWith(keyBez)) return;
       const id = lower;
       if (seen.has(id)) return;
@@ -1276,23 +1334,24 @@
       pridej(word, 90000 - index * 10);
     });
 
-    Object.values(mapa).forEach((entry) => {
-      const count = Number(entry?.count || 0);
-      pridej(entry?.word, 50000 + count * 100 - String(entry?.word || "").length);
+    najdiPrefix699DV(ziskejIndexNavrhu699DV(layout,true),key,keyBez).forEach(entry => {
+      pridej(entry.word,entry.score,entry);
     });
 
-    (SLOVNIK_NAVRHU[layout.id] || []).forEach((word, index) => {
-      const lower = lowerLocale(word, layout);
-      const exactAccent = lower.startsWith(key) ? 1000 : 600;
-      const exactWord = bezDiakritiky(lower) === keyBez ? 1500 : 0;
-      pridej(word, exactAccent + exactWord - index * 0.01 - word.length * 0.1);
+    najdiPrefix699DV(ziskejIndexNavrhu699DV(layout,false),key,keyBez).forEach(entry => {
+      const exactAccent = entry.scoreLower.startsWith(key) ? 1000 : 600;
+      const exactWord = entry.scoreBez === keyBez ? 1500 : 0;
+      pridej(entry.word,exactAccent + exactWord - entry.index * 0.01 - entry.originalLength * 0.1,entry);
     });
 
-    return kandidati
-      .sort((a, b) => b.score - a.score || a.word.length - b.word.length)
-      .map((x) => zachovejVelikost(prefix, x.word, layout))
-      .filter((x, i, arr) => arr.indexOf(x) === i)
-      .slice(0, 3);
+    kandidati.sort((a, b) => b.score - a.score || a.word.length - b.word.length);
+    const vysledek = [];
+    for (const x of kandidati) {
+      const word = zachovejVelikost(prefix,x.word,layout);
+      if (!vysledek.includes(word)) vysledek.push(word);
+      if (vysledek.length === 3) break;
+    }
+    return vysledek;
   }
 
   /* PATCH 455 – dlouhé návrhy zkracujeme UPROSTŘED, ne na konci.
@@ -4766,6 +4825,8 @@
     vlastnikOsobnihoSlovniku = dalsi;
     migrujLegacySlovnikProVlastnika();
     naucenaSlova = nactiNaucenaSlova();
+    indexNaucenych699DV.clear(); // před zobrazením návrhů jiného účtu
+    revizeSlovniku699DV++;
     kandidatiSlov = nactiKandidatySlov();
     nauceneDvojice = nactiNauceneDvojice();
     nauceneFraze = nactiNauceneFraze();
