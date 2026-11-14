@@ -358,12 +358,26 @@
     };
   }
 
+  /* 699D-AE – measure deferred work only during the DEV keyboard edit
+     benchmark. Nested samples are inclusive, not additive. Never reschedule
+     work, change geometry, or inspect user content. */
+  function merOdlozenouOperaci699DAE(name, fn) {
+    let api, token;
+    try {
+      api = window.LubaNoteKeyboardCompare699DQ;
+      token = api?.beginDeferred?.(name);
+    } catch (_error) {}
+    if (!token) return fn();
+    try { return fn(); }
+    finally { try { api.end(token); } catch (_error) {} }
+  }
+
   function vykresliV2LubaCaret(vyber = posledniVyber) {
     if (!lubaCaretMaBytViditelny() || !vyber?.sbaleny) {
       skryjV2LubaCaret();
       return;
     }
-    const rect = rectV2LubaCaretu(vyber.konec);
+    const rect = merOdlozenouOperaci699DAE('caret:geometry', () => rectV2LubaCaretu(vyber.konec));
     if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.top)) {
       skryjV2LubaCaret();
       return;
@@ -372,7 +386,7 @@
        jeho modelová pozice ležet mimo viditelný viewport editoru; v takovém
        případě ho NESMÍME vykreslit nad titulkem/datovým panelem. Selection ani
        scroll tím neměníme, jde pouze o ořez vizuálního caretu na editor. */
-    const rectEditoru = editor.getBoundingClientRect();
+    const rectEditoru = merOdlozenouOperaci699DAE('caret:editorBounds', () => editor.getBoundingClientRect());
     const vyskaCaretu = Math.max(12, Math.round(rect.height || 20));
     const spodekCaretu = rect.top + vyskaCaretu;
 
@@ -385,7 +399,7 @@
        fix není závislý na jednom telefonu ani na pevné výšce hlavičky. */
     let horniBezpecnaMez = rectEditoru.top;
     try {
-      const paddingTop = Number.parseFloat(getComputedStyle(editor).paddingTop) || 0;
+      const paddingTop = merOdlozenouOperaci699DAE('caret:padding', () => Number.parseFloat(getComputedStyle(editor).paddingTop) || 0);
       horniBezpecnaMez += Math.max(0, paddingTop - 2);
     } catch (_error) {}
 
@@ -410,19 +424,21 @@
       const blok = dokument?.bloky?.[vyber.konec.blok];
       const radek = blok && editor.querySelector(`[data-ln-v2-blok="${CSS.escape(blok.id)}"]`);
       if (!radek) { skryjV2LubaCaret(); return; }
-      const radekRect = radek.getBoundingClientRect();
+      const radekRect = merOdlozenouOperaci699DAE('caret:rowBounds', () => radek.getBoundingClientRect());
       const x = Math.round(rect.left - radekRect.left);
       const y = Math.round(rect.top - radekRect.top);
-      caret.classList.add("ln-v2-caret-scroll-anchored");
-      caret.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-      radek.appendChild(caret);
-      const uchyt = ziskejV2SingleCaretHandle();
-      uchyt.classList.add("ln-v2-caret-scroll-anchored");
-      uchyt.style.left = `${x}px`;
-      uchyt.style.top = `${y + vyskaCaretu}px`;
-      radek.appendChild(uchyt);
-      caret.hidden = false;
-      uchyt.hidden = false;
+      merOdlozenouOperaci699DAE('caret:anchoredWrites', () => {
+        caret.classList.add("ln-v2-caret-scroll-anchored");
+        caret.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+        radek.appendChild(caret);
+        const uchyt = ziskejV2SingleCaretHandle();
+        uchyt.classList.add("ln-v2-caret-scroll-anchored");
+        uchyt.style.left = `${x}px`;
+        uchyt.style.top = `${y + vyskaCaretu}px`;
+        radek.appendChild(uchyt);
+        caret.hidden = false;
+        uchyt.hidden = false;
+      });
       return;
     }
     caret.classList.remove("ln-v2-caret-scroll-anchored");
@@ -437,7 +453,7 @@
     const snapshot = vyber ? klonVyberu(vyber) : null;
     v2LubaCaretRaf = requestAnimationFrame(() => {
       v2LubaCaretRaf = 0;
-      vykresliV2LubaCaret(snapshot);
+      merOdlozenouOperaci699DAE('caret:raf', () => vykresliV2LubaCaret(snapshot));
     });
   }
 
@@ -457,8 +473,8 @@
       return false;
     }
 
-    const rectCaretu = rectV2LubaCaretu(vyber.konec);
-    const rectEditoru = editor.getBoundingClientRect();
+    const rectCaretu = merOdlozenouOperaci699DAE('scroll:geometry', () => rectV2LubaCaretu(vyber.konec));
+    const rectEditoru = merOdlozenouOperaci699DAE('scroll:editorBounds', () => editor.getBoundingClientRect());
 
     if (
       !rectCaretu ||
@@ -483,8 +499,10 @@
 
     if (Math.abs(posun) <= 1) return false;
 
-    const maximum = Math.max(0, editor.scrollHeight - editor.clientHeight);
-    editor.scrollTop = Math.max(0, Math.min(maximum, editor.scrollTop + posun));
+    merOdlozenouOperaci699DAE('scroll:apply', () => {
+      const maximum = Math.max(0, editor.scrollHeight - editor.clientHeight);
+      editor.scrollTop = Math.max(0, Math.min(maximum, editor.scrollTop + posun));
+    });
     return true;
   }
 
@@ -1532,60 +1550,23 @@
     return { node: blokEl, offset: blokEl.childNodes.length };
   }
 
-  function nastavVyberModelu(zacatek, konec = zacatek, mer699DAB = null, primyRozsah699DAD = false) {
+  function nastavVyberModelu(zacatek, konec = zacatek, mer699DAB = null) {
     if (!editor) return;
     const domZacatek = najdiDomBod(zacatek.blok, zacatek.offset);
     const domKonec = najdiDomBod(konec.blok, konec.offset);
     mer699DAB?.("selectionMapMs");
     if (!domZacatek || !domKonec) return;
 
-    /* 699D-AD: opt in only from the guarded local insertion path.
-       Move the existing live collapsed Range in its verified text node.
-       Never replace a selection unnecessarily. Verify both position and
-       Range identity synchronously; otherwise use the original restoration. */
-    let primoHotovo699DAD = false;
-    if (primyRozsah699DAD && zacatek.blok === konec.blok && zacatek.offset === konec.offset &&
-        domZacatek.node === domKonec.node && domZacatek.offset === domKonec.offset &&
-        domKonec.node.nodeType === Node.TEXT_NODE && editor.contains(domKonec.node)) {
-      const vyber = window.getSelection();
-      if (vyber?.rangeCount === 1 && vyber.isCollapsed &&
-          vyber.anchorNode === domKonec.node && vyber.focusNode === domKonec.node &&
-          typeof vyber.getRangeAt === 'function') {
-        let zivyRozsah = null;
-        let provedeno = false;
-        try {
-          zivyRozsah = vyber.getRangeAt(0);
-          if (zivyRozsah.collapsed && zivyRozsah.startContainer === domKonec.node &&
-              zivyRozsah.endContainer === domKonec.node) {
-            if (zivyRozsah.startOffset !== domKonec.offset) {
-              zivyRozsah.setStart(domKonec.node, domKonec.offset);
-              if (!zivyRozsah.collapsed) zivyRozsah.collapse(true);
-            }
-            provedeno = true;
-          }
-        } catch (_error) { /* original Range fallback below */ }
-        mer699DAB?.("selectionRangeMoveMs");
-        try {
-          primoHotovo699DAD = provedeno && vyber.rangeCount === 1 && vyber.isCollapsed &&
-            vyber.getRangeAt(0) === zivyRozsah &&
-            vyber.anchorNode === domKonec.node && vyber.focusNode === domKonec.node &&
-            vyber.anchorOffset === domKonec.offset && vyber.focusOffset === domKonec.offset;
-        } catch (_error) { primoHotovo699DAD = false; }
-        mer699DAB?.("selectionRangeMoveVerifyMs");
-      }
-    }
-    if (!primoHotovo699DAD) {
-      const range = document.createRange();
-      range.setStart(domZacatek.node, domZacatek.offset);
-      range.setEnd(domKonec.node, domKonec.offset);
+    const range = document.createRange();
+    range.setStart(domZacatek.node, domZacatek.offset);
+    range.setEnd(domKonec.node, domKonec.offset);
 
-      mer699DAB?.("selectionRangeMs");
-      const vyber = window.getSelection();
-      vyber.removeAllRanges();
-      mer699DAB?.("selectionClearMs");
-      vyber.addRange(range);
-      mer699DAB?.("selectionAddMs");
-    }
+    mer699DAB?.("selectionRangeMs");
+    const vyber = window.getSelection();
+    vyber.removeAllRanges();
+    mer699DAB?.("selectionClearMs");
+    vyber.addRange(range);
+    mer699DAB?.("selectionAddMs");
     posledniPozice = { ...konec };
     posledniVyber = {
       zacatek: { ...zacatek },
@@ -1827,8 +1808,8 @@
     queueMicrotask(() => {
       try {
         if (!editor?.isConnected) return;
-        nastavVyberModelu(selection.zacatek, selection.konec);
-        aktualizujToolbarVelikosti(selection);
+        merOdlozenouOperaci699DAE('delete:restoreSelection', () => nastavVyberModelu(selection.zacatek, selection.konec));
+        merOdlozenouOperaci699DAE('delete:toolbar', () => aktualizujToolbarVelikosti(selection));
       } catch (_error) {}
     });
     mer699DAB?.("scheduleMicrotaskMs");
@@ -1910,7 +1891,7 @@
       mer699DAB?.("textMutationMs");
       if (node.data !== freshText) return fail('insert-result');
       mer699DAB?.("mutationVerifyMs");
-      nastavVyberModelu(selection.zacatek, selection.konec, mer699DAB, true);
+      nastavVyberModelu(selection.zacatek, selection.konec, mer699DAB);
     } catch (_error) { return fail('insert-exception'); }
     finally {
       observerDomu?.observe(currentEditor, { childList: true, subtree: true, attributes: true, characterData: true });
@@ -1924,7 +1905,7 @@
             node.data !== freshText || !posledniVyber?.sbaleny ||
             posledniVyber.konec.blok !== selection.konec.blok ||
             posledniVyber.konec.offset !== selection.konec.offset) return;
-        aktualizujToolbarVelikosti(selection);
+        merOdlozenouOperaci699DAE('insert:toolbar', () => aktualizujToolbarVelikosti(selection));
       } catch (_error) {}
     });
     mer699DAB?.("scheduleMicrotaskMs");
@@ -8090,17 +8071,17 @@
      */
     queueMicrotask(() => {
       if (!editor?.isConnected) return;
-      editor.dispatchEvent(new CustomEvent("lubanote:v2-model-input", {
+      merOdlozenouOperaci699DAE('input:dispatch', () => editor.dispatchEvent(new CustomEvent("lubanote:v2-model-input", {
         bubbles: true,
         detail: { inputType: String(inputType || "") }
-      }));
+      })));
 
       /* HOTFIX 509 – přesun řádku nad LubaKeyboard pouze JEDNOU po
          skutečném modelovém vstupu. Scroll sám další vstup nevytvoří, takže
          zde nevzniká řetězec render -> selection -> scroll -> ... */
       const snapshot = posledniVyber ? klonVyberu(posledniVyber) : null;
       requestAnimationFrame(() => {
-        posunV2CaretPoVstupuDoViditelneOblasti(snapshot);
+        merOdlozenouOperaci699DAE('scroll:raf', () => posunV2CaretPoVstupuDoViditelneOblasti(snapshot));
       });
     });
   }
