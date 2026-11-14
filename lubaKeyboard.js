@@ -1662,6 +1662,15 @@
   let posledniPodobaNavrhu691CH = null;
 
   function aktualizujNavrhy() {
+    const diag = window.LubaNoteKeyboardCompare699DQ;
+    if (!diag?.active) return aktualizujNavrhy699DQOriginal();
+    let token;
+    try { token = diag.begin("suggestions"); } catch (_error) {}
+    try { return aktualizujNavrhy699DQOriginal(); }
+    finally { try { diag.end(token); } catch (_error) {} }
+  }
+
+  function aktualizujNavrhy699DQOriginal() {
     if (!navrhyBox) return;
 
     /*
@@ -2737,6 +2746,15 @@
   }
 
   function vykresliKlavesnici() {
+    const diag = window.LubaNoteKeyboardCompare699DQ;
+    if (!diag?.active) return vykresliKlavesnici699DQOriginal();
+    let token;
+    try { token = diag.begin("layout"); } catch (_error) {}
+    try { return vykresliKlavesnici699DQOriginal(); }
+    finally { try { diag.end(token); } catch (_error) {} }
+  }
+
+  function vykresliKlavesnici699DQOriginal() {
     if (!telo) return;
     telo.replaceChildren();
     const layout = aktualniLayout();
@@ -2840,7 +2858,24 @@
     chooser.replaceChildren();
     const head = document.createElement("div");
     head.className = "ln-lk-chooser-head";
-    head.innerHTML = `<strong>Klávesnice a jazyk</strong><span>LubaKeyboard je výchozí · produkční jazyky V1</span>`;
+    // 699D-Q: přímo z jazyků přepnout zdroj bez cesty přes Nastavení.
+    head.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:9px";
+    const nadpis = document.createElement("strong");
+    nadpis.textContent = "Klávesnice a jazyk";
+    const systemButton = document.createElement("button");
+    systemButton.type = "button";
+    systemButton.dataset.lkSystemSource699dq = "1";
+    systemButton.textContent = "Systémová";
+    systemButton.setAttribute("aria-label", "Přepnout na systémovou klávesnici");
+    systemButton.style.cssText = "flex:0 0 auto;min-height:34px;padding:5px 9px;border:1px solid var(--color-border,#777);border-radius:9px;background:var(--color-background,#222);color:var(--color-text,#fff);font:inherit;font-size:.73rem";
+    // Fyzické tapy řeší stejný pointerup jako ostatní volby chooseru.
+    systemButton.addEventListener("click", (event) => {
+      if (event.detail === 0 && ziskejZdrojKlavesnice() !== "system") {
+        event.preventDefault();
+        prepniNaSystemovou699DQ();
+      }
+    });
+    head.append(nadpis, systemButton);
     chooser.appendChild(head);
 
     for (const [name, layouts] of skupinyLayoutu()) {
@@ -2866,6 +2901,18 @@
 
     chooser.hidden = false;
     requestAnimationFrame(nastavVysku);
+  }
+
+  function prepniNaSystemovou699DQ() {
+    // Zapamatovat skutečný cíl před skrytím LubaKeyboard.
+    const cil = jeAktivniTextovePole() ? aktivniTextovePole :
+      jeAktivniNazev() ? najdiNazevEditoru() : (aktivniEditor || najdiEditor());
+    window.LubaNoteClickShield?.(700);
+    nastavZdrojKlavesnice("system");
+    if (cil?.isConnected) {
+      try { cil.focus({ preventScroll: true }); } catch (_error) {}
+    }
+    // IME může na některých WebView vyžadovat nový tap do textu.
   }
 
   function zavriChooser() {
@@ -3212,6 +3259,15 @@
   }
 
   function provedAkci(action, value = "") {
+    const diag = window.LubaNoteKeyboardCompare699DQ;
+    if (!diag?.active) return provedAkci699DQOriginal(action, value);
+    let token;
+    try { token = diag.begin("key:" + action); } catch (_error) {}
+    try { return provedAkci699DQOriginal(action, value); }
+    finally { try { diag.end(token); } catch (_error) {} }
+  }
+
+  function provedAkci699DQOriginal(action, value = "") {
     haptic();
     switch (action) {
       case "text": textAction(value); break;
@@ -3668,6 +3724,11 @@
     panel.addEventListener("click", (event) => event.preventDefault(), true);
 
     chooser.addEventListener("pointerup", (event) => {
+      if (event.target.closest("button[data-lk-system-source699dq]")) {
+        event.preventDefault();
+        prepniNaSystemovou699DQ();
+        return;
+      }
       const choice = event.target.closest("button[data-lk-layout]");
       if (choice) {
         event.preventDefault();
