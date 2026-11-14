@@ -3261,6 +3261,8 @@
 
   function provedAkci(action, value = "") {
     const diag = window.LubaNoteKeyboardCompare699DQ;
+    // 699D-U: only the DEV fixture may temporarily stop extra editing at 40.
+    try { if (diag?.blockLubaAction?.(action) === true) return; } catch (_error) {}
     if (!diag?.active) return provedAkci699DQOriginal(action, value);
     let token;
     try { token = diag.begin("key:" + action); } catch (_error) {}

@@ -1065,7 +1065,7 @@
   const modal = () => document.getElementById('taskModal');
   const allowed = () => window.LubaNoteAdminTools?.isAllowed?.() === true;
   const phase = () => phases[index];
-  let panel, status, instructions, actions, startBtn, index=0, run=null, running=false;
+  let panel, status, instructions, actions, startBtn, index=0, run=null, running=false, lockedStep=null;
   let originalSource=null, testEditor=null, testToken=null, results=[], baseInfo=null, lastReport='', fixtureText=null, pairTexts=null;
   const token = () => modal()?.dataset?.taskId || modal()?.dataset?.draftTaskId || null;
   const editorIsOpen = () => Boolean(editor()?.isConnected && modal() && !modal().hidden && modal().classList.contains('show') && modal().contains(editor()));
@@ -1101,6 +1101,7 @@
   }
   function setStatus(txt){status.textContent=txt;}
   function prepare(message='') {
+    lockedStep=null;
     const p=phase();
     if(!p){finish();return;}
     setStatus(`${index+1}/${phases.length} · ${phaseName(p)} · ${p.label}`);
@@ -1198,7 +1199,7 @@
   function start() {
     if(!allowed() || !api.canStartCompare?.() || !K() || !window.Capacitor?.isNativePlatform?.()) {alert('Porovnání je dostupné v DEV APK pro ověřeného administrátora, bez jiného běžícího benchmarku.');return;}
     if(running){panel.hidden=false;return;}
-    running=true;originalSource=K().ziskejZdroj();index=0;results=[];testEditor=null;testToken=null;baseInfo=null;fixtureText=null;pairTexts=Object.create(null);lastReport='';
+    lockedStep=null;running=true;originalSource=K().ziskejZdroj();index=0;results=[];testEditor=null;testToken=null;baseInfo=null;fixtureText=null;pairTexts=Object.create(null);lastReport='';
     drag=null;moved=false;panel.style.removeProperty('left');panel.style.removeProperty('top');panel.style.removeProperty('right');
     panel.hidden=false;setStatus('Porovnání klávesnic · příprava');
     instructions.textContent='Okno přesuneš tahem za jeho nadpis (⠿). Zavři Admin Dashboard. Otevři samostatnou zkušební dlouhou poznámku (bez důležitých dat), kurzor na konec těla. Používej stejnou poznámku a stejný jazyk obou klávesnic. Test sám nevkládá žádný text.';
@@ -1288,12 +1289,37 @@
       // Stop collecting further target operations immediately, but retain
       // a fixed 240ms render tail for the final press and detect overshoot.
       s.completedAt=t;s.stopReason='TARGET_40';s.deadline=t+TAIL;
+      // 699D-U: freeze actual editing only in this DEV fixture until Next / Retry.
+      // Keep the last render tail, but never count an additional key as a failure.
+      lockedStep=s;
       setStatus(`${phaseName(s.p)} · ${TARGET}/${TARGET} · HOTOVO – přestaň`);
       clearTimeout(s.timer);s.timer=setTimeout(()=>{if(run===s)endRun(s);},TAIL+80);
     }
   }
+  function editLock(source) {
+    const s=lockedStep;
+    return running&&s?.completedAt&&s.p===phase()&&s.p.source===source&&
+      allowed()&&sameEditor()&&K()?.ziskejZdroj?.()===source&&!document.hidden?s:null;
+  }
+  function noteBlocked(s) {
+    if(run===s){s.blockedAfterTarget=(s.blockedAfterTarget||0)+1;s.blockedAt??=now();}
+  }
+  const lockedLubaActions=new Set(['text','space','enter','backspace','delete','suggestion','candidate','unicode-insert','clipboard-paste','undo','redo']);
+  function blockLubaAction(action) {
+    const s=editLock('luba');
+    if(!s||K()?.ziskejCilPsani?.()!=='body'||!lockedLubaActions.has(action))return false;
+    noteBlocked(s);return true;
+  }
   function onNative(e) {
-    const s=run;if(!s?.t0||s.p.source!=='system'||!testEditor?.contains(e.target)||s.native.length>=2000)return;
+    const type=String(e.inputType||'');
+    const inFixture=e.target===testEditor||testEditor?.contains?.(e.target);
+    const lock=inFixture&&editLock('system');
+    // A closing composition may need to settle; non-cancelable IME events
+    // stay under Core V2 control and remain eligible to invalidate a run.
+    if(lock&&e.cancelable&&/^(insert|delete|history)/.test(type)&&!['insertFromComposition','deleteCompositionText'].includes(type)){
+      e.preventDefault();e.stopImmediatePropagation();noteBlocked(lock);return;
+    }
+    const s=run;if(!s?.t0||s.p.source!=='system'||!inFixture||s.native.length>=2000)return;
     // Only input type/time. Never keep e.data, text or key names.
     s.native.push({type:String(e.inputType||''),t:now()});
   }
@@ -1315,6 +1341,10 @@
     const integrity=s.p.kind==='typing'?exactInsertion(s.beforeText,afterText):s.p.kind==='delete'?exactInsertion(afterText,s.beforeText)&&afterText===pairTexts?.[s.p.group]?.before:afterText===s.beforeText;
     if(s.p.kind==='typing'&&integrity&&s.matched===TARGET)pairTexts[s.p.group]={before:s.beforeText,after:afterText};
     stopRun(s);
+    // A blocked extra press may still have a visual effect; do not include
+    // its render tail in the measured frame list.
+    const cutoff=s.blockedAt??Infinity;
+    s.frames=s.frames.filter(f=>f.end<cutoff);
     const measured=isEdit(s.p)&&s.firstInputAt ? s.frames.filter(f=>f.end>=s.firstInputAt) : s.frames;
     const activeList=activeFrames(s), all=statFrames(measured),act=statFrames(activeList);
     const editTimes=(s.editTimes||[]).slice(0,TARGET);
@@ -1326,7 +1356,7 @@
     for(const [name,values] of Object.entries(s.timings)){const xs=values.map(x=>x.ms);timing[name]={n:xs.length,avg:avg(xs),p95:p95(xs),max:max(xs)};}
     const core={};for(const field of ['totalMs','snapshotMs','modelMs','historyMs','renderMs','extraMs']){const xs=s.core.map(x=>x[field]).filter(Number.isFinite);core[field]={n:xs.length,avg:avg(xs),p95:p95(xs),max:max(xs)};}
     const coverage=measured.reduce((a,b)=>a+b.dt,0);
-    const expectedMs=isEdit(s.p)&&s.firstInputAt?Math.max(1,s.deadline-s.firstInputAt):s.p.ms;
+    const expectedMs=isEdit(s.p)&&s.firstInputAt?Math.max(1,Math.min(s.deadline,cutoff)-s.firstInputAt):s.p.ms;
     let quality='CHECKED';const issues=[];
     if(all.n<10||coverage<expectedMs*.8){issues.push('neúplné rAF okno');quality='PARTIAL';}
     if((s.p.kind==='idle'||s.p.kind==='layout')&&(edits||delta!==0)){issues.push('text se během nepsací fáze změnil');quality='PARTIAL';}
@@ -1336,21 +1366,22 @@
     if(s.matched===0&&isEdit(s.p)){issues.push('nezachycen žádný odpovídající vstup Core V2');quality='PARTIAL';}
     if(s.p.kind==='layout'&&s.p.source==='system'){issues.push('nativní Shift není vidět v WebView; manuální scénář');if(quality==='CHECKED')quality='MANUAL';}
     if(s.p.kind==='layout'&&s.p.source==='luba'&&!Object.entries(timing).some(([k,v])=>/^key:(shift|symbols|symbols-more|letters-699j|numbers-699j)$/.test(k)&&v.n>=2)){issues.push('málo zachycených přepnutí');quality='PARTIAL';}
-    const r={p:s.p,quality,issues,all,act,early,late,matched:s.matched,stopReason:s.stopReason||'TIMED',lateInputs:s.lateInputs,integrity,fixtureMatches:s.fixtureAgrees,unexpected:s.unexpected,delta,before:s.before,after,inputs:counts(s.inputs),native:counts(s.native),timing,core,long:{supported:Boolean(s.observer),n:s.long.length,max:max(s.long)},coverage,height:s.height,viewport:s.viewport,editorHeight:s.editorHeight};
+    if(quality==='PARTIAL')lockedStep=null; // enable manual correction
+    const r={p:s.p,quality,issues,all,act,early,late,blockedAfterTarget:s.blockedAfterTarget||0,tailClipped:Boolean(s.blockedAt),matched:s.matched,stopReason:s.stopReason||'TIMED',lateInputs:s.lateInputs,integrity,fixtureMatches:s.fixtureAgrees,unexpected:s.unexpected,delta,before:s.before,after,inputs:counts(s.inputs),native:counts(s.native),timing,core,long:{supported:Boolean(s.observer),n:s.long.length,max:max(s.long)},coverage,height:s.height,viewport:s.viewport,editorHeight:s.editorHeight};
     results[index]=r;
     setStatus(`${index+1}/${phases.length} · ${s.p.label}: ${fmt(all.fps)} FPS`);
-    instructions.textContent=`${quality} · změna délky: ${delta} · vstupů modelu: ${edits}\n${issues.join('; ')||'Měření uloženo.'}\n`+(s.p.kind==='layout'?'Před pokračováním vrať rozložení na písmena.':'');
+    instructions.textContent=`${quality} · změna délky: ${delta} · vstupů modelu: ${edits}\n${issues.join('; ')||'Měření uloženo.'}${s.blockedAfterTarget?' · Další stisky zablokovány: '+s.blockedAfterTarget:''}\n`+(s.p.kind==='layout'?'Před pokračováním vrať rozložení na písmena.':'');
     const next=['Další',()=>{index++;prepare(index===4?'Přepni na systémovou klávesnici a klepni do těla poznámky.':index===8?'Vrať LubaKeyboard. Při měření se automaticky vypne jen výpočet návrhů.':'');}];
     const retry=['Opakovat',()=>{results[index]=null;prepare(s.p.kind==='typing'?'Před opakováním ručně smaž písmena přidaná při tomto pokusu.':s.p.kind==='delete'?'Před opakováním ručně dopiš smazaná písmena a.':'Vrať původní text a rozložení.');}];
     showActions(...(quality==='PARTIAL'?[retry,['Přeskočit (neúplné)',next[1]]]:[next,retry]),['Zrušit',cancel]);
   }
   function restoreSource(){if(originalSource&&K()?.ziskejZdroj?.()!==originalSource)K()?.nastavZdroj?.(originalSource);}
-  function cancel(){if(run){run.cancelled=true;stopRun(run);}running=false;restoreSource();panel.hidden=true;testEditor=null;testToken=null;fixtureText=null;pairTexts=null;refreshPredictions();}
+  function cancel(){lockedStep=null;if(run){run.cancelled=true;stopRun(run);}running=false;restoreSource();panel.hidden=true;testEditor=null;testToken=null;fixtureText=null;pairTexts=null;refreshPredictions();}
   function report(){
-    const lines=['LUBANOTE KEYBOARD A/B/C / 699D-T · 40 INPUTS','READ-ONLY measurements; manual typing only in test note; no content, IDs or key values.','FPS = WebView requestAnimationFrame, not physical screen/IME FPS.','Active frames: within 240 ms of observed editor input or Luba layout action. Native IME Shift is not observable. Fixture: Core V2 plain-text model, not DOM.',`Build=${String(window.LUBANOTE_VERSION||'?')} date=${new Date().toISOString()}`,`Fixture=${baseInfo?.chars} chars / ${baseInfo?.blocks} blocks, layout=${baseInfo?.layout}, screen=${baseInfo?.width}x${baseInfo?.height}, DPR=${baseInfo?.dpr}`];
+    const lines=['LUBANOTE KEYBOARD A/B/C / 699D-U · 40 INPUTS','READ-ONLY measurements; manual typing only in test note; no content, IDs or key values.','FPS = WebView requestAnimationFrame, not physical screen/IME FPS.','Active frames: within 240 ms of observed editor input or Luba layout action. Native IME Shift is not observable. Fixture: Core V2 plain-text model, not DOM.',`Build=${String(window.LUBANOTE_VERSION||'?')} date=${new Date().toISOString()}`,`Fixture=${baseInfo?.chars} chars / ${baseInfo?.blocks} blocks, layout=${baseInfo?.layout}, screen=${baseInfo?.width}x${baseInfo?.height}, DPR=${baseInfo?.dpr}`];
     for(const r of results.filter(Boolean)){
       lines.push(`\n${r.p.group.toUpperCase()} / ${r.p.kind} · prediction=${r.p.prediction} | ${r.quality} | ${r.issues.join('; ')||'-'}`,`WINDOW=${fmt(r.coverage,0)}ms rAF=${fmt(r.all.fps)} FPS frames=${r.all.n} p95=${fmt(r.all.p95)}ms max=${fmt(r.all.max)}ms`, `ACTIVE=${fmt(r.act.fps)} FPS frames=${r.act.n} p95=${fmt(r.act.p95)}ms max=${fmt(r.act.max)}ms`, `chars=${r.before}->${r.after} (delta ${r.delta}) model=${JSON.stringify(r.inputs)} nativeBeforeInput=${JSON.stringify(r.native)}`,`longtasks=${r.long.supported?r.long.n:'N/A'} max=${fmt(r.long.max)}ms viewport=${fmt(r.viewport,0)} editorHeight=${r.editorHeight} windowHeight=${r.height}`);
-      if(isEdit(r.p))lines.push(`TARGET=${r.matched}/${TARGET} stop=${r.stopReason} extra=${r.lateInputs} fixtureExact=${r.integrity} fixtureBeforeMatches=${r.fixtureMatches} unexpected=${r.unexpected} | ACTIVE 1–20=${fmt(r.early.fps)} FPS (n=${r.early.n}, p95=${fmt(r.early.p95)}ms) | ACTIVE 21–40=${fmt(r.late.fps)} FPS (n=${r.late.n}, p95=${fmt(r.late.p95)}ms)`);
+      if(isEdit(r.p))lines.push(`TARGET=${r.matched}/${TARGET} stop=${r.stopReason} extra=${r.lateInputs} blocked=${r.blockedAfterTarget} tailClipped=${r.tailClipped} fixtureExact=${r.integrity} fixtureBeforeMatches=${r.fixtureMatches} unexpected=${r.unexpected} | ACTIVE 1–20=${fmt(r.early.fps)} FPS (n=${r.early.n}, p95=${fmt(r.early.p95)}ms) | ACTIVE 21–40=${fmt(r.late.fps)} FPS (n=${r.late.n}, p95=${fmt(r.late.p95)}ms)`);
       for(const [name,v] of Object.entries(r.timing))lines.push(`LUBA_SYNC ${name} n=${v.n} avg=${fmt(v.avg,2)}ms p95=${fmt(v.p95,2)}ms max=${fmt(v.max,2)}ms`);
       for(const [name,v] of Object.entries(r.core))if(v.n)lines.push(`LUBA_CORE ${name} n=${v.n} avg=${fmt(v.avg,2)}ms p95=${fmt(v.p95,2)}ms max=${fmt(v.max,2)}ms`);
     }
@@ -1366,12 +1397,13 @@
     return lines.join('\n');
   }
   async function copy(){try{await navigator.clipboard.writeText(lastReport);setStatus('Report zkopírován.');}catch(_){const a=mk('textarea','',document.body);a.value=lastReport;a.style.cssText='position:fixed;opacity:0;left:0;top:0';a.select();let ok=false;try{ok=document.execCommand('copy');}catch(_){}a.remove();setStatus(ok?'Report zkopírován.':'Kopírování selhalo – zkus znovu.');}}
-  function finish(){lastReport=report();running=false;restoreSource();testEditor=null;testToken=null;fixtureText=null;pairTexts=null;refreshPredictions();setStatus('Porovnání dokončeno · '+results.filter(Boolean).length+'/'+phases.length);instructions.textContent='Výsledky jsou v jednom reportu. Zkopíruj jej a pošli k vyhodnocení.';showActions(['Kopírovat report',copy],['Zavřít',()=>{panel.hidden=true;}]);}
+  function finish(){lockedStep=null;lastReport=report();running=false;restoreSource();testEditor=null;testToken=null;fixtureText=null;pairTexts=null;refreshPredictions();setStatus('Porovnání dokončeno · '+results.filter(Boolean).length+'/'+phases.length);instructions.textContent='Výsledky jsou v jednom reportu. Zkopíruj jej a pošli k vyhodnocení.';showActions(['Kopírovat report',copy],['Zavřít',()=>{panel.hidden=true;}]);}
   document.addEventListener('lubanote:v2-model-input',onModel,true);
   document.addEventListener('beforeinput',onNative,true);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden&&run)abortStep('Aplikace přešla na pozadí.');});
-  window.addEventListener('lubanote:keyboard-source-change',()=>{if(run)abortStep('Během měření se změnil zdroj klávesnice.');});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){lockedStep=null;if(run)abortStep('Aplikace přešla na pozadí.');}});
+  window.addEventListener('lubanote:keyboard-source-change',()=>{lockedStep=null;if(run)abortStep('Během měření se změnil zdroj klávesnice.');});
   window.LubaNoteKeyboardCompare699DQ={
+    blockLubaAction,
     get running(){return running;},get predictionDisabled(){return Boolean(run?.p.prediction==='off'&&sameEditor()&&K()?.ziskejZdroj?.()==='luba'&&K()?.ziskejCilPsani?.()==='body');},get active(){return Boolean(run?.t0&&run.p.source==='luba');},
     begin(name){const s=run;if(!s?.t0||s.p.source!=='luba')return null;return {s,name,t:now()};},
     end(x){if(!x||run!==x.s)return;const a=x.s.timings[x.name]||(x.s.timings[x.name]=[]);if(a.length<2000)a.push({t:x.t,ms:now()-x.t});},
