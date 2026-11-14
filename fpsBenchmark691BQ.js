@@ -1072,6 +1072,7 @@
   function showActions(...items) {
     actions.replaceChildren();
     for (const [label, fn] of items) btn(label,fn);
+    keepGuideReachable();
   }
   function setStatus(txt){status.textContent=txt;}
   function prepare(message='') {
@@ -1085,17 +1086,70 @@
       instructions.textContent='Klepni do těla testovací poznámky (na konec), aby se klávesnice otevřela.\n'+p.help;
     }],['Měřit',arm],['Zrušit',cancel]);
   }
+  // 699D-R: modeless guide, movable like Debug Hub. Keep a usable part of
+  // the handle on screen even when the rest is parked beyond the edge.
+  let drag=null, moved=false;
+  function viewportBounds(){
+    const v=window.visualViewport;
+    return {left:v?.offsetLeft||0,top:v?.offsetTop||0,width:v?.width||innerWidth,height:v?.height||innerHeight};
+  }
+  function placeGuide(left,top){
+    const r=panel.getBoundingClientRect(),v=viewportBounds();
+    const edge=Math.min(72,r.width,v.width);
+    const grip=Math.min(44,status.getBoundingClientRect().height,v.height);
+    const minLeft=v.left+edge-r.width,maxLeft=v.left+v.width-edge;
+    const minTop=v.top,maxTop=v.top+Math.max(0,v.height-grip);
+    panel.style.right='auto';
+    panel.style.left=Math.round(Math.max(minLeft,Math.min(maxLeft,left)))+'px';
+    panel.style.top=Math.round(Math.max(minTop,Math.min(maxTop,top)))+'px';
+  }
+  function keepGuideReachable(){
+    if(!panel||panel.hidden||!moved||drag)return;
+    const r=panel.getBoundingClientRect();placeGuide(r.left,r.top);
+  }
+  function installGuideDrag(){
+    status.title='Podrž a přesuň okno';
+    status.addEventListener('pointerdown',e=>{
+      if(e.button!==0||e.isPrimary===false||drag)return;
+      const r=panel.getBoundingClientRect();
+      drag={id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top,started:false};
+      try{status.setPointerCapture(e.pointerId);}catch(_){}
+      e.preventDefault();e.stopPropagation();
+    });
+    status.addEventListener('pointermove',e=>{
+      if(!drag||e.pointerId!==drag.id)return;
+      const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+      if(!drag.started&&Math.hypot(dx,dy)<4)return;
+      if(!drag.started){
+        drag.started=true;moved=true;
+        // Moving the guide mid-run would contaminate the FPS sample.
+        if(run)abortStep('Okno bylo přesunuto. Spusť měření znovu.');
+      }
+      placeGuide(drag.left+dx,drag.top+dy);
+      e.preventDefault();e.stopPropagation();
+    });
+    function endDrag(e){
+      if(!drag||e.pointerId!==drag.id)return;
+      drag=null;keepGuideReachable();
+    }
+    for(const type of ['pointerup','pointercancel','lostpointercapture'])status.addEventListener(type,endDrag);
+    window.addEventListener('resize',keepGuideReachable);
+    window.visualViewport?.addEventListener('resize',keepGuideReachable);
+    window.visualViewport?.addEventListener('scroll',keepGuideReachable);
+  }
   function init() {
     const host=document.getElementById('ln-fps-benchmark-691BQ');if(!host||panel)return;
     const css=mk('style','',document.head);css.textContent=`
       #ln-keyboard-compare-699dq[hidden]{display:none!important}
-      #ln-keyboard-compare-699dq{position:fixed;top:calc(env(safe-area-inset-top,0px) + 58px);right:7px;max-width:min(300px,calc(100vw - 14px));z-index:2147483100;box-sizing:border-box;background:var(--color-surface,#222);color:var(--color-text,#fff);border:1px solid var(--color-accent,#777);border-radius:12px;padding:9px;box-shadow:0 5px 18px #0007;font:12px/1.35 system-ui,sans-serif;white-space:pre-line;touch-action:manipulation}
-      #ln-keyboard-compare-699dq strong{display:block;font-size:12px;margin-bottom:5px}
+      #ln-keyboard-compare-699dq{position:fixed;top:calc(env(safe-area-inset-top,0px) + 58px);right:7px;width:min(300px,calc(100vw - 14px));max-width:min(300px,calc(100vw - 14px));z-index:2147483100;box-sizing:border-box;background:var(--color-surface,#222);color:var(--color-text,#fff);border:1px solid var(--color-accent,#777);border-radius:12px;padding:9px;box-shadow:0 5px 18px #0007;font:12px/1.35 system-ui,sans-serif;white-space:pre-line;touch-action:manipulation}
+      #ln-keyboard-compare-699dq strong{display:block;font-size:12px;margin-bottom:5px;min-height:28px;box-sizing:border-box;padding:4px 2px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;overflow-wrap:anywhere}
+      #ln-keyboard-compare-699dq strong::before{content:'⠿ ';opacity:.7}
+      #ln-keyboard-compare-699dq strong:active{cursor:grabbing}
       #ln-keyboard-compare-699dq p{margin:5px 0;font-size:11px;white-space:pre-line}
       #ln-keyboard-compare-699dq .ln-kc-actions{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
       #ln-keyboard-compare-699dq button{background:var(--color-background,#222);color:inherit;border:1px solid var(--color-border,#777);border-radius:8px;padding:6px;font:inherit;min-height:30px}
       #ln-keyboard-compare-699dq.ln-kc-measuring p{display:none}
-      #ln-keyboard-compare-699dq.ln-kc-measuring{width:auto;padding:7px;max-width:230px}
+      #ln-keyboard-compare-699dq.ln-kc-measuring{width:min(230px,calc(100vw - 14px));padding:7px;max-width:230px}
       #ln-keyboard-compare-start-699dq{align-self:start;font-weight:700}
     `;
     startBtn=mk('button','⌨ Porovnat klávesnice · průvodce',host);
@@ -1104,15 +1158,19 @@
     panel=mk('section','',document.body);panel.id='ln-keyboard-compare-699dq';panel.hidden=true;
     panel.setAttribute('aria-label','Porovnání klávesnic');
     status=mk('strong','',panel);instructions=mk('p','',panel);actions=mk('div','',panel);actions.className='ln-kc-actions';
+    installGuideDrag();
   }
   function start() {
     if(!allowed() || !api.canStartCompare?.() || !K() || !window.Capacitor?.isNativePlatform?.()) {alert('Porovnání je dostupné v DEV APK pro ověřeného administrátora, bez jiného běžícího benchmarku.');return;}
     if(running){panel.hidden=false;return;}
     running=true;originalSource=K().ziskejZdroj();index=0;results=[];testEditor=null;testToken=null;baseInfo=null;lastReport='';
+    drag=null;moved=false;panel.style.removeProperty('left');panel.style.removeProperty('top');panel.style.removeProperty('right');
     panel.hidden=false;setStatus('Porovnání klávesnic · příprava');
-    instructions.textContent='Zavři Admin Dashboard. Otevři samostatnou zkušební dlouhou poznámku (bez důležitých dat), kurzor na konec těla. Používej stejnou poznámku a stejný jazyk obou klávesnic. Test sám nevkládá žádný text.';
+    instructions.textContent='Okno přesuneš tahem za jeho nadpis (⠿). Zavři Admin Dashboard. Otevři samostatnou zkušební dlouhou poznámku (bez důležitých dat), kurzor na konec těla. Používej stejnou poznámku a stejný jazyk obou klávesnic. Test sám nevkládá žádný text.';
     showActions(['Poznámka připravena',()=>{
-      if(!allowed() || !editorIsOpen() || !document.getElementById('adminDashboardModal')?.hidden) {setStatus('Nejdříve zavři Dashboard a otevři testovací poznámku.');return;}
+      if(!allowed()){setStatus('Chybí ověření administrátora.');return;}
+      if(!document.getElementById('adminDashboardModal')?.hidden){setStatus('Nejdříve zavři Admin Dashboard.');return;}
+      if(!editorIsOpen()){setStatus('Otevři testovací poznámku v editoru Core V2.');return;}
       testEditor=editor();testToken=token();baseInfo={chars:currentChars(),blocks:testEditor.querySelectorAll('[data-ln-v2-blok]').length,width:innerWidth,height:innerHeight,dpr:devicePixelRatio,layout:K().ziskejLayout?.()||'?',fpsHud:!document.getElementById('ln-fb-hud-691BQ')?.hidden};
       K().nastavZdroj('luba');prepare('Klepni do textu a zobraz LubaKeyboard.');
     }],['Zrušit',cancel]);
@@ -1130,9 +1188,10 @@
     if(run!==s)return;
     if(!allowed() || document.hidden || !sameEditor() || !sourceOK()) {abortStep('Příprava přerušena.');return;}
     s.before=currentChars();s.height=innerHeight;s.viewport=window.visualViewport?.height??null;s.editorHeight=testEditor.clientHeight;
-    s.t0=now();s.last=s.t0;s.deadline=s.t0+s.p.ms;
     panel.classList.add('ln-kc-measuring');
     setStatus(`${sourceName(s.p.source)} · ${s.p.label} · ${s.p.ms/1000} s`);
+    keepGuideReachable();
+    s.t0=now();s.last=s.t0;s.deadline=s.t0+s.p.ms;
     if(window.PerformanceObserver?.supportedEntryTypes?.includes('longtask')) {
       try {s.observer=new PerformanceObserver(list=>recordLong(s,list.getEntries()));s.observer.observe({entryTypes:['longtask']});}catch(_){s.observer=null;}
     }
@@ -1152,7 +1211,7 @@
   function stopRun(s){
     clearTimeout(s.delay);clearTimeout(s.timer);cancelAnimationFrame(s.raf);
     if(s.observer){try{recordLong(s,s.observer.takeRecords());s.observer.disconnect();}catch(_){} }
-    panel.classList.remove('ln-kc-measuring');run=null;
+    panel.classList.remove('ln-kc-measuring');run=null;keepGuideReachable();
   }
   function abortStep(message){if(run){run.cancelled=true;stopRun(run);}prepare(message);}
   function onModel(e) {
