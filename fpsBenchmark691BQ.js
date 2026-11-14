@@ -1042,7 +1042,7 @@
   if (!api || window.LubaNoteKeyboardCompare699DQ) return;
   // 699D-S: same 40 physical single-letter edits, then 40 single deletions.
   const TARGET=40, LETTER='a', INPUT_TIMEOUT=90000, TAIL=240;
-  const phases = ['luba','system','luba-off'].flatMap(group => {
+  const fullPhases = ['luba','system','luba-off'].flatMap(group => {
     const source=group==='system'?'system':'luba';
     const prediction=group==='luba-off'?'off':group==='luba'?'on':'native';
     return [
@@ -1053,6 +1053,9 @@
     ];
   });
   const isEdit=p=>p.kind==='typing'||p.kind==='delete';
+  // 699D-X: same 40-input test and metrics, only omit redundant phases.
+  const quickPhases=fullPhases.filter(p=>p.group==='luba'&&isEdit(p));
+  let phases=fullPhases, testMode='FULL';
   const expectedType=p=>p.kind==='typing'?'insertText':'deleteContentBackward';
   const phaseName=p=>p.group==='luba-off'?'LubaKeyboard bez predikce':p.source==='luba'?'LubaKeyboard':'Systémová';
   const now = () => performance.now();
@@ -1179,7 +1182,7 @@
       #ln-keyboard-compare-start-699dq{align-self:start;font-weight:700}
       #ln-fps-benchmark-691BQ.ln-kc-current-only > :not(.ln-kc-entry){display:none!important}
       #ln-fps-benchmark-691BQ .ln-kc-entry{display:grid;gap:9px}
-      #ln-fps-benchmark-691BQ #ln-keyboard-compare-start-699dq{font-size:14px;font-weight:700;width:100%;padding:12px}
+      #ln-fps-benchmark-691BQ #ln-keyboard-compare-start-699dq,#ln-fps-benchmark-691BQ #ln-keyboard-compare-quick-699dx{font-size:14px;font-weight:700;width:100%;padding:12px}
     `;
     // Retire obsolete manual benchmark controls without removing the legacy
     // API used by Core V2/AutoTester or erasing local history/baselines.
@@ -1187,18 +1190,22 @@
     host.setAttribute('aria-label','Porovnání klávesnic');host.removeAttribute('aria-labelledby');
     const entry=mk('div','',host);entry.className='ln-kc-entry';
     const heading=mk('strong','Porovnání klávesnic · FPS',entry);heading.style.fontSize='16px';
-    mk('p','12 kroků · LubaKeyboard, systémová klávesnice a LubaKeyboard bez predikce. Psaní a mazání se automaticky zastaví po 40 vstupech.',entry);
-    startBtn=mk('button','⌨ Porovnat klávesnice',entry);
+    mk('p','Rychlé ladění: jen LubaKeyboard, 40× a a 40× Backspace. Kompletní srovnání: všech 12 kroků.',entry);
+    const quickBtn=mk('button','⚡ Rychlý test · 2 kroky',entry);
+    quickBtn.type='button';quickBtn.id='ln-keyboard-compare-quick-699dx';
+    quickBtn.addEventListener('click',()=>start('QUICK'));
+    startBtn=mk('button','⌨ Kompletní srovnání · 12 kroků',entry);
     startBtn.type='button';startBtn.id='ln-keyboard-compare-start-699dq';
-    startBtn.addEventListener('click',start);
+    startBtn.addEventListener('click',()=>start('FULL'));
     panel=mk('section','',document.body);panel.id='ln-keyboard-compare-699dq';panel.hidden=true;
     panel.setAttribute('aria-label','Porovnání klávesnic');
     status=mk('strong','',panel);instructions=mk('p','',panel);actions=mk('div','',panel);actions.className='ln-kc-actions';
     installGuideDrag();
   }
-  function start() {
+  function start(mode='FULL') {
     if(!allowed() || !api.canStartCompare?.() || !K() || !window.Capacitor?.isNativePlatform?.()) {alert('Porovnání je dostupné v DEV APK pro ověřeného administrátora, bez jiného běžícího benchmarku.');return;}
     if(running){panel.hidden=false;return;}
+    testMode=mode==='QUICK'?'QUICK':'FULL';phases=testMode==='QUICK'?quickPhases:fullPhases;
     lockedStep=null;running=true;originalSource=K().ziskejZdroj();index=0;results=[];testEditor=null;testToken=null;baseInfo=null;fixtureText=null;pairTexts=Object.create(null);lastReport='';
     drag=null;moved=false;panel.style.removeProperty('left');panel.style.removeProperty('top');panel.style.removeProperty('right');
     panel.hidden=false;setStatus('Porovnání klávesnic · příprava');
@@ -1379,14 +1386,14 @@
   function restoreSource(){if(originalSource&&K()?.ziskejZdroj?.()!==originalSource)K()?.nastavZdroj?.(originalSource);}
   function cancel(){lockedStep=null;if(run){run.cancelled=true;stopRun(run);}running=false;restoreSource();panel.hidden=true;testEditor=null;testToken=null;fixtureText=null;pairTexts=null;refreshPredictions();}
   function report(){
-    const lines=['LUBANOTE KEYBOARD A/B/C / 699D-W · 40 INPUTS','READ-ONLY measurements; manual typing only in test note; no content, IDs or key values.','FPS = WebView requestAnimationFrame, not physical screen/IME FPS.','Active frames: within 240 ms of observed editor input or Luba layout action. Native IME Shift is not observable. Fixture: Core V2 plain-text model, not DOM.',`Build=${String(window.LUBANOTE_VERSION||'?')} date=${new Date().toISOString()}`,`Fixture=${baseInfo?.chars} chars / ${baseInfo?.blocks} blocks, layout=${baseInfo?.layout}, screen=${baseInfo?.width}x${baseInfo?.height}, DPR=${baseInfo?.dpr}`];
+    const lines=['LUBANOTE KEYBOARD / 699D-X · 40 INPUTS',`MODE=${testMode} steps=${phases.length}${testMode==='QUICK'?' · LubaKeyboard only; compare full baseline separately':''}`,'READ-ONLY measurements; manual typing only in test note; no content, IDs or key values.','FPS = WebView requestAnimationFrame, not physical screen/IME FPS.','Active frames: within 240 ms of observed editor input or Luba layout action. Native IME Shift is not observable. Fixture: Core V2 plain-text model, not DOM.',`Build=${String(window.LUBANOTE_VERSION||'?')} date=${new Date().toISOString()}`,`Fixture=${baseInfo?.chars} chars / ${baseInfo?.blocks} blocks, layout=${baseInfo?.layout}, screen=${baseInfo?.width}x${baseInfo?.height}, DPR=${baseInfo?.dpr}`];
     for(const r of results.filter(Boolean)){
       lines.push(`\n${r.p.group.toUpperCase()} / ${r.p.kind} · prediction=${r.p.prediction} | ${r.quality} | ${r.issues.join('; ')||'-'}`,`WINDOW=${fmt(r.coverage,0)}ms rAF=${fmt(r.all.fps)} FPS frames=${r.all.n} p95=${fmt(r.all.p95)}ms max=${fmt(r.all.max)}ms`, `ACTIVE=${fmt(r.act.fps)} FPS frames=${r.act.n} p95=${fmt(r.act.p95)}ms max=${fmt(r.act.max)}ms`, `chars=${r.before}->${r.after} (delta ${r.delta}) model=${JSON.stringify(r.inputs)} nativeBeforeInput=${JSON.stringify(r.native)}`,`longtasks=${r.long.supported?r.long.n:'N/A'} max=${fmt(r.long.max)}ms viewport=${fmt(r.viewport,0)} editorHeight=${r.editorHeight} windowHeight=${r.height}`);
       if(isEdit(r.p))lines.push(`TARGET=${r.matched}/${TARGET} stop=${r.stopReason} extra=${r.lateInputs} blocked=${r.blockedAfterTarget} tailClipped=${r.tailClipped} fixtureExact=${r.integrity} fixtureBeforeMatches=${r.fixtureMatches} unexpected=${r.unexpected} | ACTIVE 1–20=${fmt(r.early.fps)} FPS (n=${r.early.n}, p95=${fmt(r.early.p95)}ms) | ACTIVE 21–40=${fmt(r.late.fps)} FPS (n=${r.late.n}, p95=${fmt(r.late.p95)}ms)`);
       for(const [name,v] of Object.entries(r.timing))lines.push(`LUBA_SYNC ${name} n=${v.n} avg=${fmt(v.avg,2)}ms p95=${fmt(v.p95,2)}ms max=${fmt(v.max,2)}ms`);
       for(const [name,v] of Object.entries(r.core))if(v.n)lines.push(`LUBA_CORE ${name} n=${v.n} avg=${fmt(v.avg,2)}ms p95=${fmt(v.p95,2)}ms max=${fmt(v.max,2)}ms`);
     }
-    for(const group of ['system','luba-off']){
+    for(const group of (testMode==='FULL'?['system','luba-off']:[])){
       lines.push(`\n${group.toUpperCase()} minus LUBA (prediction on) – descriptive; compare counts, geometry and quality:`);
       for(const kind of ['idle','layout','typing','delete']){
         const a=results.find(r=>r?.p.group==='luba'&&r.p.kind===kind),c=results.find(r=>r?.p.group===group&&r.p.kind===kind);

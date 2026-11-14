@@ -1723,6 +1723,10 @@
   let pozastavNavrhyPriDrzeniBackspace691CH = false;
   let navrhyZmeneneBehemDrzeni691CH = false;
   let posledniPodobaNavrhu691CH = null;
+  // 699D-X: viewport width does not change when a suggestion changes.
+  // Invalidate on the real window resize, not on every DOM write.
+  let uzkeNavrhy699DX = null;
+  window.addEventListener("resize", () => { uzkeNavrhy699DX = null; });
 
   /* 699D-W – body input gets a paint opportunity before prediction.
      At most one pending job, always reads the latest context. No note text
@@ -1804,7 +1808,7 @@
      */
     const layout = aktualniLayout();
     const podporovano = mode === "letters" && !layout.compose && layout.id !== "emoji" && layout.id !== "unicode";
-    navrhyBox.hidden = !podporovano;
+    if (navrhyBox.hidden === podporovano) navrhyBox.hidden = !podporovano;
     if (!podporovano) {
       posledniPodobaNavrhu691CH = null;
       if (navrhyBox.childElementCount) navrhyBox.replaceChildren();
@@ -1819,19 +1823,42 @@
 
   function vykresliNavrhy699DW(layout, navrhy) {
     while (navrhy.length < 3) navrhy.push("");
-    // Identické návrhy = identické DOM. Přeskočíme zbytečný replaceChildren,
-    // který jinak při každé aktualizaci invaliduje layout smartbaru.
-    const podoba = JSON.stringify([layout.id, window.innerWidth <= 390, ...navrhy.slice(0, 3)]);
-    if (podoba === posledniPodobaNavrhu691CH && navrhyBox.childElementCount === 3) return;
-    posledniPodobaNavrhu691CH = podoba;
-    navrhyBox.replaceChildren();
-    navrhy.slice(0, 3).forEach((value, index) => {
-      const zobrazene = value ? zkratNavrhUprostred(value, window.innerWidth <= 390 ? 12 : 14) : " ";
-      const b = button(zobrazene, "suggestion", value, `ln-lk-suggestion ln-lk-suggestion-${index + 1}`,
-        value ? `Návrh slova: ${value}` : "Prázdný návrh");
-      if (value) b.title = value;
-      if (!value) b.disabled = true;
-      navrhyBox.appendChild(b);
+    // A single width read before DOM writes, only on initial render/resize.
+    const uzke = merNavrhy699DW("dom:width", () => {
+      if (uzkeNavrhy699DX === null) uzkeNavrhy699DX = window.innerWidth <= 390;
+      return uzkeNavrhy699DX;
+    });
+    const values = navrhy.slice(0, 3);
+    const podoba = JSON.stringify([layout.id, uzke, ...values]);
+    const slots = Array.from(navrhyBox.children);
+    const platne = slots.length === 3 && slots.every((b, i) =>
+      b.dataset.lkAction === "suggestion" && b.classList.contains(`ln-lk-suggestion-${i + 1}`));
+    if (platne && podoba === posledniPodobaNavrhu691CH) return;
+    merNavrhy699DW("dom:update", () => {
+      // Preserve actual buttons, delegated handlers, and pointer state.
+      // Rebuild only after a different smartbar mode or initial mount.
+      if (!platne) {
+        slots.length = 0;
+        for (let i = 0; i < 3; i++) slots.push(button(" ", "suggestion", "",
+          `ln-lk-suggestion ln-lk-suggestion-${i + 1}`, "Prázdný návrh"));
+      }
+      values.forEach((value, i) => {
+        const b = slots[i];
+        const label = value ? zkratNavrhUprostred(value, uzke ? 12 : 14) : " ";
+        const aria = value ? `Návrh slova: ${value}` : "Prázdný návrh";
+        if (b.textContent !== label) b.textContent = label;
+        if (value) {
+          if (b.dataset.lkValue !== value) b.dataset.lkValue = value;
+          if (b.title !== value) b.title = value;
+        } else {
+          if (b.dataset.lkValue !== undefined) delete b.dataset.lkValue;
+          if (b.hasAttribute("title")) b.removeAttribute("title");
+        }
+        if (b.getAttribute("aria-label") !== aria) b.setAttribute("aria-label", aria);
+        if (b.disabled !== !value) b.disabled = !value;
+      });
+      if (!platne) navrhyBox.replaceChildren(...slots);
+      posledniPodobaNavrhu691CH = podoba;
     });
   }
 
@@ -3791,8 +3818,13 @@
       ukonciVizualniStiskMimoPanel699O(pointerId);
     }
 
+    // Reused suggestion buttons can change underneath a held finger.
+    // Never accept a different value than the one on pointerdown.
+    let stiskNavrhu699DX = null;
     panel.addEventListener("pointerdown", (event) => {
       const b = event.target.closest("button");
+      stiskNavrhu699DX = b?.dataset.lkAction === "suggestion" ?
+        { b, id: event.pointerId, value: b.dataset.lkValue || "", disabled: b.disabled } : null;
       if (!b) return;
       event.preventDefault();
       if (b.dataset.lkAction) {
@@ -3821,6 +3853,8 @@
     }, true);
 
     panel.addEventListener("pointerup", (event) => {
+      const stiskNavrhu = stiskNavrhu699DX;
+      stiskNavrhu699DX = null;
       ukonciVizualniStisk699O(event.pointerId);
       stopLongPress();
       stopRepeat();
@@ -3839,6 +3873,11 @@
       if (!b) return;
       event.preventDefault();
 
+      if (b.dataset.lkAction === "suggestion" &&
+          (!stiskNavrhu || stiskNavrhu.id !== event.pointerId || stiskNavrhu.b !== b ||
+           stiskNavrhu.disabled || b.disabled || !stiskNavrhu.value ||
+           stiskNavrhu.value !== b.dataset.lkValue)) return;
+
       /* 658BT – hide odstraní celý fixed panel už v pointerup. WebView pak
          někdy pošle následný syntetický click na kartu, která se tím odkryla
          pod prstem. Shield v script.js spotřebuje právě jen tento click. */
@@ -3850,6 +3889,7 @@
     }, true);
 
     panel.addEventListener("pointercancel", (event) => {
+      if (stiskNavrhu699DX?.id === event.pointerId) stiskNavrhu699DX = null;
       ukonciVizualniStisk699O(event.pointerId);
       stopLongPress();
       stopRepeat();
@@ -3860,6 +3900,7 @@
 
     // WebView může zrušit pointer capture mimo klávesnici.
     panel.addEventListener("lostpointercapture", (event) => {
+      if (stiskNavrhu699DX?.id === event.pointerId) stiskNavrhu699DX = null;
       ukonciVizualniStisk699O(event.pointerId);
     }, true);
 
