@@ -1532,38 +1532,49 @@
     return { node: blokEl, offset: blokEl.childNodes.length };
   }
 
-  function nastavVyberModelu(zacatek, konec = zacatek, mer699DAB = null, primeSbaleni699DAC = false) {
+  function nastavVyberModelu(zacatek, konec = zacatek, mer699DAB = null, primyRozsah699DAD = false) {
     if (!editor) return;
     const domZacatek = najdiDomBod(zacatek.blok, zacatek.offset);
     const domKonec = najdiDomBod(konec.blok, konec.offset);
     mer699DAB?.("selectionMapMs");
     if (!domZacatek || !domKonec) return;
 
-    /* 699D-AC: opt in only from the guarded local insertion path.
-       Do not remove a live collapsed selection in the same verified text
-       node just to recreate it. Check exact DOM position synchronously;
-       otherwise fall back to the original Range restoration. */
-    let primoHotovo699DAC = false;
-    if (primeSbaleni699DAC && zacatek.blok === konec.blok && zacatek.offset === konec.offset &&
+    /* 699D-AD: opt in only from the guarded local insertion path.
+       Move the existing live collapsed Range in its verified text node.
+       Never replace a selection unnecessarily. Verify both position and
+       Range identity synchronously; otherwise use the original restoration. */
+    let primoHotovo699DAD = false;
+    if (primyRozsah699DAD && zacatek.blok === konec.blok && zacatek.offset === konec.offset &&
         domZacatek.node === domKonec.node && domZacatek.offset === domKonec.offset &&
         domKonec.node.nodeType === Node.TEXT_NODE && editor.contains(domKonec.node)) {
       const vyber = window.getSelection();
       if (vyber?.rangeCount === 1 && vyber.isCollapsed &&
           vyber.anchorNode === domKonec.node && vyber.focusNode === domKonec.node &&
-          typeof vyber.collapse === 'function') {
+          typeof vyber.getRangeAt === 'function') {
+        let zivyRozsah = null;
         let provedeno = false;
         try {
-          vyber.collapse(domKonec.node, domKonec.offset);
-          provedeno = true;
+          zivyRozsah = vyber.getRangeAt(0);
+          if (zivyRozsah.collapsed && zivyRozsah.startContainer === domKonec.node &&
+              zivyRozsah.endContainer === domKonec.node) {
+            if (zivyRozsah.startOffset !== domKonec.offset) {
+              zivyRozsah.setStart(domKonec.node, domKonec.offset);
+              if (!zivyRozsah.collapsed) zivyRozsah.collapse(true);
+            }
+            provedeno = true;
+          }
         } catch (_error) { /* original Range fallback below */ }
-        mer699DAB?.("selectionCollapseMs");
-        primoHotovo699DAC = provedeno && vyber.rangeCount === 1 && vyber.isCollapsed &&
-          vyber.anchorNode === domKonec.node && vyber.focusNode === domKonec.node &&
-          vyber.anchorOffset === domKonec.offset && vyber.focusOffset === domKonec.offset;
-        mer699DAB?.("selectionCollapseVerifyMs");
+        mer699DAB?.("selectionRangeMoveMs");
+        try {
+          primoHotovo699DAD = provedeno && vyber.rangeCount === 1 && vyber.isCollapsed &&
+            vyber.getRangeAt(0) === zivyRozsah &&
+            vyber.anchorNode === domKonec.node && vyber.focusNode === domKonec.node &&
+            vyber.anchorOffset === domKonec.offset && vyber.focusOffset === domKonec.offset;
+        } catch (_error) { primoHotovo699DAD = false; }
+        mer699DAB?.("selectionRangeMoveVerifyMs");
       }
     }
-    if (!primoHotovo699DAC) {
+    if (!primoHotovo699DAD) {
       const range = document.createRange();
       range.setStart(domZacatek.node, domZacatek.offset);
       range.setEnd(domKonec.node, domKonec.offset);
