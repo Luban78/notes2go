@@ -1294,11 +1294,15 @@
     const layout = aktualniLayout();
     if (mode !== "letters" || layout.compose || layout.id === "emoji" || layout.id === "unicode") return [];
 
-    const kontext = jeAktivniTextovePole()
+    const kontext = merNavrhy699DW("context", () => jeAktivniTextovePole()
       ? ziskejKontextTextovehoPole()
       : jeAktivniNazev()
         ? ziskejKontextNazvu()
-        : core()?.ziskejKontextVlastniKlavesnice?.();
+        : core()?.ziskejKontextVlastniKlavesnice?.());
+    return merNavrhy699DW("lookup", () => vypocitejNavrhyZKontextu699DW(layout, kontext));
+  }
+
+  function vypocitejNavrhyZKontextu699DW(layout, kontext) {
     const prefix = String(kontext?.prefix || "");
     const predchoziSlovo = String(kontext?.predchoziSlovo || "");
     const predchoziDveSlova = kontext?.predchoziDveSlova || [];
@@ -1720,7 +1724,67 @@
   let navrhyZmeneneBehemDrzeni691CH = false;
   let posledniPodobaNavrhu691CH = null;
 
+  /* 699D-W – body input gets a paint opportunity before prediction.
+     At most one pending job, always reads the latest context. No note text
+     is cached; synchronous refreshes invalidate all pending jobs. */
+  let navrhyFrame699DW = 0;
+  let navrhyTimer699DW = 0;
+  let navrhyCekaji699DW = false;
+  let generaceNavrhu699DW = 0;
+
+  function merNavrhy699DW(name, fn) {
+    const diag = window.LubaNoteKeyboardCompare699DQ;
+    if (!diag?.active) return fn();
+    let token;
+    try { token = diag.begin("suggestions:" + name); } catch (_error) {}
+    try { return fn(); }
+    finally { try { diag.end(token); } catch (_error) {} }
+  }
+
+  function zrusNavrhy699DW() {
+    generaceNavrhu699DW++;
+    if (navrhyFrame699DW) cancelAnimationFrame(navrhyFrame699DW);
+    if (navrhyTimer699DW) clearTimeout(navrhyTimer699DW);
+    navrhyFrame699DW = navrhyTimer699DW = 0;
+    navrhyCekaji699DW = false;
+  }
+
+  function naplanujNavrhy699DW() {
+    // Only note-body input is deferred. Titles, fields and IME composition
+    // retain their original synchronous/microtask paths.
+    if (aktivniCilPsani !== "body") {
+      queueMicrotask(aktualizujNavrhy);
+      return;
+    }
+    zrusNavrhy699DW();
+    const cil = core()?.ziskejEditorElement?.();
+    if (!cil?.isConnected || !panel || panel.hidden ||
+        ziskejZdrojKlavesnice() !== "luba") return;
+    navrhyCekaji699DW = true;
+    const generace = generaceNavrhu699DW;
+    navrhyFrame699DW = requestAnimationFrame(() => {
+      if (generace !== generaceNavrhu699DW) return;
+      navrhyFrame699DW = 0;
+      // A task posted from rAF runs outside that frame callback. This is a
+      // rendering opportunity, not a promise of a completed physical paint.
+      navrhyTimer699DW = setTimeout(() => {
+        if (generace !== generaceNavrhu699DW) return;
+        navrhyTimer699DW = 0;
+        if (document.hidden || !cil.isConnected || core()?.ziskejEditorElement?.() !== cil ||
+            !panel || panel.hidden || aktivniCilPsani !== "body" ||
+            ziskejZdrojKlavesnice() !== "luba") { zrusNavrhy699DW(); return; }
+        if (pozastavNavrhyPriDrzeniBackspace691CH) {
+          navrhyZmeneneBehemDrzeni691CH = true;
+          zrusNavrhy699DW();
+          return;
+        }
+        aktualizujNavrhy();
+      }, 0);
+    });
+  }
+
   function aktualizujNavrhy() {
+    zrusNavrhy699DW();
     const diag = window.LubaNoteKeyboardCompare699DQ;
     if (!diag?.active) return aktualizujNavrhy699DQOriginal();
     let token;
@@ -1748,7 +1812,12 @@
     }
 
     // 699D-S: temporary DEV A/B/C isolation; keep smartbar geometry.
-    const navrhy = window.LubaNoteKeyboardCompare699DQ?.predictionDisabled === true ? [] : vypocitejNavrhy();
+    const vypnuto = window.LubaNoteKeyboardCompare699DQ?.predictionDisabled === true;
+    const navrhy = vypnuto ? merNavrhy699DW("disabled", () => []) : vypocitejNavrhy();
+    return merNavrhy699DW("dom", () => vykresliNavrhy699DW(layout, navrhy));
+  }
+
+  function vykresliNavrhy699DW(layout, navrhy) {
     while (navrhy.length < 3) navrhy.push("");
     // Identické návrhy = identické DOM. Přeskočíme zbytečný replaceChildren,
     // který jinak při každé aktualizaci invaliduje layout smartbaru.
@@ -2805,16 +2874,16 @@
     telo.appendChild(row);
   }
 
-  function vykresliKlavesnici() {
+  function vykresliKlavesnici(jenShift699DW = false) {
     const diag = window.LubaNoteKeyboardCompare699DQ;
-    if (!diag?.active) return vykresliKlavesnici699DQOriginal();
+    if (!diag?.active) return vykresliKlavesnici699DQOriginal(jenShift699DW);
     let token;
     try { token = diag.begin("layout"); } catch (_error) {}
-    try { return vykresliKlavesnici699DQOriginal(); }
+    try { return vykresliKlavesnici699DQOriginal(jenShift699DW); }
     finally { try { diag.end(token); } catch (_error) {} }
   }
 
-  function vykresliKlavesnici699DQOriginal() {
+  function vykresliKlavesnici699DQOriginal(jenShift699DW = false) {
     if (!telo) return;
     telo.replaceChildren();
     const layout = aktualniLayout();
@@ -2828,7 +2897,12 @@
     else vykresliLetters();
     vykresliBottom();
     aktualizujCompose();
-    aktualizujNavrhy();
+    // Shift changes key labels, not the typed word. Still refresh on a
+    // full render, language/target change or when the smartbar is absent.
+    const zachovejNavrhy = jenShift699DW === true && aktivniCilPsani === "body" &&
+      mode === "letters" && !layout.compose && PRODUKCNI_LAYOUTY.includes(layout.id) &&
+      navrhyBox && !navrhyBox.hidden && navrhyBox.childElementCount === 3;
+    if (!zachovejNavrhy) aktualizujNavrhy();
     requestAnimationFrame(nastavVysku);
   }
 
@@ -3188,10 +3262,11 @@
       hangulInput(value);
       return;
     }
-    insertCore(value);
+    const vlozeno = insertCore(value);
     if (shift && !caps) {
       shift = false;
-      vykresliKlavesnici();
+      // A successful body insert emits its own model-input refresh.
+      vykresliKlavesnici(vlozeno && aktivniCilPsani === "body");
     }
   }
 
@@ -3249,6 +3324,11 @@
     if (jeAktivniTextovePole() && aktivniTextovePole.type === 'password') return;
     const navrh = String(value || "").trim();
     if (!navrh) return;
+    if (navrhyCekaji699DW) {
+      aktualizujNavrhy();
+      if (!Array.from(navrhyBox?.children || []).some(b =>
+        !b.disabled && b.dataset.lkAction === "suggestion" && b.dataset.lkValue === value)) return;
+    }
     const kontext = jeAktivniTextovePole()
       ? ziskejKontextTextovehoPole()
       : jeAktivniNazev()
@@ -3276,7 +3356,7 @@
     } else {
       shift = !shift;
     }
-    vykresliKlavesnici();
+    vykresliKlavesnici(true);
   }
 
   function symbolsAction() {
@@ -3629,7 +3709,7 @@
     const obnovit = pozastavNavrhyPriDrzeniBackspace691CH && navrhyZmeneneBehemDrzeni691CH;
     pozastavNavrhyPriDrzeniBackspace691CH = false;
     navrhyZmeneneBehemDrzeni691CH = false;
-    if (obnovit && panel && !panel.hidden) queueMicrotask(aktualizujNavrhy);
+    if (obnovit && panel && !panel.hidden) naplanujNavrhy699DW();
   }
 
   let stisknutaKlavesa699O = null;
@@ -4066,6 +4146,7 @@
   }
 
   function skryj() {
+    zrusNavrhy699DW();
     ukonciVizualniStiskMimoPanel699O();
     /* Ruční/API hide je stabilní stav. Samotný stále aktivní contenteditable
        jej nesmí hned přebít focusin událostí. */
@@ -4456,7 +4537,7 @@
     if (pozastavNavrhyPriDrzeniBackspace691CH) {
       navrhyZmeneneBehemDrzeni691CH = true;
     } else {
-      queueMicrotask(aktualizujNavrhy);
+      naplanujNavrhy699DW();
     }
     if (akcniPanelOtevren) queueMicrotask(naplanujSelectionSafeScroll);
   }, true);

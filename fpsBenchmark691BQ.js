@@ -1363,6 +1363,7 @@
     if(isEdit(s.p)&&(s.stopReason!=='TARGET_40'||s.matched!==TARGET||s.unexpected||delta!==(s.p.kind==='typing'?TARGET:-TARGET)||s.lateInputs)){issues.push('nedokončeno přesně 40 jednotlivých vstupů nebo přebytečný vstup');quality='PARTIAL';}
     if(!integrity){issues.push('obsah neodpovídá přesnému scénáři');quality='PARTIAL';}
     if(!s.fixtureAgrees){issues.push('výchozí model se liší od referenčního textu');quality='PARTIAL';}
+    if(s.p.prediction==='off'&&((timing['suggestions:context']?.n||0)>0||(timing['suggestions:lookup']?.n||0)>0)){issues.push('výpočet predikce zachycen i v OFF – neplatná izolace');quality='PARTIAL';}
     if(s.matched===0&&isEdit(s.p)){issues.push('nezachycen žádný odpovídající vstup Core V2');quality='PARTIAL';}
     if(s.p.kind==='layout'&&s.p.source==='system'){issues.push('nativní Shift není vidět v WebView; manuální scénář');if(quality==='CHECKED')quality='MANUAL';}
     if(s.p.kind==='layout'&&s.p.source==='luba'&&!Object.entries(timing).some(([k,v])=>/^key:(shift|symbols|symbols-more|letters-699j|numbers-699j)$/.test(k)&&v.n>=2)){issues.push('málo zachycených přepnutí');quality='PARTIAL';}
@@ -1378,7 +1379,7 @@
   function restoreSource(){if(originalSource&&K()?.ziskejZdroj?.()!==originalSource)K()?.nastavZdroj?.(originalSource);}
   function cancel(){lockedStep=null;if(run){run.cancelled=true;stopRun(run);}running=false;restoreSource();panel.hidden=true;testEditor=null;testToken=null;fixtureText=null;pairTexts=null;refreshPredictions();}
   function report(){
-    const lines=['LUBANOTE KEYBOARD A/B/C / 699D-U · 40 INPUTS','READ-ONLY measurements; manual typing only in test note; no content, IDs or key values.','FPS = WebView requestAnimationFrame, not physical screen/IME FPS.','Active frames: within 240 ms of observed editor input or Luba layout action. Native IME Shift is not observable. Fixture: Core V2 plain-text model, not DOM.',`Build=${String(window.LUBANOTE_VERSION||'?')} date=${new Date().toISOString()}`,`Fixture=${baseInfo?.chars} chars / ${baseInfo?.blocks} blocks, layout=${baseInfo?.layout}, screen=${baseInfo?.width}x${baseInfo?.height}, DPR=${baseInfo?.dpr}`];
+    const lines=['LUBANOTE KEYBOARD A/B/C / 699D-W · 40 INPUTS','READ-ONLY measurements; manual typing only in test note; no content, IDs or key values.','FPS = WebView requestAnimationFrame, not physical screen/IME FPS.','Active frames: within 240 ms of observed editor input or Luba layout action. Native IME Shift is not observable. Fixture: Core V2 plain-text model, not DOM.',`Build=${String(window.LUBANOTE_VERSION||'?')} date=${new Date().toISOString()}`,`Fixture=${baseInfo?.chars} chars / ${baseInfo?.blocks} blocks, layout=${baseInfo?.layout}, screen=${baseInfo?.width}x${baseInfo?.height}, DPR=${baseInfo?.dpr}`];
     for(const r of results.filter(Boolean)){
       lines.push(`\n${r.p.group.toUpperCase()} / ${r.p.kind} · prediction=${r.p.prediction} | ${r.quality} | ${r.issues.join('; ')||'-'}`,`WINDOW=${fmt(r.coverage,0)}ms rAF=${fmt(r.all.fps)} FPS frames=${r.all.n} p95=${fmt(r.all.p95)}ms max=${fmt(r.all.max)}ms`, `ACTIVE=${fmt(r.act.fps)} FPS frames=${r.act.n} p95=${fmt(r.act.p95)}ms max=${fmt(r.act.max)}ms`, `chars=${r.before}->${r.after} (delta ${r.delta}) model=${JSON.stringify(r.inputs)} nativeBeforeInput=${JSON.stringify(r.native)}`,`longtasks=${r.long.supported?r.long.n:'N/A'} max=${fmt(r.long.max)}ms viewport=${fmt(r.viewport,0)} editorHeight=${r.editorHeight} windowHeight=${r.height}`);
       if(isEdit(r.p))lines.push(`TARGET=${r.matched}/${TARGET} stop=${r.stopReason} extra=${r.lateInputs} blocked=${r.blockedAfterTarget} tailClipped=${r.tailClipped} fixtureExact=${r.integrity} fixtureBeforeMatches=${r.fixtureMatches} unexpected=${r.unexpected} | ACTIVE 1–20=${fmt(r.early.fps)} FPS (n=${r.early.n}, p95=${fmt(r.early.p95)}ms) | ACTIVE 21–40=${fmt(r.late.fps)} FPS (n=${r.late.n}, p95=${fmt(r.late.p95)}ms)`);
@@ -1404,7 +1405,7 @@
   window.addEventListener('lubanote:keyboard-source-change',()=>{lockedStep=null;if(run)abortStep('Během měření se změnil zdroj klávesnice.');});
   window.LubaNoteKeyboardCompare699DQ={
     blockLubaAction,
-    get running(){return running;},get predictionDisabled(){return Boolean(run?.p.prediction==='off'&&sameEditor()&&K()?.ziskejZdroj?.()==='luba'&&K()?.ziskejCilPsani?.()==='body');},get active(){return Boolean(run?.t0&&run.p.source==='luba');},
+    get running(){return running;},get predictionDisabled(){return Boolean(run?.p.prediction==='off'&&sameEditor()&&K()?.ziskejZdroj?.()==='luba');},get active(){return Boolean(run?.t0&&run.p.source==='luba');},
     begin(name){const s=run;if(!s?.t0||s.p.source!=='luba')return null;return {s,name,t:now()};},
     end(x){if(!x||run!==x.s)return;const a=x.s.timings[x.name]||(x.s.timings[x.name]=[]);if(a.length<2000)a.push({t:x.t,ms:now()-x.t});},
     wantCore(typ){return Boolean(run?.t0&&run.p.source==='luba'&&['text','space','backspace'].includes(typ));},
