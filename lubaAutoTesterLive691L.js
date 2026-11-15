@@ -32,7 +32,23 @@ function restoreFixtureView(){
  filtrTajnychPoznamekAktivni=before.secret;
  window.renderTasks?.();
 }
-const type=async v=>{const el=input();el.dispatchEvent(new KeyboardEvent('keydown',{key:'a',bubbles:true}));el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));await wait(160)};
+// 699D-AJ: wait for the exact scheduled UI render, not a fixed 160 ms.
+// No direct render, no forced flush, no polling for expected PASS content.
+const type=async (v,alive)=>{
+ const state=window.LubaNoteSearch?.stavPrekresleni;
+ check(typeof state==='function','search_render_completion_api_missing');
+ const before=state().requested,el=input();
+ el.dispatchEvent(new KeyboardEvent('keydown',{key:'a',bubbles:true}));el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));
+ const expected=state().requested;check(expected>before,'search_render_not_scheduled');
+ const deadline=performance.now()+5000;
+ while(performance.now()<deadline){
+  check(alive(),'beh_prerusen');const s=state();
+  check(s.requested===expected,'search_render_superseded');
+  if(!s.pending&&s.completed===expected)return;
+  await wait(25);
+ }
+ throw Error('search_render_completion_timeout');
+};
 async function run(id,alive=()=>true,progress=()=>{}){
  const rows=[];let broken=false;const original=input()?.value||'';const wasActive=!!window.LubaNoteSearch?.jeAktivniDotaz?.();
  try{
@@ -44,8 +60,8 @@ async function run(id,alive=()=>true,progress=()=>{}){
  const n=note(id);check(n,'chybi_vlastni_LOCAL_Testy_poznamka');check(document.getElementById('taskModal')?.hidden===true,'editor_je_otevren');check(input()&&clear()&&typeof window.renderTasks==='function','chybi_produkcni_hledani');
  let evidence='';
  if(i===0){check(!wasActive&&!original.trim(),'vyhledavani_jiz_pouziva_uzivatel');prepareFixtureView();await refresh();check(cards().some(c=>c.textContent.includes(n.title)),'testovaci_poznamka_neviditelna_ani_v_izolovanem_LOCAL_filtru');evidence='Vlastni LOCAL Testy poznamka je ve skutecnem seznamu po docasnem prepnutí na LOCAL; puvodni filtr se na konci obnovi.'}
- if(i===1){const q=n.title;await type(q);check(window.LubaNoteSearch.jeAktivniDotaz(),'dotaz_nebyl_aktivovan');check(cards().length>0&&cards().every(c=>c.textContent.toLowerCase().includes(q.toLowerCase())),'vysledky_neodpovidaji_textu_nazvu');evidence='Skutecny search.js filtroval vykreslene karty podle textu nazvu, nikoli stitku.'}
- if(i===2){await type('AT691L_NO_MATCH_'+Date.now());check(cards().length===0,'neexistujici_text_nevratil_nula_karet');check(document.getElementById('noSearchResults')?.hidden===false,'nezobrazen_prazdny_vysledek');evidence='Neexistujici text vratil nula karet a produkcni empty-state.'}
+ if(i===1){const q=n.title;await type(q,alive);check(window.LubaNoteSearch.jeAktivniDotaz(),'dotaz_nebyl_aktivovan');check(cards().length>0&&cards().every(c=>c.textContent.toLowerCase().includes(q.toLowerCase())),'vysledky_neodpovidaji_textu_nazvu');evidence='Skutecny search.js filtroval vykreslene karty podle textu nazvu, nikoli stitku.'}
+ if(i===2){await type('AT691L_NO_MATCH_'+Date.now(),alive);check(cards().length===0,'neexistujici_text_nevratil_nula_karet');check(document.getElementById('noSearchResults')?.hidden===false,'nezobrazen_prazdny_vysledek');evidence='Neexistujici text vratil nula karet a produkcni empty-state.'}
  if(i===3){clear().click();await wait(160);check(!window.LubaNoteSearch.jeAktivniDotaz()&&!input().value,'hledani_nebylo_zruseno');check(cards().some(c=>c.textContent.includes(n.title)),'puvodni_seznam_neobnoven');evidence='Skutecny krizik ukoncil hledani a obnovil seznam.'}
  if(i===4){check(!!note(id),'testovaci_poznamka_nebyla_zachovana');evidence='Testovaci LOCAL poznamka zustala ulozena; stitky ani uzivatelska data se nemenila.'}
  rows.push({id:key,name,kind:'REAL_NOTES_TEXT_SEARCH_691L',status:'APP_PASS',ms:Math.round(performance.now()-t),detail:evidence+' Programove udalosti ve skutecnem UI; ne fyzicky prst.'});

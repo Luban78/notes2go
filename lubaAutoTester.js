@@ -32,6 +32,7 @@
         <div class="lat-advanced-inner">
           <button class="lat-main-run lat-advanced-run" type="button" data-lat="run" data-suite="live-perf-691CS">▶ Výkon – živé červené úchyty</button>
           <button class="lat-main-run lat-advanced-run" type="button" data-lat="perf-quick">▶ Rychlý výkon (bez dlouhé regrese)</button>
+          <button type="button" data-lat="search-benchmark-699daj">▶ Výkon hledání · 699D-AJ</button>
           <button class="lat-main-run lat-advanced-run" type="button" data-lat="run" data-suite="editor-sync" aria-label="Spustit jen živé testy Editor a izolované testy synchronizace">▶ Editor + SYNC</button>
           <div class="lat-subrun"><select id="lat-area" aria-label="Vybrat oblast">
             <option value="sync-server">LubaServer – živé RPC (pouze čtení)</option><option value="bullet">Bullet / seznamy (dle nastavení)</option><option value="editor">Editor / Core V2 (dle nastavení)</option><option value="todo">ToDo (dle nastavení)</option><option value="caret">Kurzor / úchyty / mazání (dle nastavení)</option><option value="planner">Planner / opakování (dle nastavení)</option><option value="e2e">E2E poznámky</option>
@@ -171,6 +172,7 @@
   zajistiTesterVDocku();
   function open(){
     if(!isAllowed())return;
+    window.LubaNoteSearchBenchmark699DAJ?.close?.();
     if(!screen){
       screen=document.createElement('section');screen.id='ln-auto-tester';
       screen.hidden=true;screen.setAttribute('role','dialog');screen.setAttribute('aria-modal','true');screen.setAttribute('aria-label','LubaNote AutoTester');
@@ -313,6 +315,11 @@
           }else performanceHistoryNotice='Vymazání výkonové historie se nepodařilo. Nic jiného nebylo změněno.';
           render();return;
         }
+        if(action==='search-benchmark-699daj'){
+          if(running||window.LubaNoteAdminTools?.isAllowed?.()!==true)return;
+          if(window.LubaNoteSearchBenchmark699DAJ?.open?.()){close();}else setStatus('Diagnostika hledání není dostupná.');
+          return;
+        }
         if(action==='perf-quick'){void runQuickPerformance691CE();return;}
         if(action==='run'){void run(btn.dataset.suite);return;}
         if(action==='choose'){openAreaPicker();return;}
@@ -385,6 +392,21 @@
   // NOT a modal dialog. Its old aria-modal=true caused the production
   // selection guard [role=dialog][aria-modal=true] to HIDE OWN caret handles.
   // Revert modal semantics BEFORE returning to the full test screen.
+  // 699D-AJ: theme-generated author !important backgrounds can beat our
+  // playback stylesheet. Override only the playback surface and restore the
+  // previous inline values on every normal exit (also close/stop paths).
+  let playbackTheme699DAJ = null;
+  const playbackProps699DAJ = {'background-color':'transparent','background-image':'none','backdrop-filter':'none','-webkit-backdrop-filter':'none'};
+  function protectPlayback699DAJ(){
+    if(!screen||playbackTheme699DAJ)return;
+    playbackTheme699DAJ=Object.keys(playbackProps699DAJ).map(prop=>[prop,screen.style.getPropertyValue(prop),screen.style.getPropertyPriority(prop)]);
+    for(const [prop,value] of Object.entries(playbackProps699DAJ))screen.style.setProperty(prop,value,'important');
+  }
+  function restorePlayback699DAJ(){
+    if(!screen||!playbackTheme699DAJ)return;
+    for(const [prop,value,priority] of playbackTheme699DAJ){if(value)screen.style.setProperty(prop,value,priority);else screen.style.removeProperty(prop);}
+    playbackTheme699DAJ=null;
+  }
   function minimizeTestScreen(){
     if(!screen||screen.hidden)return;
     screen.removeAttribute('aria-modal');
@@ -393,6 +415,7 @@
     // though .lat-app-playback is meant to be click-through.
     clearTesterScrollOverrides();
     screen.classList.add('lat-app-playback'); // observed by Core V2 UI-overlay guard
+    protectPlayback699DAJ();
     const hud=screen.querySelector('#lat-app-hud');if(hud)hud.hidden=false;
     document.body.classList.remove('lat-open');
   }
@@ -424,6 +447,7 @@
     if(!screen)return;
     screen.setAttribute('aria-modal','true');
     screen.classList.remove('lat-app-playback'); // observed by Core V2 UI-overlay guard
+    restorePlayback699DAJ();
     const hud=screen.querySelector('#lat-app-hud');if(hud)hud.hidden=true;
     if(!screen.hidden)document.body.classList.add('lat-open');
     restoreTesterScroll();
