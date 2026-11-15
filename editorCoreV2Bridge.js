@@ -1639,6 +1639,8 @@
   }
 
   function zajistiV2VolbyToolbaru() {
+    // 699D-AO: pojistka vrstev i pro menu kurzoru bez custom handles.
+    if (!jeDesktopSelection) zajistiV2SelectionScrollHighlightStyl();
     const panelVelikost = document.querySelector("#editorPanelVelikost .editorPanelScroll");
     if (panelVelikost && !panelVelikost.querySelector("[data-ln-v2-zaklad-velikost]")) {
       const button = document.createElement("button");
@@ -2980,6 +2982,16 @@
     }
     body.ln-v2-selection-ui-blocked #selectionMenu[data-ln-v2-owner="1"] {
       display: none !important;
+    }
+    /* 699D-AO: toolbar je uvnitr stacking contextu #taskModal (1000),
+       menu a kapky jsou primo v body. Zvyseni z-indexu samotneho toolbaru
+       proto nepomuze. Po dobu otevreneho formatovaciho panelu utlumime
+       JEN vizualni ovladace vyberu; model, highlight, hidden a vlastnik
+       menu zustavaji beze zmeny. CSS reaguje ihned i na prepnuti panelu. */
+    body:has(#taskModal.editorCoreV2Mode:not([hidden]) :is(.editorToolbarPanel, #textColorPalette):not([hidden], [hidden] *))
+      :is(#selectionMenu[data-ln-v2-owner="1"], .ln-v2-selection-handle-custom) {
+      visibility: hidden !important;
+      pointer-events: none !important;
     }
     /* 677D – magnifier je jediný aktivní drag UI. Panel se nesmí objevit
        ani na jediný frame přes selectionchange/reposition hook. */
