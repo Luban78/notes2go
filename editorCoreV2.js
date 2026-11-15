@@ -4235,7 +4235,9 @@
       if (!editor.contains(range.startContainer) || !editor.contains(range.endContainer)) return false;
       const zacatek = domBodNaModel(range.startContainer, range.startOffset);
       const konec = domBodNaModel(range.endContainer, range.endOffset);
-      if (!zacatek || !konec) return false;
+      if (!zacatek || !konec || porovnejPozice(zacatek, konec) >= 0 ||
+          !jeTextovyBlok(dokument.bloky[zacatek.blok]) ||
+          !jeTextovyBlok(dokument.bloky[konec.blok])) return false;
 
       posledniPozice = { ...konec };
       posledniVyber = {
@@ -4308,14 +4310,29 @@
     const texty = [];
     for (let index = vyber.zacatek.blok; index <= vyber.konec.blok; index += 1) {
       const blok = dokument.bloky[index];
-      if (!jeTextovyBlok(blok)) continue;
+      if (!jeTextovyBlok(blok)) {
+        // 699D-AN: text-only clipboard keeps the same line separators as
+        // textVeVyberu, without copying media or attachment identifiers.
+        bloky.push({ typ: "odstavec", zarovnani: "left", obsah: [vytvorSegment("")] });
+        texty.push("");
+        continue;
+      }
 
       const delka = textBloku(blok).length;
       const od = index === vyber.zacatek.blok ? vyber.zacatek.offset : 0;
       const doPozice = index === vyber.konec.blok ? vyber.konec.offset : delka;
       const obsah = vyrezObsahuBloku(blok, od, doPozice);
       const jeMezilehly = index > vyber.zacatek.blok && index < vyber.konec.blok;
-      if (!obsah.length && !jeMezilehly && doPozice <= od) continue;
+      if (!obsah.length && !jeMezilehly && doPozice <= od) {
+        // A selection ending at offset 0 (or beginning at the end of a row)
+        // includes a newline but no characters of this boundary block.
+        // Preserve the separator, not a phantom TODO/list item.
+        if (vyber.zacatek.blok !== vyber.konec.blok) {
+          bloky.push({ typ: "odstavec", zarovnani: "left", obsah: [vytvorSegment("")] });
+          texty.push("");
+        }
+        continue;
+      }
 
       const kopie = klonDat(blok);
       /* Fragment je zatím jen clipboard payload; skutečné nové ID dostane až při vložení. */

@@ -900,6 +900,13 @@
     return true;
   }
 
+  // 699D-AN: clipboard implementations may represent line endings as CRLF.
+  // Do not trim or ignore whitespace; identical plaintext still gates rich paste.
+  function stejnyV2TextSchranky(a, b) {
+    return typeof a === "string" && typeof b === "string" &&
+      a.replace(/\r\n/g, "\n") === b.replace(/\r\n/g, "\n");
+  }
+
   async function zapisV2DoSchranky(text) {
     const hodnota = String(text || "");
     if (!hodnota) return false;
@@ -1049,10 +1056,13 @@
       }
 
       if (button === selectionKopirovat) {
+        if (v2SelectionScroll?.range && !ulozV2VizualniRangeDoCore(v2SelectionScroll.range)) {
+          zrusV2SelectionScrollStav(); skryjV2SelectionMenu(); return;
+        }
         const text = core()?.ziskejTextVyberuProSelectionMenu?.() || "";
         const rich = core()?.ziskejRichVyberProSelectionMenu?.() || null;
         if (text && await zapisV2DoSchranky(text)) {
-          v2RichSchranka = rich?.text === text ? rich : null;
+          v2RichSchranka = stejnyV2TextSchranky(rich?.text, text) ? rich : null;
           core()?.sklapniVyberNaKonecProSelectionMenu?.();
         }
         zrusV2SelectionScrollStav();
@@ -1061,11 +1071,14 @@
       }
 
       if (button === selectionVyjmout) {
+        if (v2SelectionScroll?.range && !ulozV2VizualniRangeDoCore(v2SelectionScroll.range)) {
+          zrusV2SelectionScrollStav(); skryjV2SelectionMenu(); return;
+        }
         const text = core()?.ziskejTextVyberuProSelectionMenu?.() || "";
         const rich = core()?.ziskejRichVyberProSelectionMenu?.() || null;
         if (!text) return;
         await zapisV2DoSchranky(text);
-        v2RichSchranka = rich?.text === text ? rich : null;
+        v2RichSchranka = stejnyV2TextSchranky(rich?.text, text) ? rich : null;
         core()?.vyjmiVyberProSelectionMenu?.();
         zrusV2SelectionScrollStav();
         skryjV2SelectionMenu();
@@ -1080,7 +1093,7 @@
         if (text || html) {
           const vlozenoRich = Boolean(
             text
-            && v2RichSchranka?.text === text
+            && stejnyV2TextSchranky(v2RichSchranka?.text, text)
             && core()?.vlozRichVyberProSelectionMenu?.(v2RichSchranka)
           );
           if (!vlozenoRich) {
@@ -1723,6 +1736,9 @@
 
   function deaktivuj() {
     if (!aktivni) return;
+    v2ZacatekDotykuDvojtap = null;
+    v2PrimyDruhyTap = null;
+    v2PosledniTapSelection = null;
     zrusV2SelectionScrollStav();
     skryjV2SelectionMenu();
     core()?.zavriVHostu?.();
@@ -2818,7 +2834,8 @@
     if (jeDesktopSelection || !aktivni || selectionMenu.dataset.lnV2Owner !== "1") return;
     const button = event.target.closest?.("button");
     if (!button || !selectionMenu.contains(button)) return;
-    core()?.zachytAktualniVyber?.();
+    if (v2SelectionScroll?.range) ulozV2VizualniRangeDoCore(v2SelectionScroll.range);
+    else core()?.zachytAktualniVyber?.();
     event.preventDefault();
   }, true);
 
@@ -3107,15 +3124,22 @@
     if (uzel.nodeType !== Node.ELEMENT_NODE) return null;
     const deti = Array.from(uzel.childNodes || []);
     const index = Math.max(0, Math.min(deti.length, Number(offset) || 0));
+    const editor = uzel.closest?.(".ln-v2-editor");
+    // The *editor itself* is contenteditable=false with LubaKeyboard. Only
+    // actual nested non-text controls are excluded, not all of its text.
+    const mimoText = (el) => {
+      const zakazany = el?.closest?.('button, figure, svg, [contenteditable="false"]');
+      return Boolean(zakazany && zakazany !== editor);
+    };
     const najdiText = (koren, odKonce) => {
-      if (!koren || koren.nodeType === Node.ELEMENT_NODE && koren.matches?.('button, figure, svg, [contenteditable="false"]')) return null;
+      if (!koren || mimoText(koren.nodeType === Node.TEXT_NODE ? koren.parentElement : koren)) return null;
       if (koren.nodeType === Node.TEXT_NODE) return koren.nodeValue?.length ? koren : null;
       const walker = document.createTreeWalker(koren, NodeFilter.SHOW_TEXT);
       let prvni = null;
       let posledni = null;
       let node;
       while ((node = walker.nextNode())) {
-        if (!node.nodeValue?.length || node.parentElement?.closest?.('button, figure, svg, [contenteditable="false"]')) continue;
+        if (!node.nodeValue?.length || mimoText(node.parentElement)) continue;
         if (!prvni) prvni = node;
         posledni = node;
         if (!odKonce) break;
@@ -3153,7 +3177,7 @@
       caret.collapse(true);
       const rects = Array.from(caret.getClientRects?.() || []);
       const rect = rects.find((r) => Number.isFinite(r.left) && Number.isFinite(r.bottom) && r.height > 0);
-      if (rect) return { x: rect.left, y: rect.bottom };
+      if (rect) return { x: rect.left, y: rect.bottom, hitY: (rect.top + rect.bottom) / 2 };
 
       /* Fallback pro WebView bez collapsed rectu: pouzijeme jediný znak
          pripojeny k tomuto endpointu, ne obdelnik pres cely code blok. */
@@ -3164,12 +3188,12 @@
         znak.setStart(cilovyUzel, od);
         znak.setEnd(cilovyUzel, od + 1);
         const glyph = Array.from(znak.getClientRects?.() || []).find((r) => r.height > 0);
-        if (glyph) return { x: zacatek ? glyph.left : glyph.right, y: glyph.bottom };
+        if (glyph) return { x: zacatek ? glyph.left : glyph.right, y: glyph.bottom, hitY: (glyph.top + glyph.bottom) / 2 };
       }
       if (cilovyUzel.nodeType === Node.ELEMENT_NODE) {
         const prazdny = cilovyUzel.matches?.('br') ? cilovyUzel : cilovyUzel.querySelector?.(':scope > br');
         const br = prazdny?.getBoundingClientRect?.();
-        if (br?.height > 0) return { x: br.left, y: br.bottom };
+        if (br?.height > 0) return { x: br.left, y: br.bottom, hitY: (br.top + br.bottom) / 2 };
       }
     } catch (_error) {}
     return null;
@@ -3518,9 +3542,12 @@
   }
 
   function vytvorV2HandleDrag(stav, strana, dotyk, pevnyBod) {
-    const bodHandle = ziskejV2SelectionHandleBodProMenu(stav?.range, strana);
+    const bodHandle = ziskejV2SelectionHandleBod(stav?.range, strana);
     const posunX = bodHandle && Number.isFinite(bodHandle.x) ? Number(bodHandle.x) - Number(dotyk.clientX) : 0;
-    const posunY = bodHandle && Number.isFinite(bodHandle.y) ? Number(bodHandle.y) - Number(dotyk.clientY) : 0;
+    // 699D-AN: handle is drawn at the bottom of the glyph, but hit-testing
+    // must use the centre of that line. Otherwise it may pick the next row.
+    const hitY = bodHandle?.hitY ?? bodHandle?.y;
+    const posunY = Number.isFinite(hitY) ? Number(hitY) - Number(dotyk.clientY) : 0;
     const presny = { x: Number(dotyk.clientX) + posunX, y: Number(dotyk.clientY) + posunY };
     return {
       touchId: dotyk.identifier,
@@ -3870,16 +3897,49 @@
     }
   }
 
+  // 699D-AN: caretPositionFromPoint can return the editor root in its
+  // bottom padding, a helper node or a row far away from the actual touch.
+  // The highlight and the model must not accept those as selection endpoints.
+  function domBodV2ProHandle(x, y, editor) {
+    const bod = domBodV2ZBodu(x, y, editor);
+    const el = bod?.node?.nodeType === Node.TEXT_NODE ? bod.node.parentElement : bod?.node;
+    const radek = el?.closest?.(".ln-v2-odstavec[data-ln-v2-blok]");
+    if (radek && editor.contains(radek) && !radek.hidden &&
+        !el.closest("button, figure, svg, img")) {
+      const r = radek.getBoundingClientRect();
+      if (r.height > 0 && y >= r.top - 4 && y <= r.bottom + 4) return bod;
+    }
+
+    // Outside text: keep endpoint on the closest visible text row. Only
+    // this exceptional path walks rows; normal drag/edge-scroll is unchanged.
+    let nej = null;
+    for (const row of editor.querySelectorAll(":scope > .ln-v2-odstavec[data-ln-v2-blok]:not([hidden])")) {
+      const text = ziskejV2TextovyBodProHandle(row, row.childNodes.length, false);
+      if (!text) continue; // do not snap to padding or an unrelated empty row
+      const r = row.getBoundingClientRect();
+      if (!r.height || !r.width) continue;
+      const vzd = Math.max(r.top - y, y - r.bottom, 0);
+      if (!nej || vzd < nej.vzd) nej = { row, r, vzd, text };
+    }
+    if (!nej) return null;
+    if (y > nej.r.bottom) return nej.text;
+    if (y < nej.r.top) return ziskejV2TextovyBodProHandle(nej.row, 0, true);
+    // No valid text endpoint at this point (e.g. media within a row).
+    return null;
+  }
+
   function aktualizujV2HandleRangeZeSouradnic(stav, clientX, clientY, lehkyRezim = false) {
     if (!stav?.handleDrag || !stav.editor) return false;
     const rect = stav.editor.getBoundingClientRect();
     const x = Math.max(rect.left + 2, Math.min(rect.right - 2, Number(clientX)));
     const y = Math.max(rect.top + 2, Math.min(rect.bottom - 2, Number(clientY)));
-    const bod = domBodV2ZBodu(x, y, stav.editor);
+    const bod = domBodV2ProHandle(x, y, stav.editor);
     if (!bod) return false;
-    stav.handleDrag.posledniBod = { node: bod.node, offset: bod.offset };
     const novyRange = rangeV2MeziBody(stav.handleDrag.pevnyBod, bod);
     if (!novyRange) return false;
+    if (!lehkyRezim && !ulozV2VizualniRangeDoCore(novyRange)) return false;
+    stav.handleDrag.posledniBod = { node: bod.node, offset: bod.offset };
+    stav.handleDrag.strana = porovnejV2DomBody(bod, stav.handleDrag.pevnyBod) < 0 ? "start" : "end";
     stav.range = novyRange;
     nastavV2SelectionScrollHighlight(stav.range);
 
@@ -3887,7 +3947,6 @@
        Nevoláme proto každý RAF getClientRects + core-save + jejich přepozicování.
        Tyto drahé kroky provedeme až při ručním pohybu / ukončení dragu. */
     if (!lehkyRezim) {
-      ulozV2VizualniRangeDoCore(stav.range);
       if (stav.handleDrag?.lupaAktivni) skryjV2SelectionHandles();
       else zobrazV2SelectionHandles(stav.range);
     }
@@ -4085,8 +4144,10 @@
       stav.obnovTimer = null;
     }
     try { window.getSelection()?.removeAllRanges?.(); } catch (_error) {}
+    if (!ulozV2VizualniRangeDoCore(stav.range)) {
+      zrusV2SelectionScrollStav(stav); skryjV2SelectionMenu(); return false;
+    }
     nastavV2SelectionScrollHighlight(stav.range);
-    ulozV2VizualniRangeDoCore(stav.range);
     zobrazV2SelectionHandles(stav.range);
     const explicitniStrana = preferovanyKonec === "start" ? "start" : (preferovanyKonec === "end" ? "end" : null);
     const strana = explicitniStrana || (stav.menuKotvaStrana === "start" || stav.menuKotvaStrana === "end" ? stav.menuKotvaStrana : null);
@@ -4155,6 +4216,7 @@
     }
     if (v2SelectionScroll) zrusV2SelectionScrollStav(v2SelectionScroll);
     try { window.getSelection()?.removeAllRanges?.(); } catch (_error) {}
+    if (!ulozV2VizualniRangeDoCore(range)) return false;
     if (!nastavV2SelectionScrollHighlight(range)) return false;
 
     const kopie = range.cloneRange?.() || range;
@@ -4289,8 +4351,13 @@
      krátký tap stejného slova. Neplatí pro šipky, MOVE, obrázky ani odkazy.
      Zabraňuje Androidu vytvořit první modré selection handles. */
   document.addEventListener("touchstart", (event) => {
-    if (!jeAndroidApkSelectionScroll() || !aktivni || event.touches?.length !== 1) return;
+    if (!jeAndroidApkSelectionScroll() || !aktivni) return;
     v2PrimyDruhyTap = null;
+    v2ZacatekDotykuDvojtap = null;
+    if (event.touches?.length !== 1) {
+      v2PosledniTapSelection = null;
+      return;
+    }
     const dotyk = event.touches[0];
     if (jeMediaObrazekPodDotykem(event,dotyk)) {
       v2ZacatekDotykuDvojtap=null;
@@ -4305,14 +4372,15 @@
        odmítne všechny dvojtapy. Vylučujeme pouze skutečné vnořené ovladače. */
     const neTextovyPrvek = cil.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, a[href], input, textarea, select, [contenteditable=false]");
     if (!editor?.contains(cil) || (neTextovyPrvek && neTextovyPrvek !== editor)) {
-      v2ZacatekDotykuDvojtap = null;
+      v2PosledniTapSelection = null;
       return;
     }
     const aktualni = { id: dotyk.identifier, x: dotyk.clientX, y: dotyk.clientY,
-      cas: performance.now(), scroll: Number(editor.scrollTop || 0) };
+      cas: event.timeStamp, scroll: Number(editor.scrollTop || 0), editor };
     const predchozi = v2PosledniTapSelection;
     v2ZacatekDotykuDvojtap = aktualni;
-    if (!predchozi || aktualni.cas - predchozi.cas > 360 ||
+    if (!predchozi || predchozi.editor !== editor ||
+        aktualni.cas - predchozi.cas < 0 || aktualni.cas - predchozi.cas > 360 ||
         Math.hypot(aktualni.x - predchozi.x, aktualni.y - predchozi.y) > 34 ||
         jeV2MoveInterakce(event)) return;
     v2PrimyDruhyTap = aktualni;
@@ -4571,15 +4639,17 @@
       event.preventDefault();
       event.stopPropagation();
       const dragDokoncen = stav.handleDrag;
-      const strana = dragDokoncen.strana;
       const bylMultiscroll = !!dragDokoncen.melMultiscroll;
       zastavV2HandleAutoScroll(stav, "touchend");
       /* PATCH 677 – i finální endpoint používá stejný kalibrovaný hrot jako
          celý drag. Jinak by poslední touchend mohl výběr o znak posunout. */
       const presnyKonec = presneV2DragSouradnice(dragDokoncen, dotyk.clientX, dotyk.clientY);
-      if (!aktualizujV2HandleRangeZeSouradnic(stav, presnyKonec.x, presnyKonec.y, true)) {
+      const pohyb = Math.hypot(dotyk.clientX - dragDokoncen.startTouchX, dotyk.clientY - dragDokoncen.startTouchY);
+      if ((dragDokoncen.lupaAktivni || bylMultiscroll || pohyb >= V2_SELECTION_LUPA_DRAG_PRAH) &&
+          !aktualizujV2HandleRangeZeSouradnic(stav, presnyKonec.x, presnyKonec.y, true)) {
         dragDokoncen.rangeMiss = Number(dragDokoncen.rangeMiss || 0) + 1;
       }
+      const strana = dragDokoncen.strana;
       skryjV2SelectionLupu();
       nastavV2CustomSelectionAktivni(stav.editor, true);
       stav.handleDrag = null;
@@ -4587,7 +4657,9 @@
       stav.touchEnded = true;
       stav.menuKotvaStrana = strana;
       // lehký auto-scroll šetří core/handle layout; při konci vše jednou dorovnáme.
-      ulozV2VizualniRangeDoCore(stav.range);
+      if (!ulozV2VizualniRangeDoCore(stav.range)) {
+        zrusV2SelectionScrollStav(stav); skryjV2SelectionMenu(); return;
+      }
 
       /* 673G24 – pokud aktivní konec skončil schovaný pod LubaKeyboard,
          neposílat panel/úchyty nejdřív do neviditelného místa. Nejdřív celý
@@ -4667,13 +4739,18 @@
   }, { passive: false, capture: true });
 
   document.addEventListener("touchcancel", (event) => {
+    v2ZacatekDotykuDvojtap = null;
+    v2PrimyDruhyTap = null;
+    v2PosledniTapSelection = null;
     const stav = v2SelectionScroll;
     if (!stav) return;
     if (stav.handleDrag) {
       const dragDokoncen = stav.handleDrag;
-      const strana = dragDokoncen.strana;
       zastavV2HandleAutoScroll(stav, "touchcancel");
-      aktualizujV2HandleRangeZeSouradnic(stav, dragDokoncen.lastX, dragDokoncen.lastY, true);
+      if (dragDokoncen.lupaAktivni || dragDokoncen.melMultiscroll) {
+        aktualizujV2HandleRangeZeSouradnic(stav, dragDokoncen.lastX, dragDokoncen.lastY, true);
+      }
+      const strana = dragDokoncen.strana;
       skryjV2SelectionLupu();
       nastavV2CustomSelectionAktivni(stav.editor, true);
       stav.handleDrag = null;
@@ -4789,15 +4866,15 @@
 
     const dotyk = event.changedTouches?.[0];
     if (!dotyk) return;
-    const ted = performance.now();
-    const aktualni = { x: dotyk.clientX, y: dotyk.clientY, cas: ted };
+    const ted = event.timeStamp;
+    const editor = core()?.ziskejEditorElement?.();
+    const aktualni = { x: dotyk.clientX, y: dotyk.clientY, cas: ted, editor };
     const zacatek = v2ZacatekDotykuDvojtap;
     v2ZacatekDotykuDvojtap = null;
     /* Skutečný tap nesmí být scroll ani dlouhé podržení pro MOVE. */
-    const editor = core()?.ziskejEditorElement?.();
     const jeKratkyTap = !jeAndroidApkSelectionScroll() || (
-      !!zacatek && zacatek.id === dotyk.identifier &&
-      ted - zacatek.cas < 320 &&
+      !!zacatek && zacatek.editor === editor && zacatek.id === dotyk.identifier &&
+      ted - zacatek.cas >= 0 && ted - zacatek.cas < 320 &&
       Math.hypot(aktualni.x - zacatek.x, aktualni.y - zacatek.y) < 12 &&
       Math.abs(Number(editor?.scrollTop || 0) - zacatek.scroll) < 3
     );
@@ -4809,8 +4886,14 @@
     }
     const predchozi = v2PosledniTapSelection;
     v2PosledniTapSelection = aktualni;
-    if (!predchozi || ted - predchozi.cas > 360 ||
-        Math.hypot(aktualni.x - predchozi.x, aktualni.y - predchozi.y) > 34) return;
+    // 699D-AN: when touchstart accepted tap #2, use that same decision.
+    // Comparing touchend #2 with touchend #1 could reject an already guarded
+    // second tap (e.g. slow device / longer press within the valid window).
+    const druhyTap = jeAndroidApkSelectionScroll()
+      ? Boolean(primy && primy === zacatek)
+      : Boolean(predchozi && ted - predchozi.cas <= 360 &&
+          Math.hypot(aktualni.x - predchozi.x, aktualni.y - predchozi.y) <= 34);
+    if (!druhyTap) return;
     v2PosledniTapSelection = null;
     zapisV2Stabilitu("DOUBLE_TAP_DETECTED", `x=${Math.round(aktualni.x)} y=${Math.round(aktualni.y)}`);
 
