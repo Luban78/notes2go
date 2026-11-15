@@ -5750,6 +5750,193 @@ async function dokoncitKartuPodleIndexu(index) {
 let casovacOdlozenehoRenderuKaret = null;
 let pocetRenderuKaret696V = 0;
 
+/* 699D-AM – formátovaný, krátký a neinteraktivní náhled karty.
+ * RichContent je zdroj pořadí; pro čisté TODO zůstává zdrojem todos.
+ * Do živého DOM nikdy nevkládáme uložené HTML ani odkazy/obrázky.
+ * Beze změn editoru, úložiště, synchronizace a rozměrů karet. */
+function vykresliFormatovanyNahledKarty699DAM(cil, task) {
+  const html = typeof task.richContent === "string" ? task.richContent : "";
+  const todos = Array.isArray(task.todos) ? task.todos : [];
+  const smiseny = html.includes("data-lubanote-v2-todo");
+  const cisteTodo = todos.length > 0 && !smiseny;
+  // Pro obyčejné textové karty ponecháváme původní rychlou cestu.
+  if (!cisteTodo && (!html || html.length > 192000 ||
+      !/<(?:ul|ol|li|strong|b|em|i|u|s|strike|del|code|font|mark|h[1-6])\b|\b(?:style|data-velikost-pisma|data-lubanote-v2-todo)\s*=|editorNadpis|noteInternalLink/i.test(html))) return false;
+
+  const maxRadku = 12, maxZnaku = 1200, maxUzlu = 300;
+  let pocetRadku = 0, pocetZnaku = 0, pocetUzlu = 0;
+  const vystup = document.createDocumentFragment();
+  let radek = document.createDocumentFragment();
+  const bloky = new Set(["DIV", "P", "SECTION", "ARTICLE", "BLOCKQUOTE", "PRE", "H1", "H2", "H3", "H4", "H5", "H6"]);
+  const inline = new Set(["SPAN", "B", "STRONG", "I", "EM", "U", "S", "STRIKE", "DEL", "CODE", "FONT", "MARK", "A", "SMALL", "SUB", "SUP"]);
+  const hotovo = () => pocetRadku >= maxRadku || pocetZnaku >= maxZnaku || pocetUzlu >= maxUzlu;
+
+  function pridejText(host, value) {
+    if (hotovo()) return;
+    const text = String(value ?? "").replace(/\r\n?/g, "\n").slice(0, maxZnaku - pocetZnaku);
+    if (!text) return;
+    host.appendChild(document.createTextNode(text));
+    pocetZnaku += text.length;
+  }
+  function dalsiRadek() {
+    if (!radek.childNodes.length || pocetRadku >= maxRadku) return;
+    if (pocetRadku) vystup.appendChild(document.createTextNode("\n"));
+    vystup.appendChild(radek);
+    radek = document.createDocumentFragment();
+    pocetRadku++;
+  }
+  function bezpecnaBarva(value) {
+    const barva = String(value || "").trim();
+    return /^(?:#[\da-f]{3,8}|(?:rgba?|hsla?)\([\d.,%+\-\s]+\)|[a-z]{1,24})$/i.test(barva) ? barva : "";
+  }
+  function format(source, cil, tag) {
+    const css = source.style;
+    const nadpis = /^H[1-6]$/.test(tag) || source.classList?.contains("editorNadpis");
+    if (nadpis || tag === "B" || tag === "STRONG" || /^(bold|bolder|[6-9]00)$/i.test(css?.fontWeight || "")) cil.style.fontWeight = "700";
+    if (tag === "I" || tag === "EM" || /^(italic|oblique)$/.test(css?.fontStyle || "")) cil.style.fontStyle = "italic";
+    const dekorace = `${css?.textDecorationLine || ""} ${css?.textDecoration || ""}`;
+    const podtrzene = tag === "U" || /\bunderline\b/.test(dekorace);
+    const preskrtnute = ["S", "STRIKE", "DEL"].includes(tag) || /\bline-through\b/.test(dekorace);
+    if (podtrzene || preskrtnute) cil.style.textDecoration = [podtrzene ? "underline" : "", preskrtnute ? "line-through" : ""].filter(Boolean).join(" ");
+    const barva = bezpecnaBarva(css?.color || (tag === "FONT" ? source.getAttribute("color") : ""));
+    const pozadi = bezpecnaBarva(css?.backgroundColor);
+    if (barva) cil.style.color = barva;
+    if (pozadi) cil.style.backgroundColor = pozadi;
+    if (tag === "CODE" || tag === "PRE") cil.style.fontFamily = "monospace";
+    const px = /^(\d+(?:\.\d+)?)px$/.exec(css?.fontSize || "");
+    // Náhled si drží velikost karty; větší písmo pouze přiměřeně odlišíme.
+    if (px) cil.style.fontSize = `${Math.max(.75, Math.min(1.25, Number(px[1]) / 16))}em`;
+    else if (nadpis) cil.style.fontSize = "1.15em";
+  }
+  function odkazovyText(node) {
+    const text = node.textContent || "";
+    if (!node.classList?.contains("noteInternalLink")) return text;
+    const bezpecny = document.createElement("span");
+    bezpecny.className = "noteInternalLink";
+    bezpecny.dataset.noteId = String(node.dataset.noteId || "");
+    bezpecny.textContent = text;
+    // Stejné pravidlo aktuálního názvu/smazaného cíle jako dosavadní náhled.
+    return window.LubaNoteNoteLinks?.ziskejTextProNahledPoznamky?.({ richContent: bezpecny.outerHTML, note: text }) ?? text;
+  }
+  function inlineUzel(node, host, hloubka = 0) {
+    if (hotovo() || hloubka > 32) return;
+    pocetUzlu++;
+    if (node.nodeType === 3) { pridejText(host, node.nodeValue); return; }
+    if (node.nodeType !== 1) return;
+    const tag = node.tagName;
+    if (tag === "BR") { pridejText(host, "\n"); return; }
+    if (!inline.has(tag) && !bloky.has(tag)) return; // obrázky, skripty, libovolné cizí elementy
+    if (node.dataset?.bulletMediaLine === "true") return;
+    const span = document.createElement("span");
+    format(node, span, tag);
+    if (node.classList?.contains("noteInternalLink")) pridejText(span, odkazovyText(node));
+    else for (const child of node.childNodes) { if (hotovo()) break; inlineUzel(child, span, hloubka + 1); }
+    if (span.childNodes.length) host.appendChild(span);
+  }
+  function znacka(text, uroven = 0, splneno = false) {
+    const span = document.createElement("span");
+    if (uroven) span.style.paddingInlineStart = `${Math.min(uroven, 4) * .7}em`;
+    if (splneno) span.style.opacity = ".8";
+    pridejText(span, text);
+    radek.appendChild(span);
+  }
+  function todoRadek(node, completed, prostyText = "") {
+    dalsiRadek();
+    if (hotovo()) return;
+    znacka(completed ? "● " : "○ ", 0, completed);
+    const span = document.createElement("span");
+    if (completed) { span.style.textDecoration = "line-through"; span.style.opacity = ".8"; }
+    if (node) {
+      for (const child of node.childNodes) { if (hotovo()) break; inlineUzel(child, span); }
+    } else pridejText(span, prostyText);
+    radek.appendChild(span);
+    dalsiRadek();
+  }
+  function seznam(node, uroven = 0) {
+    if (hotovo() || uroven > 16) return;
+    const ordered = node.tagName === "OL";
+    const start = Number(node.getAttribute("start") || 1);
+    let poradi = Number.isSafeInteger(start) ? start : 1;
+    for (const li of node.children) {
+      if (hotovo()) break;
+      if (li.tagName !== "LI") continue;
+      dalsiRadek();
+      if (hotovo()) break;
+      const explicitni = li.getAttribute("value");
+      if (ordered && explicitni !== null && Number.isSafeInteger(Number(explicitni))) poradi = Number(explicitni);
+      znacka(ordered ? `${poradi++}. ` : "• ", uroven);
+      // V náhledu se stejně jako dosud zobrazí i obsah sbalených větví;
+      // pouze jej odlišíme odsazením, bez interaktivních šipek.
+      for (const child of li.childNodes) {
+        if (hotovo()) break;
+        if (child.nodeType === 1 && (child.tagName === "UL" || child.tagName === "OL")) {
+          dalsiRadek(); seznam(child, uroven + 1);
+        } else inlineUzel(child, radek);
+      }
+      dalsiRadek();
+    }
+  }
+  function projdi(node, hloubka = 0) {
+    if (hotovo() || hloubka > 32) return;
+    pocetUzlu++;
+    if (node.nodeType === 3) {
+      if (node.nodeValue?.trim() || radek.childNodes.length) pridejText(radek, node.nodeValue);
+      return;
+    }
+    if (node.nodeType !== 1) return;
+    if (node.hasAttribute("data-lubanote-v2-todo")) {
+      const stav = node.getAttribute("data-completed");
+      const mirror = stav === null ? todos.find(t => String(t?.id) === String(node.dataset.todoId)) : null;
+      todoRadek(node, stav === "true" || (stav === null && mirror?.completed === true));
+      return;
+    }
+    const tag = node.tagName;
+    if (tag === "UL" || tag === "OL") { dalsiRadek(); seznam(node); return; }
+    if (bloky.has(tag)) {
+      if (node.dataset?.bulletMediaLine === "true") return;
+      dalsiRadek();
+      // Běžný Core V2 odstavec s inline segmenty. U historického vnořeného
+      // blokového HTML zachováme pořadí pomocí stejné průchozí cesty.
+      const nested = Array.from(node.children).some(ch => bloky.has(ch.tagName) || ch.tagName === "UL" || ch.tagName === "OL" || ch.hasAttribute("data-lubanote-v2-todo"));
+      if (nested) {
+        for (const child of node.childNodes) { if (hotovo()) break; projdi(child, hloubka + 1); }
+      } else {
+        const span = document.createElement("span");
+        format(node, span, tag);
+        for (const child of node.childNodes) { if (hotovo()) break; inlineUzel(child, span); }
+        if (span.childNodes.length) radek.appendChild(span);
+      }
+      dalsiRadek();
+    } else inlineUzel(node, radek);
+  }
+  try {
+    // Template je inertní: uložené src/href/event atributy se nikdy nepřenášejí.
+    const template = document.createElement("template");
+    if (cisteTodo) {
+      for (const todo of todos.slice(0, 3)) {
+        if (hotovo()) break;
+        const todoHtml = typeof todo?.html === "string" ? todo.html : "";
+        if (todoHtml && todoHtml.length <= 192000) {
+          template.innerHTML = todoHtml;
+          // Prázdné/mediální HTML se použije jako prostý řádek.
+          if (template.content.textContent.trim()) todoRadek(template.content, todo?.completed === true);
+          else todoRadek(null, todo?.completed === true, todo?.text);
+        } else todoRadek(null, todo?.completed === true, todo?.text);
+      }
+    } else {
+      template.innerHTML = html;
+      for (const node of template.content.childNodes) { if (hotovo()) break; projdi(node); }
+      dalsiRadek();
+    }
+    if (!vystup.textContent.trim()) return false;
+    cil.replaceChildren(vystup);
+    return true;
+  } catch (_error) {
+    // Kartu nikdy neshodíme kvůli staršímu/neočekávanému obsahu.
+    return false;
+  }
+}
+
 function renderTasks() {
   /*
    * Během aktivního drag gesta nesmí sync/realtime vyhodit DOM karty
@@ -5970,38 +6157,40 @@ function renderTasks() {
       )
     );
     const loadedNoteText = document.createElement("p");
-
-    const aktualniNahledPoznamky =
-      window.LubaNoteNoteLinks
-        ?.ziskejTextProNahledPoznamky?.(loadedTask);
-
-    loadedNoteText.textContent =
-      aktualniNahledPoznamky ?? loadedTask.note;
     loadedNoteText.classList.add("taskNoteText");
-    
-    const taskTodos = loadedTask.todos || [];
-    const jeV2SmisenaPoznamka =
-      typeof loadedTask.richContent === "string" &&
-      loadedTask.richContent.includes("data-lubanote-v2-todo");
-    
-    /* V2.21 – smíšená poznámka má pořadí Text/Bullet/TODO uložené v
-       richContent. TODO pole je u ní jen kompatibilní zrcadlo pro Planner.
-       Náhled proto nesmí zahodit normální text a ukázat jen checkboxy. */
-    if (taskTodos.length > 0 && !jeV2SmisenaPoznamka) {
-      loadedNoteText.textContent = taskTodos
-        .slice(0, 3)
-        .map(todo => {
-          const aktualniTodoText =
-            window.LubaNoteNoteLinks
-              ?.ziskejTextProNahledTodo?.(todo);
 
-          return `${todo.completed ? "●" : "○"} ${
-            aktualniTodoText ?? todo.text
-          }`;
-        })
-        .join("\n");
+    if (!vykresliFormatovanyNahledKarty699DAM(loadedNoteText, loadedTask)) {
+      const aktualniNahledPoznamky =
+        window.LubaNoteNoteLinks
+          ?.ziskejTextProNahledPoznamky?.(loadedTask);
+
+      loadedNoteText.textContent =
+        aktualniNahledPoznamky ?? loadedTask.note;
+
+      const taskTodos = loadedTask.todos || [];
+      const jeV2SmisenaPoznamka =
+        typeof loadedTask.richContent === "string" &&
+        loadedTask.richContent.includes("data-lubanote-v2-todo");
+
+      /* V2.21 – smíšená poznámka má pořadí Text/Bullet/TODO uložené v
+         richContent. TODO pole je u ní jen kompatibilní zrcadlo pro Planner.
+         Náhled proto nesmí zahodit normální text a ukázat jen checkboxy. */
+      if (taskTodos.length > 0 && !jeV2SmisenaPoznamka) {
+        loadedNoteText.textContent = taskTodos
+          .slice(0, 3)
+          .map(todo => {
+            const aktualniTodoText =
+              window.LubaNoteNoteLinks
+                ?.ziskejTextProNahledTodo?.(todo);
+
+            return `${todo.completed ? "●" : "○"} ${
+              aktualniTodoText ?? todo.text
+            }`;
+          })
+          .join("\n");
+      }
     }
-    
+
     const loadedDateText = document.createElement("p");
     
     
