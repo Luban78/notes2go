@@ -4359,6 +4359,116 @@
     if (vyber?.rangeCount && !vyber.isCollapsed) potlacV2NativeSelection();
   }
 
+  /* 699D-AP – prvni tap z otevrene formatovaci nabidky je pouze navrat.
+     Zachyt na window musi predbehnout Core/Keyboard i G14 tap-collapse.
+     Pointer Events a Touch Events mohou patrit jednomu fyzickemu dotyku;
+     spotrebujeme cely tento dotyk, ne az synteticky click po nem. */
+  if (!jeDesktopSelection) {
+    let gestoNavratu = null;
+    let dozvukNavratu = null;
+    const otevrenyFormat = () => taskModal.querySelector(
+      ":is(.editorToolbarPanel, #textColorPalette):not([hidden], [hidden] *)"
+    );
+    const jeCilNavratu = (event, bod = event) => {
+      if (!aktivni || !otevrenyFormat()) return false;
+      const editor = core()?.ziskejEditorElement?.();
+      const cil = event.target;
+      return !!editor?.contains(cil) &&
+        !cil.closest?.("button, figure, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, a[href], input, textarea, select, [data-v2-list-marker], [data-v2-list-toggle]") &&
+        !jeMediaObrazekPodDotykem(event, bod) && !jeV2SkutecnaSipka(event) &&
+        !v2SelectionScroll?.handleDrag;
+    };
+    const spotrebuj = (event) => {
+      if (event.cancelable) event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    const zacniNavrat = (bod) => ({ x: bod.clientX, y: bod.clientY,
+      pointerId: null, touchId: null, editor: core()?.ziskejEditorElement?.() });
+    const dokonciNavrat = (event, bod, zavrit = true) => {
+      const gesto = gestoNavratu;
+      gestoNavratu = null;
+      dozvukNavratu = { x: bod?.clientX ?? gesto.x, y: bod?.clientY ?? gesto.y,
+        pointerId: gesto.pointerId, do: performance.now() + 500 };
+      spotrebuj(event);
+      if (!zavrit || !aktivni || gesto.editor !== core()?.ziskejEditorElement?.()) return;
+      zavriPanelyFormatu();
+      v2PosledniTapSelection = null;
+      v2ZacatekDotykuDvojtap = null;
+      v2PrimyDruhyTap = null;
+      if (jeV2CustomSelectionRangePlatny(v2SelectionScroll)) {
+        // Existujici modelovy Range, zadny presun caretu podle mista tapu.
+        nastavV2SelectionMenuNuceneSkryti(false);
+        zobrazV2VizualniSelectionPoScrollu(v2SelectionScroll, "toolbar-dismiss");
+      } else if (v2SelectionMenuAktivni && v2SelectionMenuKurzor) {
+        zobrazV2SelectionMenuProKurzor(v2SelectionMenuBod);
+      } else {
+        const vyber = window.getSelection?.();
+        const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+        if (range && !range.collapsed && jeV2SelectionRozsah(range)) {
+          zobrazV2SelectionMenuProOznaceni(range);
+        }
+      }
+    };
+    const capture = { capture: true, passive: false };
+    window.addEventListener("pointerdown", (event) => {
+      dozvukNavratu = null;
+      if (event.isPrimary === false || event.button !== 0) return;
+      if (!jeCilNavratu(event)) { gestoNavratu = null; return; }
+      if (!gestoNavratu || gestoNavratu.touchId === null) gestoNavratu = zacniNavrat(event);
+      gestoNavratu.pointerId = event.pointerId;
+      spotrebuj(event);
+    }, capture);
+    window.addEventListener("touchstart", (event) => {
+      dozvukNavratu = null;
+      const t = event.touches?.[0];
+      if (event.touches?.length !== 1 || !t) {
+        if (gestoNavratu) { spotrebuj(event); }
+        return;
+      }
+      if (!jeCilNavratu(event, t)) { gestoNavratu = null; return; }
+      if (!gestoNavratu) gestoNavratu = zacniNavrat(t);
+      gestoNavratu.touchId = t.identifier;
+      spotrebuj(event);
+    }, capture);
+    window.addEventListener("pointerup", (event) => {
+      if (gestoNavratu && gestoNavratu.pointerId === event.pointerId) {
+        if (gestoNavratu.touchId !== null) spotrebuj(event);
+        else dokonciNavrat(event, event);
+      } else if (dozvukNavratu?.pointerId === event.pointerId && performance.now() < dozvukNavratu.do) {
+        spotrebuj(event);
+      }
+    }, capture);
+    window.addEventListener("pointercancel", (event) => {
+      if (gestoNavratu && gestoNavratu.pointerId === event.pointerId) {
+        if (gestoNavratu.touchId !== null) spotrebuj(event);
+        else dokonciNavrat(event, event, false);
+      }
+    }, capture);
+    window.addEventListener("touchend", (event) => {
+      if (!gestoNavratu || gestoNavratu.touchId === null) return;
+      const t = Array.from(event.changedTouches || []).find(x => x.identifier === gestoNavratu.touchId);
+      if (t) dokonciNavrat(event, t);
+    }, capture);
+    window.addEventListener("touchcancel", (event) => {
+      if (!gestoNavratu || gestoNavratu.touchId === null) return;
+      const t = Array.from(event.changedTouches || []).find(x => x.identifier === gestoNavratu.touchId);
+      if (t) dokonciNavrat(event, t, false);
+    }, capture);
+    window.addEventListener("click", (event) => {
+      const d = dozvukNavratu;
+      if (d && performance.now() < d.do &&
+          Math.hypot(event.clientX - d.x, event.clientY - d.y) < 32) {
+        dozvukNavratu = null;
+        spotrebuj(event);
+        return;
+      }
+      // Fallback pro click bez pointer/touch sekvence (napr. accessibility).
+      if (!jeCilNavratu(event)) return;
+      gestoNavratu = zacniNavrat(event);
+      dokonciNavrat(event, event);
+    }, capture);
+  }
+
   /* 683M – druhý tap v editoru: včasný preventDefault pouze na druhý
      krátký tap stejného slova. Neplatí pro šipky, MOVE, obrázky ani odkazy.
      Zabraňuje Androidu vytvořit první modré selection handles. */
