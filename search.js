@@ -93,13 +93,12 @@ function prekresliVysledkyVyhledavani() {
   aktualizujPrazdnyVysledekVyhledavani();
 }
 
-/* 699AN – 200 ms pro PC (rychle vykreslování), 550 ms pro nativní APK.
- * Při typickém psaní na mobilu je prodleva mezi znaky často přes 200 ms:
- * předchozí časovač spouštěl celý render karet mezi jednotlivými klávesami.
- * Text vstupuje do pole okamžitě, přepočet výsledků běží po pauze.
- * Vždy se ruší předchozí timer; ochrany 699AM zůstávají. */
+/* 699D-AL – po ručním ověření plynulosti LubaKeyboard v APK 0.9.1283
+ * nastavujeme nativní APK na 0 ms (setTimeout(0), nikoli synchronní render).
+ * PC/web zůstává 200 ms. Rušení předchozího timeru a ochrany 699AM
+ * zůstávají beze změny. Diagnostika nadále nabízí všech pět prodlev. */
 const ODLOZENI_HLEDANI_699AN_MS =
-  window.Capacitor?.isNativePlatform?.() === true ? 550 : 200;
+  window.Capacitor?.isNativePlatform?.() === true ? 0 : 200;
 let casovacHledani699AM = null;
 // 699D-AJ: completion handshake for the real UI regression; no query content.
 let pozadavekHledani699DAJ = 0;
