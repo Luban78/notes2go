@@ -128,18 +128,22 @@ function naplanujOdlozeneHledani699AM() {
   const cislo = ++pozadavekHledani699DAJ;
   // Diagnostic override only while its explicit admin panel is open.
   const m = mereniHledani699DAJ && adminMuzeMeritHledani699DAJ()
-    && vyhledavaniAktivovaneUzivatelem ? mereniHledani699DAJ : null;
+    && !document.hidden && vyhledavaniAktivovaneUzivatelem ? mereniHledani699DAJ : null;
   const prodleva = m ? m.delay : ODLOZENI_HLEDANI_699AN_MS;
   const zadano = m ? performance.now() : 0;
+  const epoch = m?.epoch;
+  const group = m?.group(prodleva);
   if (m) {
-    const group = m.group(prodleva);
     group.inputs++;
-    if (nahrazuje && m.pending === cislo - 1) group.superseded++;
+    if (nahrazuje && m.pending === cislo - 1 && m.pendingGroup === group) group.superseded++;
     m.pending = cislo;
+    m.pendingGroup = group;
   }
   casovacHledani699AM = setTimeout(() => {
     casovacHledani699AM = null;
-    const merit = m && mereniHledani699DAJ === m && adminMuzeMeritHledani699DAJ();
+    const merit = m && mereniHledani699DAJ === m && epoch === m.epoch &&
+      !document.hidden && adminMuzeMeritHledani699DAJ();
+    if (m?.pending === cislo) { m.pending = 0; m.pendingGroup = null; }
     const drag = window.LubaNoteCardDrag?.jeAktivni?.() === true;
     const vzorek = merit ? { wait: performance.now() - zadano, filter: 0, calls: 0,
       hits: 0, render: 0, total: 0, cards: 0, frame: null } : null;
@@ -151,11 +155,10 @@ function naplanujOdlozeneHledani699AM() {
       // completed; the regression will time out rather than pass stale DOM.
       if (!drag) dokonceneHledani699DAJ = cislo;
     } catch (error) {
-      if (vzorek) { m.group(prodleva).errors++; m.update(); }
+      if (vzorek) { group.errors++; m.update(); }
       throw error;
     } finally { aktivniVzorekHledani699DAJ = null; }
     if (!vzorek) return;
-    const group = m.group(prodleva);
     if (drag) { group.deferred++; m.update(); return; }
     vzorek.render = performance.now() - start;
     vzorek.total = performance.now() - zadano;
@@ -165,7 +168,7 @@ function naplanujOdlozeneHledani699AM() {
     m.update();
     // Two RAF callbacks bracket a potential paint; not physical display latency.
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (mereniHledani699DAJ !== m || !adminMuzeMeritHledani699DAJ() ||
+      if (mereniHledani699DAJ !== m || epoch !== m.epoch || !adminMuzeMeritHledani699DAJ() ||
           pozadavekHledani699DAJ !== cislo || document.hidden) return;
       vzorek.frame = performance.now() - zadano;
       m.update();
@@ -748,8 +751,9 @@ window.zvyrazniAktualniVyhledavaniVEditoru =
   zvyrazniAktualniVyhledavaniVEditoru;
 
 
-/* 699D-AJ – admin-only, ephemeral search benchmark. Never changes notes,
-   storage, E2E or server; normal delay returns on close. */
+/* 699D-AK – guided/manual and automatic search benchmark, admin only.
+   In-memory measurements; no explicit writes to notes, storage or server.
+   Automated inputs are synthetic; actual keyboard responsiveness is manual. */
 (() => {
   const volby = [0, 100, 200, 350, 550];
   const fmt = v => Number.isFinite(v) ? v.toFixed(1) : 'N/A';
@@ -758,10 +762,133 @@ window.zvyrazniAktualniVyhledavaniVEditoru =
     if (!valid.length) return 'N/A';
     return `${fmt(valid.reduce((a,b)=>a+b,0)/valid.length)}/${fmt(valid[Math.ceil(valid.length*.95)-1])}/${fmt(valid.at(-1))}`;
   }
+  const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+  function groupFor(groups, delay) {
+    if (!groups.has(delay)) groups.set(delay,{inputs:0,superseded:0,deferred:0,errors:0,interrupted:0,samples:[],lag:[],rounds:0});
+    return groups.get(delay);
+  }
+  function invalidate(m) {
+    if (m.pendingGroup && m.pending === pozadavekHledani699DAJ && casovacHledani699AM !== null) {
+      m.pendingGroup.interrupted++;
+    }
+    m.epoch++;
+    m.pending = 0;
+    m.pendingGroup = null;
+  }
+  function owns(run) {
+    return run && run.expected !== null && vyhledavaniAktivovaneUzivatelem && searchNotes.value === run.expected;
+  }
+  function restore(m) {
+    const run = m.restoreRun;
+    if (!run) return;
+    m.restoreRun = null;
+    if (owns(run)) zavriVyhledavaniKrizkem699AM();
+    run.expected = null;
+  }
+  function stopAuto(m, reason, deferRestore = document.hidden) {
+    const run = m.run;
+    if (!run) return;
+    invalidate(m);
+    m.run = null;
+    m.autoState = 'INTERRUPTED';
+    m.delay = ODLOZENI_HLEDANI_699AN_MS;
+    m.notice = reason;
+    if (owns(run)) {
+      zrusOdlozeneHledani699AM(); // only a query created by this diagnostic
+      m.restoreRun = run;
+      if (!deferRestore) restore(m);
+    }
+  }
   function close() {
     const m = mereniHledani699DAJ;
+    if (!m) return;
     mereniHledani699DAJ = null;
-    m?.panel.remove();
+    stopAuto(m, 'Test ukončen.');
+    // For a true unload there is no usable page to restore. If the page is
+    // still visible (e.g. opening another diagnostics panel), restore now.
+    if (!document.hidden) restore(m);
+    m.panel.remove();
+  }
+  function visible(el) {
+    return !!el && !el.hidden && el.getClientRects().length > 0;
+  }
+  function safeScreen() {
+    return !document.hidden && adminMuzeMeritHledani699DAJ() &&
+      visible(searchNotes) && visible(document.getElementById('pinnedCards')) &&
+      !visible(document.getElementById('taskModal')) &&
+      !document.body.classList.contains('secretModeActive') &&
+      ![...document.querySelectorAll('[aria-modal="true"]')].some(visible) &&
+      window.LubaNoteCardDrag?.jeAktivni?.() !== true;
+  }
+  async function runAuto(m) {
+    if (m.run || mereniHledani699DAJ !== m) return;
+    if (!safeScreen() || jeAktivniVyhledavaciDotaz() || searchNotes.value ||
+        jeVyhledavaniRozsirene() || casovacHledani699AM !== null) {
+      m.notice = 'Otevři seznam poznámek, ukonči hledání křížkem a zavři ostatní okna.';
+      m.update(); return;
+    }
+    invalidate(m);
+    m.autoGroups.clear();
+    m.autoState = 'RUNNING';
+    m.notice = '';
+    const run = {expected:null};
+    m.run = run;
+    const order = [ODLOZENI_HLEDANI_699AN_MS, ...volby.filter(v=>v!==ODLOZENI_HLEDANI_699AN_MS)];
+    m.autoOrder = order;
+    const check = () => {
+      if (mereniHledani699DAJ !== m || m.run !== run || !safeScreen()) throw Error('interrupted');
+      if (run.expected === null ? !!searchNotes.value : !owns(run)) throw Error('search_changed');
+    };
+    try {
+      for (const [i,delay] of order.entries()) {
+        check();
+        m.delay = delay;
+        m.progress = `${i+1}/${order.length} · ${delay} ms`;
+        const g = m.group(delay);
+        m.update();
+        // Same two prefixes and target cadence for every delay. No actual
+        // key presses or IME are generated, and no user's query is reused.
+        for (const [word,cadence] of [['práce',180],['termín',300]]) {
+          check();
+          const base = performance.now();
+          for (let n=1;n<=word.length;n++) {
+            const target = base + (n-1)*cadence;
+            if (n>1) await pause(Math.max(0,target-performance.now()));
+            check();
+            g.lag.push(Math.max(0,performance.now()-target));
+            aktivujVyhledavaniUzivatelem();
+            // Do not focus the real input or launch the mobile keyboard.
+            run.expected = word.slice(0,n);
+            searchNotes.value = run.expected;
+            searchNotes.dispatchEvent(new Event('input',{bubbles:true}));
+          }
+          const expected = pozadavekHledani699DAJ;
+          const deadline = performance.now()+8000;
+          do {
+            await pause(50); check();
+            if (pozadavekHledani699DAJ !== expected) throw Error('search_changed');
+            if (performance.now()>deadline) throw Error('render_timeout');
+          } while (casovacHledani699AM !== null || dokonceneHledani699DAJ !== expected);
+          // Allow the existing two-frame proxy to complete before clearing.
+          await pause(100); check();
+          g.rounds++;
+          zavriVyhledavaniKrizkem699AM();
+          run.expected = null;
+          await pause(150); check();
+        }
+      }
+      m.autoState = 'COMPLETE';
+      m.notice = 'Hotovo. Zkopíruj report. Pro ověření klávesnice zkus ještě ruční psaní.';
+      m.run = null;
+      m.delay = ODLOZENI_HLEDANI_699AN_MS;
+      m.update();
+    } catch (error) {
+      if (m.run !== run) return; // Already stopped by a real user action or lifecycle event.
+      stopAuto(m, error?.message === 'render_timeout' ?
+        'Test nedokončen: čekání na vykreslení. Zkopíruj částečný report.' :
+        'Test přerušen. Částečný report zůstal, celý test můžeš spustit znovu.');
+      m.update();
+    }
   }
   function open() {
     if (!adminMuzeMeritHledani699DAJ() || !searchNotes) return false;
@@ -771,27 +898,35 @@ window.zvyrazniAktualniVyhledavaniVEditoru =
     panel.setAttribute('aria-label','Výkon hledání');
     // Keep the diagnostic independently readable under custom themes.
     panel.style.cssText = 'position:fixed;z-index:2147483602;top:100px;right:8px;width:min(310px,calc(100vw - 16px));box-sizing:border-box;max-height:55vh;overflow:auto;padding:9px;border:1px solid #629a83;border-radius:12px;background:#172c24;color:#e5fff0;font:13px/1.3 system-ui;box-shadow:0 4px 16px #0006';
-    panel.innerHTML = `<div data-drag style="touch-action:none;cursor:move;font-weight:700;padding:6px 0">⠿ Výkon hledání · 699D-AJ</div>
-      <div>Prodleva pouze pro toto měření</div><div data-delays style="display:flex;flex-wrap:wrap;gap:4px;margin:6px 0"></div>
-      <small>Používej normální hledání. Stejný dotaz každou variantou, mezi nimi křížek. 0 = nejbližší timer.</small>
+    panel.innerHTML = `<div data-drag style="touch-action:none;cursor:move;font-weight:700;padding:6px 0">⠿ Výkon hledání · 699D-AK</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin:6px 0"><button type="button" data-auto>▶ Spustit celý test</button><button type="button" data-stop disabled>Zastavit</button></div>
+      <small>Automaticky porovná 5 prodlev na skutečných kartách. Během testu nepiš ani neklikej mimo panel.</small>
       <div data-status style="white-space:pre-line;margin:6px 0" role="status"></div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px"><button type="button" data-ram>RAM 100/500/1000</button><button type="button" data-copy>Kopírovat report</button><button type="button" data-close>Zavřít</button></div>`;
+      <div><strong>Ruční ověření klávesnice (volitelné)</strong></div><div data-delays style="display:flex;flex-wrap:wrap;gap:4px;margin:6px 0"></div>
+      <small>Vyber prodlevu, napiš běžný dotaz a ověř plynulost. Před změnou prodlevy ukonči hledání křížkem.</small>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px"><button type="button" data-ram>RAM 100/500/1000</button><button type="button" data-copy>Kopírovat report</button><button type="button" data-close>Zavřít</button></div>`;
     const groups = new Map();
     const buttons = new Map();
     const m = {
-      panel, delay: ODLOZENI_HLEDANI_699AN_MS, groups, pending: 0, ram: [],
-      group(delay) {
-        if (!groups.has(delay)) groups.set(delay,{inputs:0,superseded:0,deferred:0,errors:0,samples:[]});
-        return groups.get(delay);
-      },
+      panel, delay: ODLOZENI_HLEDANI_699AN_MS, groups, autoGroups:new Map(), autoOrder:[],
+      pending: 0, pendingGroup:null, epoch:0, ram: [], run:null, restoreRun:null,
+      autoState:'NOT_RUN', notice:'', progress:'',
+      group(delay) { return groupFor(m.run ? m.autoGroups : groups,delay); },
       update() {
         if (mereniHledani699DAJ !== m) return;
         if (!adminMuzeMeritHledani699DAJ()) { close(); return; }
-        const g = m.group(m.delay), last = g.samples.at(-1);
-        panel.querySelector('[data-status]').textContent = `${m.delay} ms · ${g.samples.length} renderů / ${g.inputs} vstupů` +
+        const g = (m.run ? m.autoGroups : groups).get(m.delay), last = g?.samples.at(-1);
+        panel.querySelector('[data-status]').textContent =
+          (m.run ? `Automatický test ${m.progress}` : `Ruční prodleva: ${m.delay} ms`) +
+          (g ? `\n${g.samples.length} renderů / ${g.inputs} vstupů` : '') +
           (last ? `\nČekání ${fmt(last.wait)} · render ${fmt(last.render)} ms\nCelkem ${fmt(last.total)} ms · ${last.cards} karet` : '') +
-          (m.ram.length ? '\nRAM měření hotovo.' : '');
-        for (const [delay,button] of buttons) button.setAttribute('aria-pressed',String(delay===m.delay));
+          (m.notice ? `\n${m.notice}` : '') + (m.ram.length ? '\nRAM měření hotovo.' : '');
+        for (const [delay,button] of buttons) {
+          button.setAttribute('aria-pressed',String(delay===m.delay));
+          button.disabled = !!m.run;
+        }
+        for (const selector of ['[data-auto]','[data-ram]','[data-copy]']) panel.querySelector(selector).disabled = !!m.run;
+        panel.querySelector('[data-stop]').disabled = !m.run;
       }
     };
     function buttonStyle(button) {
@@ -804,7 +939,8 @@ window.zvyrazniAktualniVyhledavaniVEditoru =
         if (casovacHledani699AM !== null || jeAktivniVyhledavaciDotaz()) {
           panel.querySelector('[data-status]').textContent='Nejprve ukonči hledání křížkem.'; return;
         }
-        m.delay=delay;m.update(); });
+        if (m.run) return;
+        m.delay=delay;m.notice='';m.update(); });
       panel.querySelector('[data-delays]').append(button);
     }
     const drag = panel.querySelector('[data-drag]');
@@ -816,6 +952,8 @@ window.zvyrazniAktualniVyhledavaniVEditoru =
     // Keep focus in the real search until a deliberate panel action. Clicking
     // measurement controls must not type into or modify a user's search.
     panel.querySelector('[data-close]').addEventListener('click',close);
+    panel.querySelector('[data-auto]').addEventListener('click',()=>{void runAuto(m);});
+    panel.querySelector('[data-stop]').addEventListener('click',()=>{stopAuto(m,'Test zastaven. Částečný report zůstal.');m.update();});
     panel.querySelector('[data-ram]').addEventListener('click',()=>{
       if (!adminMuzeMeritHledani699DAJ()) return close();
       if (casovacHledani699AM !== null || jeAktivniVyhledavaciDotaz()) {panel.querySelector('[data-status]').textContent='Nejprve ukonči hledání křížkem.';return;}
@@ -830,14 +968,23 @@ window.zvyrazniAktualniVyhledavaniVEditoru =
     });
     panel.querySelector('[data-copy]').addEventListener('click',async()=>{
       if (!adminMuzeMeritHledani699DAJ()) return close();
-      const lines=['LUBANOTE SEARCH / 699D-AJ',`build=${window.LUBANOTE_VERSION||'?'} default=${ODLOZENI_HLEDANI_699AN_MS}ms`,
-        'REAL: actual renderTasks calls from manual input; times avg/p95/max ms. Filter time is nested in render; not additive. Frame is a two-rAF proxy, may be missing if superseded. Cards are DOM count. No query, IDs, note content or storage writes.',
-        '0ms = setTimeout(0); input bursts and current filters may differ.'];
-      for(const [delay,g] of [...groups].sort((a,b)=>a[0]-b[0])){
-        const samples=g.samples;lines.push(`DELAY=${delay} inputs=${g.inputs} superseded=${g.superseded} rendered=${samples.length} deferred=${g.deferred} errors=${g.errors}`);
-        for(const name of ['wait','filter','render','total','frame'])lines.push(` ${name}=${stats(samples.map(s=>s[name]))} n=${samples.filter(s=>Number.isFinite(s[name])).length}`);
-        lines.push(` calls=${samples.map(s=>s.calls).join(',')} hits=${samples.map(s=>s.hits).join(',')} cards=${samples.map(s=>s.cards).join(',')}`);
+      if (m.run) return;
+      const lines=['LUBANOTE SEARCH / 699D-AK',`build=${window.LUBANOTE_VERSION||'?'} default=${ODLOZENI_HLEDANI_699AN_MS}ms`,
+        'Actual renderTasks calls; times avg/p95/max ms. Filter is nested in render. Frame is a two-rAF proxy, may be missing. Cards are DOM count. No query, IDs or note content in report.',
+        '0ms = setTimeout(0); current filters/data may change; background measurements are excluded.',
+        `AUTO_STATE=${m.autoState} ORDER=${m.autoOrder.join(',')}`,
+        'AUTO: synthetic DOM input, two bursts (5/6 chars, target 180/300ms). inputLag = scheduler delay proxy, not keyboard latency.'];
+      function appendGroups(mode,map) {
+        for(const [delay,g] of [...map].sort((a,b)=>a[0]-b[0])){
+          const samples=g.samples;lines.push(`${mode} DELAY=${delay} inputs=${g.inputs} superseded=${g.superseded} rendered=${samples.length} deferred=${g.deferred} errors=${g.errors} interrupted=${g.interrupted} rounds=${g.rounds}`);
+          for(const name of ['wait','filter','render','total','frame'])lines.push(` ${name}=${stats(samples.map(s=>s[name]))} n=${samples.filter(s=>Number.isFinite(s[name])).length}`);
+          if(mode==='AUTO')lines.push(` inputLag=${stats(g.lag)} n=${g.lag.length}`);
+          lines.push(` calls=${samples.map(s=>s.calls).join(',')} hits=${samples.map(s=>s.hits).join(',')} cards=${samples.map(s=>s.cards).join(',')}`);
+        }
       }
+      appendGroups('AUTO',m.autoGroups);
+      lines.push('MANUAL: actual input; physical typing experience must be judged by user.');
+      appendGroups('MANUAL',groups);
       lines.push('RAM: synthetic text match only, no cards, no storage. 12 runs per size.');
       for(const r of m.ram)lines.push(`RAM count=${r.count} hits=${r.hits} matchMs=${r.ms}`);
       try{await navigator.clipboard.writeText(lines.join('\n'));panel.querySelector('[data-status]').textContent='Report zkopírován.';}
@@ -846,6 +993,43 @@ window.zvyrazniAktualniVyhledavaniVEditoru =
     mereniHledani699DAJ=m;document.body.append(panel);m.update();return true;
   }
   window.LubaNoteSearchBenchmark699DAJ=Object.freeze({open,close});
-  window.addEventListener('pagehide',close);
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)close();});
+  function suspend() {
+    const m = mereniHledani699DAJ;
+    if (!m) return;
+    m.panel.hidden = true;
+    if (m.run) stopAuto(m,'Test přerušen přechodem na pozadí. Částečný report zůstal.',true);
+    else invalidate(m);
+  }
+  function resume() {
+    const m = mereniHledani699DAJ;
+    if (!m || document.hidden) return;
+    if (!adminMuzeMeritHledani699DAJ()) return close();
+    restore(m);
+    m.panel.hidden = false;
+    // Rotation/resize while backgrounded must not leave the drag handle unreachable.
+    const r = m.panel.getBoundingClientRect();
+    if (r.top > innerHeight-40 || r.left > innerWidth-50 || r.right < 50) {
+      m.panel.style.left='auto';m.panel.style.right='8px';m.panel.style.top='100px';
+    }
+    m.update();
+  }
+  window.addEventListener('pagehide',event=>{if(event.persisted) suspend();else close();});
+  window.addEventListener('pageshow',resume);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)suspend();else resume();});
+  // An actual user action outside the panel interrupts the controlled replay
+  // before it can overwrite the user's search or act on a stale test screen.
+  function userAction(event) {
+    const m = mereniHledani699DAJ;
+    if (!m?.run || !event.isTrusted || m.panel.contains(event.target)) return;
+    stopAuto(m,'Test přerušen tvým ovládáním. Částečný report zůstal.');
+    m.update();
+  }
+  document.addEventListener('pointerdown',userAction,true);
+  document.addEventListener('keydown',userAction,true);
+  searchNotes?.addEventListener('input',event=>{
+    const m=mereniHledani699DAJ;
+    if (!m?.run || (!event.isTrusted && owns(m.run))) return;
+    stopAuto(m,'Test přerušen změnou hledání. Částečný report zůstal.');
+    m.update();
+  },true);
 })();
