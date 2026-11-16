@@ -439,6 +439,29 @@
 
   pripis('APP', 'diagnostika spuštěna');
 
+  /* 699D-AR: PROD i DEV pouzivaji existujici nativni 692X report.
+     Pouze cteni; bez zmeny planovani, prijimacu nebo notifikaci. */
+  async function alarmReport699DAR() {
+    const native = window.Capacitor?.Plugins?.LubaNoteFcmToken;
+    if (typeof native?.getAlarmDiagnostics692X !== 'function') {
+      return 'Alarm diagnostika: nativni 692X neni v teto verzi APK dostupna.';
+    }
+    try {
+      const result = await native.getAlarmDiagnostics692X();
+      const value = result?.report;
+      return typeof value === 'string' && value.startsWith('LUBANOTE ALARM FORENSICS / 692X')
+        ? value.trimEnd()
+        : 'Alarm diagnostika: nativni report je prazdny nebo neplatny.';
+    } catch (_) {
+      return 'Alarm diagnostika: nativni report se nepodarilo nacist.';
+    }
+  }
+
+  async function kompletniReport699DAR() {
+    return report() + '\n--- ANDROID ALARM DIAGNOSTIKA 699D-AR ---\n' +
+      await alarmReport699DAR() + '\n--- KONEC ALARM DIAGNOSTIKY ---';
+  }
+
   function report() {
     const flavour = ['PROD', 'DEV'].includes(window.LUBANOTE_BUILD_FLAVOR)
       ? window.LUBANOTE_BUILD_FLAVOR : 'nezjištěn';
@@ -469,7 +492,7 @@
   let puvodniFocus = null;
 
   async function zkopiruj() {
-    const content = report();
+    const content = await kompletniReport699DAR();
     if (textarea) textarea.value = content;
     let done = false;
     try {
@@ -496,13 +519,15 @@
     try { puvodniFocus?.focus?.({preventScroll:true}); } catch (_) {}
   }
 
-  function otevri() {
+  async function otevri() {
     if (!okno) vytvorOkno();
     puvodniFocus = document.activeElement;
-    textarea.value = report();
+    textarea.value = report() + "\nNacitam diagnostiku alarmu...";
     copyStatus.textContent = '';
     okno.hidden = false;
     okno.querySelector('[data-ln-support-copy]')?.focus();
+    const content = await kompletniReport699DAR();
+    if (okno && !okno.hidden && textarea) textarea.value = content;
   }
 
   function vytvorOkno() {
