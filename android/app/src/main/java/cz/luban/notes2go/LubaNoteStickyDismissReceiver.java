@@ -72,8 +72,12 @@ public class LubaNoteStickyDismissReceiver extends BroadcastReceiver {
 
       NotificationManager spravce =
         (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-      if (spravce != null && LubaNoteStickyPlugin.jeAktivni(context, id)) {
-        spravce.notify(id, builder.build());
+      // 699D-AQ: Serialize the final sticky check/post with native delivery
+      // cleanup so a queued swipe cannot recreate an already resolved alert.
+      synchronized (LubaNoteRemoteAlarm692O.class) {
+        if (spravce != null && LubaNoteStickyPlugin.jeAktivni(context, id)) {
+          spravce.notify(id, builder.build());
+        }
       }
     } catch (Exception ignored) {
       // Selhani obnovy nikdy nesmi shodit systemovy BroadcastReceiver.

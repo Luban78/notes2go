@@ -1930,7 +1930,7 @@ function byloVyrizeneKliknuti699Y(noteId, at, localId = null) {
     vyrizeneKlikyNotifikaci699Y.has(`local:${Number(localId)}`));
 }
 
-function openReminderCenterEntry(entry) {
+function openReminderCenterEntry(entry, options = undefined) {
   if (!entry) {
     return false;
   }
@@ -1959,7 +1959,7 @@ function openReminderCenterEntry(entry) {
   }
 
   try {
-    openReminderQuickMenu(entry);
+    openReminderQuickMenu(entry, options);
   } catch (error) {
     // Závada nepovinného obsahu nesmí opakovaně překreslovat obrazovku.
     console.warn("693F: Otevření odkládacího modalu:", error);
@@ -2080,6 +2080,53 @@ function oznacVyrizenyRemoteToken699Y(token) {
     );
   }
 }
+/* 699D-AQ: Match the actual delivered occurrence, not just its parent note.
+ * A missing snapshot, unknown recurrence or UI failure is NOT proof of expiry. */
+function overRemoteVyskyt699DAQ(noteId, at) {
+  const stejnaMinuta = (value) => {
+    const ms = new Date(value).getTime();
+    return Number.isFinite(ms) && Math.floor(ms / 60000) === Math.floor(at / 60000);
+  };
+  const notes = loadTask();
+  const task = notes.find(n => String(n?.id || '') === noteId);
+  const plans = loadPlannedItems();
+  if (!Array.isArray(notes) || !Array.isArray(plans)) return {reason:'data_unavailable'};
+  const note = getReminderEntry('note', noteId);
+  if (note?.reminder && !note.completed && stejnaMinuta(note.date)) return {entry:note};
+  for (const item of plans) {
+    if (String(item?.sourceNoteId || '') !== noteId || item.completed === true ||
+        !jePlanovanaPripominkaZapnuta(item) || !stejnaMinuta(item.plannedAt)) continue;
+    const entry = getReminderEntry('planned', item.id);
+    if (entry?.reminder && !entry.completed) return {entry};
+    return {reason:'data_unavailable'};
+  }
+  if (note?.reminder && !note.completed && note.sourceType === 'recurring-note') {
+    const rule = task?.repeat;
+    const base = new Date(note.date);
+    const date = new Date(at);
+    const engine = window.LubaNoteRecurring;
+    if (!rule?.startDate || !['daily','weekly','monthly'].includes(rule.type) ||
+        !engine?.jeDatumVOpakovani || !Number.isFinite(base.getTime())) {
+      return {reason:'recurrence_unknown'};
+    }
+    if (engine.jeDatumVOpakovani(date, rule) &&
+        date.getHours() === base.getHours() && date.getMinutes() === base.getMinutes()) {
+      return {entry:note, dateOverride:formatReminderLocalDateTime(date)};
+    }
+  }
+  // Never delete solely because the note is not loaded. Require positive local
+  // evidence (existing changed note or explicit trash), and a settled snapshot.
+  const trash = !task && typeof nactiPoznamkyVKosi === 'function' &&
+    nactiPoznamkyVKosi().some(n => String(n?.id || '') === noteId);
+  const stable = window.LubaNoteSyncStatus?.ziskejStav?.() === 'synced' &&
+    window.LubaNoteRegularNotesStore?.chybiPlnaCacheProSync?.() === false;
+  if (!stable || (!task && !trash) || task?.isSecret === true) return {reason:'data_unavailable'};
+  if (task?.reminder === true && task.completed !== true &&
+      (!note || !Number.isFinite(new Date(note.date).getTime()))) return {reason:'data_unavailable'};
+  return {stale:true, reason:'occurrence_changed'};
+}
+
+let posledniRemoteToken699DAQ = '';
 window.addEventListener('lubanote:remote-reminder-open', (event) => {
   const data = event?.detail || {};
   const noteId = String(data.noteId || '');
@@ -2088,52 +2135,74 @@ window.addEventListener('lubanote:remote-reminder-open', (event) => {
   if (!/^[\w:-]{1,128}$/.test(noteId) || !Number.isSafeInteger(at) || at <= 0 ||
       !/^[\w-]{8,80}$/.test(token) || zpracovavaneRemoteKliky692T.has(token) ||
       uspesneOtevreneRemoteTokeny699Y.has(token)) return;
+  posledniRemoteToken699DAQ = token;
   zpracovavaneRemoteKliky692T.add(token);
-  let attempts = 0;
-  const openWhenReady = async () => {
-    // 699Y: Uspesne vyreseny termin nesmi znovu otevrit modal.
-    // Native pending tap presto ACKneme, aby po dalsim startu necekal.
-    if (byloVyrizeneKliknuti699Y(noteId, at)) {
-      oznacVyrizenyRemoteToken699Y(token);
-      zpracovavaneRemoteKliky692T.delete(token);
-      try {
-        await window.Capacitor?.Plugins?.LubaNoteFcmToken?.ackRemoteOpen?.({token});
-      } catch (_) {}
-      window.LubaNoteStartupDiag?.zapis?.('REM-TAP', '699Y LATE REMOTE TAP SKIPPED');
-      return;
-    }
-    let entry = null;
+  const plugin = window.Capacitor?.Plugins?.LubaNoteFcmToken;
+  let attempts = 0, staleCount = 0;
+  const report = (outcome) => {
+    window.LubaNoteStartupDiag?.zapis?.('REM-TAP', '699D-AQ ' + outcome);
+    try { Promise.resolve(plugin?.reportRemoteTap699DAQ?.({noteId, at:String(at), outcome})).catch(() => {}); } catch (_) {}
+  };
+  const finish = async () => {
+    oznacVyrizenyRemoteToken699Y(token);
+    zpracovavaneRemoteKliky692T.delete(token);
+    try { await plugin?.ackRemoteOpen?.({token}); } catch (_) {}
+  };
+  const clean = async (outcome) => {
+    if (typeof plugin?.resolveRemoteOccurrence699DAQ !== 'function') return false;
     try {
-      const note = getReminderEntry('note', noteId);
-      if (note?.reminder && Math.abs(new Date(note.date).getTime() - at) <= 60000) {
-      entry = note;
-    }
-    if (!entry && typeof loadPlannedItems === 'function') {
-      const match = (loadPlannedItems() || []).find(item =>
-        String(item?.sourceNoteId || '') === noteId &&
-        item?.completed !== true &&
-        Math.abs(new Date(item.plannedAt).getTime() - at) <= 60000);
-      if (match) entry = getReminderEntry('planned', match.id);
-    }
-    // Recurring note occurrences can differ from the note's original date.
-    if (!entry && note?.reminder && note.sourceType === 'recurring-note') entry = note;
-    } catch { /* app data may not be loaded yet */ }
-    let opened = false;
-    try { if (entry) opened = openReminderCenterEntry(entry); } catch { /* retry after UI init */ }
-    if (opened) {
-      remoteQuickMenu692T = {kind: entry.kind, id: entry.id, noteId, at};
-      // 699Y: Smazat jen in-flight, ne historii uspesneho tokenu.
-      // Jinak muze checkRemoteOpen692T po 30 s otevrit stejny modal znovu.
-      oznacVyrizenyRemoteToken699Y(token);
-      try {
-        await window.Capacitor?.Plugins?.LubaNoteFcmToken?.ackRemoteOpen?.({token});
-      } catch { /* still stored in native prefs; same token is idempotent */ }
+      const result = await plugin.resolveRemoteOccurrence699DAQ({noteId, at:String(at), token});
+      if (result?.resolved !== true) return false;
+      report(outcome);
+      await finish();
+      return true;
+    } catch (_) { return false; }
+  };
+  const openWhenReady = async () => {
+    // Native stores one pending tap; an older retry cannot overwrite a new one.
+    if (posledniRemoteToken699DAQ !== token) {
       zpracovavaneRemoteKliky692T.delete(token);
       return;
     }
+    if (byloVyrizeneKliknuti699Y(noteId, at)) {
+      // Web/older APK compatibility: retain the previous duplicate ACK.
+      if (typeof plugin?.resolveRemoteOccurrence699DAQ !== 'function') {
+        report('already_resolved');
+        await finish();
+        return;
+      }
+      if (!await clean('already_resolved')) {
+        report('cleanup_deferred');
+        zpracovavaneRemoteKliky692T.delete(token);
+      }
+      return;
+    }
+    let result = {reason:'data_unavailable'};
+    try { result = overRemoteVyskyt699DAQ(noteId, at); } catch (_) {}
+    const entry = result.entry;
+    staleCount = result.stale ? staleCount + 1 : 0;
+    let opened = false;
+    // A same-note modal may belong to a DIFFERENT occurrence. Never relabel it
+    // while the user is deciding what to do; allow retry after closing it.
+    const occupied = reminderQuickMenu?.hidden === false &&
+      (!remoteQuickMenu692T || remoteQuickMenu692T.noteId !== noteId || remoteQuickMenu692T.at !== at);
+    try {
+      if (entry && !occupied) opened = openReminderCenterEntry(entry,
+        result.dateOverride ? {dateOverride:result.dateOverride} : undefined);
+    } catch (_) {}
+    if (opened) {
+      remoteQuickMenu692T = {kind:entry.kind, id:entry.id, noteId, at};
+      report('opened');
+      await finish();
+      return;
+    }
+    // Require multiple settled observations and the complete existing retry
+    // window; native additionally checks the exact delivered occurrence/token.
     if (++attempts < 100) {
       setTimeout(() => {void openWhenReady();}, 250);
     } else {
+      if (staleCount >= 8 && await clean('stale_removed')) return;
+      report(result.stale ? 'cleanup_deferred' : entry ? 'ui_deferred' : result.reason);
       zpracovavaneRemoteKliky692T.delete(token);
     }
   };
@@ -2773,7 +2842,10 @@ function resolveRemoteAfterSave692T(entry) {
   oznacVyrizeneKliknuti699Y(noteId, at, entry?.notificationId);
   // Never block the existing save/navigation flow on a native UI cleanup.
   try {
-    Promise.resolve(plugin.resolveRemoteAlarm({noteId, at:String(at)})).catch(() => {});
+    const exact = matchingOpen && typeof plugin.resolveRemoteOccurrence699DAQ === 'function';
+    Promise.resolve(exact
+      ? plugin.resolveRemoteOccurrence699DAQ({noteId, at:String(at)})
+      : plugin.resolveRemoteAlarm({noteId, at:String(at)})).catch(() => {});
   } catch { /* notification cleanup must never undo a saved action */ }
 }
 

@@ -677,6 +677,36 @@ final class LubaNoteRemoteAlarm692O {
     catch(Exception ignored) {}
   }
 
+  // 699D-AQ: Exact delivery cleanup only. Never cancel an AlarmManager slot,
+  // change the recurrence, or clear another timestamp within a minute.
+  static synchronized boolean resolveRemoteOccurrence699DAQ(Context ctx,String id,long at) {
+    try {
+      JSONObject records=load(ctx);
+      JSONObject row=records.optJSONObject(id);
+      JSONArray delivered=row==null?null:row.optJSONArray("delivered");
+      if (delivered==null) return false;
+      JSONArray remaining=new JSONArray();
+      boolean found=false;
+      for(int i=0;i<delivered.length();i++) {
+        long t=delivered.optLong(i,0L);
+        if(t==at) found=true; else remaining.put(t);
+      }
+      if(!found) return false;
+      int notificationId=requestId(id,at);
+      NotificationManager manager=(NotificationManager)ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+      if(manager==null) return false;
+      if(!ctx.getSharedPreferences("lubanote_sticky_notifications_683au",Context.MODE_PRIVATE)
+          .edit().remove("n_"+notificationId).commit()) return false;
+      manager.cancel(notificationId);
+      row.put("delivered",remaining);
+      records.put(id,row);
+      if(!ctx.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit()
+          .putString(RECORDS,records.toString()).commit()) return false;
+      diag692X(ctx,"REMOTE_RESOLVE_699DAQ",id,at,"exact_delivery_removed");
+      return true;
+    } catch(Exception ignored) {return false;}
+  }
+
   static synchronized void apply(Context ctx, java.util.Map<String,String> data) {
     final String id=data.get("noteId");
     final String owner=data.get("owner");

@@ -256,6 +256,40 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     call.resolve();
   }
 
+  // 699D-AQ: A stale tap must still be the current pending token. A saved
+  // action may use the exact occurrence without a token (already ACKed).
+  @PluginMethod public void resolveRemoteOccurrence699DAQ(PluginCall call) {
+    String id=call.getString("noteId", "");
+    String token=call.getString("token", "");
+    boolean resolved=false;
+    try {
+      long at=Long.parseLong(call.getString("at", ""));
+      if(at>0L && id.matches("[a-zA-Z0-9_:-]{1,128}")) {
+        SharedPreferences prefs=getContext().getSharedPreferences(LubaNoteRemoteOpen692T.PREF,Context.MODE_PRIVATE);
+        boolean valid=token.isEmpty() || (token.equals(prefs.getString(LubaNoteRemoteOpen692T.TOKEN,"")) &&
+            id.equals(prefs.getString(LubaNoteRemoteOpen692T.NOTE,"")) &&
+            at==prefs.getLong(LubaNoteRemoteOpen692T.AT,0L));
+        if(valid) resolved=LubaNoteRemoteAlarm692O.resolveRemoteOccurrence699DAQ(getContext(),id,at);
+      }
+    } catch(Exception ignored) {}
+    JSObject result=new JSObject();
+    result.put("resolved",resolved);
+    call.resolve(result);
+  }
+
+  @PluginMethod public void reportRemoteTap699DAQ(PluginCall call) {
+    String id=call.getString("noteId", "");
+    String outcome=call.getString("outcome", "");
+    try {
+      long at=Long.parseLong(call.getString("at", ""));
+      if(at>0L && id.matches("[a-zA-Z0-9_:-]{1,128}") &&
+          outcome.matches("opened|already_resolved|stale_removed|cleanup_deferred|ui_deferred|data_unavailable|recurrence_unknown")) {
+        LubaNoteRemoteAlarm692O.diag692X(getContext(),"REMOTE_TAP_RESULT_699DAQ",id,at,outcome);
+      }
+    } catch(Exception ignored) {}
+    call.resolve();
+  }
+
   // 692X: Read-only diagnostic export. No notification or schedule is changed.
   @PluginMethod public void getAlarmDiagnostics692X(PluginCall call) {
     JSObject response=new JSObject();
