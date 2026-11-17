@@ -294,6 +294,21 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
   }
 
   // 692X: Read-only diagnostic export. No notification or schedule is changed.
+  /* 699D-AV: Opt-in system listener, never changes alarm or notification settings. */
+  @PluginMethod public void getNotificationListenerReport699DAV(PluginCall call) {
+    JSObject response=new JSObject();
+    response.put("report",LubaNoteNotificationListener699DAV.report(getContext()));
+    call.resolve(response);
+  }
+
+  @PluginMethod public void openNotificationListenerSettings699DAV(PluginCall call) {
+    try {
+      Intent intent=new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
+      getActivity().startActivity(intent);
+      call.resolve();
+    } catch(Exception error) { call.reject("NOTIFICATION_LISTENER_SETTINGS_UNAVAILABLE"); }
+  }
+
   @PluginMethod public void getAlarmDiagnostics692X(PluginCall call) {
     JSObject response=new JSObject();
     response.put("report",LubaNoteRemoteAlarm692O.diagnosticReport692X(getContext()));

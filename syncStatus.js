@@ -476,11 +476,24 @@
     }
   }
 
+  async function listenerReport699DAV() {
+    const native = window.Capacitor?.Plugins?.LubaNoteFcmToken;
+    if (typeof native?.getNotificationListenerReport699DAV !== 'function') {
+      return 'Systemovy posluchac 699D-AV neni v teto APK dostupny.';
+    }
+    try {
+      const result = await native.getNotificationListenerReport699DAV();
+      return typeof result?.report === 'string' ? result.report.trimEnd() : 'Report neni dostupny.';
+    } catch (_) { return 'Systemovy report nelze precist.'; }
+  }
+
   async function kompletniReport699DAR() {
     return report() + '\n--- ANDROID ALARM DIAGNOSTIKA 699D-AR ---\n' +
       await alarmReport699DAR() + '\n--- KONEC ALARM DIAGNOSTIKY ---' +
       '\n--- ANDROID NOTIFICATION CHANNEL 699D-AT ---\n' +
-      await channelReport699DAT() + '\n--- KONEC NOTIFICATION CHANNEL ---';
+      await channelReport699DAT() + '\n--- KONEC NOTIFICATION CHANNEL ---' +
+      '\n--- ANDROID SYSTEM LISTENER 699D-AV ---\n' +
+      await listenerReport699DAV() + '\n--- KONEC SYSTEM LISTENER ---';
   }
 
   function report() {
@@ -561,6 +574,8 @@
       <button type="button" data-ln-support-close aria-label="Zavřít diagnostiku">×</button></header>
       <p>Technický výpis pro řešení potíží. Bez obsahu poznámek a přihlašovacích údajů. Nikam se automaticky neodesílá.</p>
       <textarea readonly rows="13" aria-label="Technický report LubaNote" spellcheck="false"></textarea>
+      <p>Volitelné: systémový posluchač vyžaduje zvláštní oprávnění Androidu. Android tím umožní aplikaci přístup i k oznámením jiných aplikací; naše diagnostika je nečte ani neukládá. Přístup lze později v nastavení odebrat.</p>
+      <div class="lnSupportActions699DF"><button type="button" data-ln-listener-settings>Zapnout diagnostiku Androidu</button></div>
       <div class="lnSupportActions699DF"><button type="button" data-ln-support-copy>Zkopírovat diagnostiku</button>
       <button type="button" data-ln-support-close>Zavřít</button></div>
       <p class="lnSupportCopyState699DF" role="status" aria-live="polite"></p>
@@ -568,6 +583,15 @@
     document.body.appendChild(okno);
     textarea = okno.querySelector('textarea');
     copyStatus = okno.querySelector('.lnSupportCopyState699DF');
+    okno.querySelector('[data-ln-listener-settings]').addEventListener('click', async () => {
+      const native = window.Capacitor?.Plugins?.LubaNoteFcmToken;
+      if (typeof native?.openNotificationListenerSettings699DAV !== 'function') {
+        copyStatus.textContent = 'Tato APK nema systemovou diagnostiku 699D-AV.';
+        return;
+      }
+      try { await native.openNotificationListenerSettings699DAV(); }
+      catch (_) { copyStatus.textContent = 'Nastaveni posluchace nelze otevrit.'; }
+    });
     okno.querySelector('[data-ln-support-copy]').addEventListener('click', () => {void zkopiruj();});
     okno.querySelectorAll('[data-ln-support-close]').forEach(el => el.addEventListener('click', zavri));
     okno.addEventListener('click', e => {if (e.target === okno) zavri();});
