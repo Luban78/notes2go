@@ -457,9 +457,30 @@
     }
   }
 
+  /* 699D-AT: Read actual Android channel state, without changing it.
+     A missing method means an older APK or browser; keep the report usable. */
+  async function channelReport699DAT() {
+    const native = window.Capacitor?.Plugins?.LubaNoteFcmToken;
+    if (typeof native?.getNotificationChannelDiagnostics699DAT !== 'function') {
+      return 'Notifikacni kanal: nativni diagnostika 699D-AT neni v teto APK dostupna.';
+    }
+    try {
+      const result = await native.getNotificationChannelDiagnostics699DAT();
+      const value = result?.report;
+      return typeof value === 'string' &&
+        value.startsWith('LUBANOTE ANDROID NOTIFICATION CHANNEL / 699D-AT')
+        ? value.trimEnd()
+        : 'Notifikacni kanal: nativni report je prazdny nebo neplatny.';
+    } catch (_) {
+      return 'Notifikacni kanal: nativni report se nepodarilo nacist.';
+    }
+  }
+
   async function kompletniReport699DAR() {
     return report() + '\n--- ANDROID ALARM DIAGNOSTIKA 699D-AR ---\n' +
-      await alarmReport699DAR() + '\n--- KONEC ALARM DIAGNOSTIKY ---';
+      await alarmReport699DAR() + '\n--- KONEC ALARM DIAGNOSTIKY ---' +
+      '\n--- ANDROID NOTIFICATION CHANNEL 699D-AT ---\n' +
+      await channelReport699DAT() + '\n--- KONEC NOTIFICATION CHANNEL ---';
   }
 
   function report() {
@@ -522,7 +543,7 @@
   async function otevri() {
     if (!okno) vytvorOkno();
     puvodniFocus = document.activeElement;
-    textarea.value = report() + "\nNacitam diagnostiku alarmu...";
+    textarea.value = report() + "\nNacitam diagnostiku alarmu a notifikacniho kanalu...";
     copyStatus.textContent = '';
     okno.hidden = false;
     okno.querySelector('[data-ln-support-copy]')?.focus();

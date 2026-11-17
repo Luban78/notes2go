@@ -1,6 +1,9 @@
 package cz.luban.notes2go;
 
 import android.app.AlarmManager;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.media.AudioAttributes;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -294,6 +297,95 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
   @PluginMethod public void getAlarmDiagnostics692X(PluginCall call) {
     JSObject response=new JSObject();
     response.put("report",LubaNoteRemoteAlarm692O.diagnosticReport692X(getContext()));
+    call.resolve(response);
+  }
+
+  /* 699D-AT: Only read Android's EXISTING notification channel. Never create,
+   * delete, reset or update a channel; never schedule/cancel an alarm.
+   * Do not export sound URI, device identifiers or personal notification text. */
+  @PluginMethod public void getNotificationChannelDiagnostics699DAT(PluginCall call) {
+    StringBuilder report = new StringBuilder("LUBANOTE ANDROID NOTIFICATION CHANNEL / 699D-AT\n");
+    report.append("androidApi=").append(Build.VERSION.SDK_INT).append('\n');
+    report.append("channelId=reminders\n");
+    try {
+      NotificationManager manager = (NotificationManager)
+          getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+      if (manager == null) {
+        report.append("notificationManager=unavailable\n");
+      } else {
+        if (Build.VERSION.SDK_INT >= 24) {
+          report.append("appNotificationsEnabled=").append(manager.areNotificationsEnabled()).append('\n');
+        } else {
+          report.append("appNotificationsEnabled=unavailable_pre24\n");
+        }
+        if (Build.VERSION.SDK_INT < 26) {
+          report.append("channel=unsupported_pre26\n");
+        } else {
+          NotificationChannel channel = manager.getNotificationChannel("reminders");
+          if (channel == null) {
+            report.append("channel=not_found\n");
+          } else {
+            report.append("channel=found\n");
+            int importance = channel.getImportance();
+            String importanceLabel = importance == NotificationManager.IMPORTANCE_NONE ? "NONE" :
+                importance == NotificationManager.IMPORTANCE_MIN ? "MIN" :
+                importance == NotificationManager.IMPORTANCE_LOW ? "LOW" :
+                importance == NotificationManager.IMPORTANCE_DEFAULT ? "DEFAULT" :
+                importance == NotificationManager.IMPORTANCE_HIGH ? "HIGH" :
+                importance == NotificationManager.IMPORTANCE_MAX ? "MAX" : "UNKNOWN";
+            report.append("importance=").append(importance).append(" (").append(importanceLabel).append(")\n");
+            Uri sound = channel.getSound();
+            String soundState = sound == null ? "none_silent" :
+                Settings.System.DEFAULT_NOTIFICATION_URI.equals(sound) ? "system_default_notification" :
+                "other_uri_redacted";
+            report.append("sound=").append(soundState).append('\n');
+            AudioAttributes audio = channel.getAudioAttributes();
+            if (audio == null) {
+              report.append("audioUsage=unavailable\naudioContentType=unavailable\n");
+            } else {
+              int usage = audio.getUsage();
+              String usageLabel = usage == AudioAttributes.USAGE_ALARM ? "ALARM" :
+                  usage == AudioAttributes.USAGE_NOTIFICATION ? "NOTIFICATION" :
+                  usage == AudioAttributes.USAGE_NOTIFICATION_EVENT ? "NOTIFICATION_EVENT" :
+                  usage == AudioAttributes.USAGE_NOTIFICATION_RINGTONE ? "RINGTONE" : "OTHER";
+              report.append("audioUsage=").append(usage).append(" (").append(usageLabel).append(")\n");
+              report.append("audioContentType=").append(audio.getContentType()).append('\n');
+            }
+            boolean vibration = channel.shouldVibrate();
+            report.append("vibrationEnabled=").append(vibration).append('\n');
+            long[] pattern = channel.getVibrationPattern();
+            report.append("vibrationPattern=").append(pattern == null ? "default_or_unset" : "defined_redacted")
+                .append('\n');
+            int visibility = channel.getLockscreenVisibility();
+            String visibilityLabel = visibility == 1 ? "PUBLIC" :
+                visibility == 0 ? "PRIVATE" : visibility == -1 ? "SECRET" : "OTHER_OR_UNSET";
+            report.append("lockscreenVisibility=").append(visibility).append(" (")
+                .append(visibilityLabel).append(")\n");
+            report.append("bypassDnd=").append(channel.canBypassDnd()).append('\n');
+            report.append("showBadge=").append(channel.canShowBadge()).append('\n');
+            report.append("lightsEnabled=").append(channel.shouldShowLights()).append('\n');
+            // Source requests are informative; user/OEM settings can override them.
+            report.append("compareJavaImportance4=")
+                .append(importance == NotificationManager.IMPORTANCE_HIGH ? "same" : "different")
+                .append('\n');
+            report.append("compareAppEffectiveHigh=")
+                .append(importance >= NotificationManager.IMPORTANCE_HIGH ? "at_least_high" : "below_high")
+                .append('\n');
+            report.append("compareJsVibrationTrue=")
+                .append(vibration ? "same" : "different").append('\n');
+            report.append("compareJsVisibility1=")
+                .append(visibility == 1 ? "same" : "different").append('\n');
+          }
+        }
+      }
+    } catch (Exception error) {
+      // Read errors should not interrupt the existing diagnostics/clipboard.
+      report.append("readError=").append(error.getClass().getSimpleName()).append('\n');
+    }
+    report.append("sourceRequests=Java:importance4,JS:importance5(OS_caps_apps_at4),vibrationTrue,visibility1\n");
+    report.append("note=Differences_do_not_prove_late_notification_presentation\n");
+    JSObject response = new JSObject();
+    response.put("report", report.toString().trim());
     call.resolve(response);
   }
 
