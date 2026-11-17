@@ -598,7 +598,7 @@
         '',
         ...(entries.length ? entries : ['Žádné záznamy FIRED/POSTED v dostupné historii.']),
         '',
-        'SYSTÉMOVÁ HISTORIE OZNÁMENÍ',
+        'SYSTÉMOVÁ HISTORIE OZNÁMENÍ (posluchač není v této kontrolní APK registrován)',
         listener || 'Nedostupná'
       ].join('\\n');
     } catch (_) { panel.textContent = 'Historii se nepodařilo načíst.'; }

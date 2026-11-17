@@ -19,13 +19,6 @@
     <receiver android:name=".LubaNoteRemoteBootReceiver692O" android:exported="true">
       <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
     </receiver>
-    <!-- 699D-AV: Android enables this listener only after explicit user approval. -->
-    <service android:name=".LubaNoteNotificationListener699DAV"
-      android:label="LubaNote – diagnostika oznámení"
-      android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-      android:exported="true">
-      <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
-    </service>
     <service android:name=".LubaNoteFcmMessagingService" android:exported="false">
       <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
     </service>
