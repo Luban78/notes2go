@@ -309,6 +309,14 @@ public class LubaNoteFcmTokenPlugin extends Plugin {
     } catch(Exception error) { call.reject("NOTIFICATION_LISTENER_SETTINGS_UNAVAILABLE"); }
   }
 
+  // 699D-AW: Read-only history; no scheduling, notification or account changes.
+  @PluginMethod public void getAlarmHistory699DAW(PluginCall call) {
+    JSObject result=new JSObject();
+    result.put("alarms",LubaNoteRemoteAlarm692O.diagnosticReport692X(getContext()));
+    result.put("listener",LubaNoteNotificationListener699DAV.report(getContext()));
+    call.resolve(result);
+  }
+
   @PluginMethod public void getAlarmDiagnostics692X(PluginCall call) {
     JSObject response=new JSObject();
     response.put("report",LubaNoteRemoteAlarm692O.diagnosticReport692X(getContext()));

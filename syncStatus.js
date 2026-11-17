@@ -564,6 +564,46 @@
     if (okno && !okno.hidden && textarea) textarea.value = content;
   }
 
+  async function otevriHistorii699DAW() {
+    const native = window.Capacitor?.Plugins?.LubaNoteFcmToken;
+    const panel = okno?.querySelector('[data-ln-alarm-history]');
+    if (!panel) return;
+    panel.hidden = false;
+    panel.textContent = 'Načítám historii alarmů…';
+    if (typeof native?.getAlarmHistory699DAW !== 'function') {
+      panel.textContent = 'Historie vyžaduje APK s patchem 699D-AW.';
+      return;
+    }
+    try {
+      const data = await native.getAlarmHistory699DAW();
+      const source = String(data?.alarms || '');
+      const listener = String(data?.listener || '');
+      const events = source.split('\\n').filter(line =>
+        /\\| (?:FIRED|POSTED|REMOTE_RECEIVER_FIRED|REMOTE_NOTIFICATION_POSTED) \\|/.test(line));
+      const formatTime = ms => Number.isFinite(ms) && ms > 0
+        ? new Date(ms).toLocaleString('cs-CZ', {hour12:false}) + '.' + String(ms%1000).padStart(3,'0')
+        : 'nezjištěno';
+      const entries = events.map(line => {
+        const time = Number(line.match(/^\\s*(\\d{13})/)?.[1]);
+        const target = Number(line.match(/targetMs=(\\d+)/)?.[1]);
+        const kind = line.match(/\\| (FIRED|POSTED|REMOTE_RECEIVER_FIRED|REMOTE_NOTIFICATION_POSTED) \\|/)?.[1] || '';
+        const lag = target > 0 && time > 0 ? ` (+${time-target} ms)` : '';
+        return `${kind}: plán ${formatTime(target)} | událost ${formatTime(time)}${lag}`;
+      });
+      panel.textContent = [
+        'HISTORIE ALARMŮ 699D-AW (nejnovější dole)',
+        'FIRED = spuštění alarmu; POSTED = předání Androidu.',
+        'RANKING_ALERT = systémový údaj o zvukovém/vibračním upozornění; nemusí být dostupný.',
+        'Fyzické zazvonění reproduktoru není systémovým API přímo měřeno.',
+        '',
+        ...(entries.length ? entries : ['Žádné záznamy FIRED/POSTED v dostupné historii.']),
+        '',
+        'SYSTÉMOVÁ HISTORIE OZNÁMENÍ',
+        listener || 'Nedostupná'
+      ].join('\\n');
+    } catch (_) { panel.textContent = 'Historii se nepodařilo načíst.'; }
+  }
+
   function vytvorOkno() {
     if (okno) return;
     okno = document.createElement('div');
@@ -577,7 +617,9 @@
       <p>Volitelné: systémový posluchač vyžaduje zvláštní oprávnění Androidu. Android tím umožní aplikaci přístup i k oznámením jiných aplikací; naše diagnostika je nečte ani neukládá. Přístup lze později v nastavení odebrat.</p>
       <div class="lnSupportActions699DF"><button type="button" data-ln-listener-settings>Zapnout diagnostiku Androidu</button></div>
       <div class="lnSupportActions699DF"><button type="button" data-ln-support-copy>Zkopírovat diagnostiku</button>
+      <button type="button" data-ln-alarm-history-button>Seznam alarmů</button>
       <button type="button" data-ln-support-close>Zavřít</button></div>
+      <pre data-ln-alarm-history hidden aria-label="Historie alarmů" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:42dvh;overflow:auto;font:12px/1.45 monospace;padding:10px;border:1px solid var(--color-border,#667);border-radius:8px"></pre>
       <p class="lnSupportCopyState699DF" role="status" aria-live="polite"></p>
       </section>`;
     document.body.appendChild(okno);
@@ -592,6 +634,7 @@
       try { await native.openNotificationListenerSettings699DAV(); }
       catch (_) { copyStatus.textContent = 'Nastaveni posluchace nelze otevrit.'; }
     });
+    okno.querySelector('[data-ln-alarm-history-button]').addEventListener('click', () => {void otevriHistorii699DAW();});
     okno.querySelector('[data-ln-support-copy]').addEventListener('click', () => {void zkopiruj();});
     okno.querySelectorAll('[data-ln-support-close]').forEach(el => el.addEventListener('click', zavri));
     okno.addEventListener('click', e => {if (e.target === okno) zavri();});

@@ -111,7 +111,7 @@ final class LubaNoteRemoteAlarm692O {
       SharedPreferences pref=ctx.getSharedPreferences(DIAG_PREF_692X,Context.MODE_PRIVATE);
       JSONArray previous=new JSONArray(pref.getString(DIAG_TRACE_696Z,"[]"));
       JSONArray next=new JSONArray();
-      for(int i=Math.max(0,previous.length()-119);i<previous.length();i++) next.put(previous.opt(i));
+      for(int i=Math.max(0,previous.length()-999);i<previous.length();i++) next.put(previous.opt(i));
       next.put(entry);
       pref.edit().putString(DIAG_TRACE_696Z,next.toString()).commit();
     } catch(Exception ignored) { /* Tracing must NEVER block alarms. */ }

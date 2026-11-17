@@ -26,7 +26,7 @@ public final class LubaNoteNotificationListener699DAV extends NotificationListen
       SharedPreferences prefs=context.getSharedPreferences(PREF,Context.MODE_PRIVATE);
       JSONArray previous=new JSONArray(prefs.getString(ROWS,"[]"));
       JSONArray rows=new JSONArray();
-      for(int i=Math.max(0,previous.length()-79);i<previous.length();i++) rows.put(previous.opt(i));
+      for(int i=Math.max(0,previous.length()-999);i<previous.length();i++) rows.put(previous.opt(i));
       rows.put(System.currentTimeMillis()+" | "+kind+" | notificationId="+id+" | postMs="+post+" | lastAlertMs="+alert);
       prefs.edit().putString(ROWS,rows.toString()).apply();
     } catch(Exception ignored) { }
