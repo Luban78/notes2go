@@ -2,6 +2,7 @@ package cz.luban.notes2go;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.ContentValues;
 import android.content.ClipData;
@@ -10,6 +11,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
+import android.graphics.RectF;
 import android.graphics.pdf.PdfRenderer;
 import android.graphics.pdf.PdfDocument;
 import android.net.Uri;
@@ -49,6 +51,8 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.Locale;
+import java.util.List;
+import org.json.JSONArray;
 
 @CapacitorPlugin(name = "LubaNoteDocument")
 public class LubaNoteDocumentPlugin extends Plugin {
@@ -935,6 +939,9 @@ public class LubaNoteDocumentPlugin extends Plugin {
         odpoved.put("width", cilovaSirka);
         odpoved.put("height", cilovaVyska);
         odpoved.put("pageCount", pdfViewerRenderer.getPageCount());
+        odpoved.put("pdfWidthPoints", zdrojSirka);
+        odpoved.put("pdfHeightPoints", zdrojVyska);
+        odpoved.put("links", ziskejPdfWebOdkazy699DAZ(stranka));
         call.resolve(odpoved);
       } catch (Exception chyba) {
         call.reject(
@@ -950,6 +957,84 @@ public class LubaNoteDocumentPlugin extends Plugin {
           stranka.close();
         }
       }
+    }
+  }
+
+  /* 699D-AZ: Vraci pouze skutecne URL anotace PDF a jejich obdelniky.
+   * Projekt kompiluji proti Android SDK 34; nova API 35+ proto cteme
+   * reflexi pouze na kompatibilnim zarizeni. Na starsim OS se nezmeni nic. */
+  private JSONArray ziskejPdfWebOdkazy699DAZ(PdfRenderer.Page stranka) {
+    JSONArray odkazy = new JSONArray();
+    if (Build.VERSION.SDK_INT < 35) return odkazy;
+
+    try {
+      Object vysledek = PdfRenderer.Page.class
+        .getMethod("getLinkContents").invoke(stranka);
+      if (!(vysledek instanceof List)) return odkazy;
+
+      int pocet = 0;
+      for (Object polozka : (List<?>) vysledek) {
+        if (polozka == null || pocet >= 200) break;
+        Object uriObj = polozka.getClass().getMethod("getUri").invoke(polozka);
+        if (!(uriObj instanceof Uri)) continue;
+        Uri uri = (Uri) uriObj;
+        String schema = uri.getScheme();
+        if (schema == null || uri.getHost() == null ||
+            !("https".equalsIgnoreCase(schema) || "http".equalsIgnoreCase(schema))) {
+          continue;
+        }
+
+        Object obdelnikyObj = polozka.getClass().getMethod("getBounds").invoke(polozka);
+        if (!(obdelnikyObj instanceof List)) continue;
+        JSONArray obdelniky = new JSONArray();
+        for (Object plocha : (List<?>) obdelnikyObj) {
+          if (!(plocha instanceof RectF) || obdelniky.length() >= 40) continue;
+          RectF rect = (RectF) plocha;
+          if (rect.isEmpty()) continue;
+          JSObject misto = new JSObject();
+          misto.put("left", rect.left);
+          misto.put("top", rect.top);
+          misto.put("right", rect.right);
+          misto.put("bottom", rect.bottom);
+          obdelniky.put(misto);
+        }
+        if (obdelniky.length() == 0) continue;
+
+        JSObject odkaz = new JSObject();
+        odkaz.put("url", uri.toString());
+        odkaz.put("rects", obdelniky);
+        odkazy.put(odkaz);
+        pocet += 1;
+      }
+    } catch (Exception | LinkageError ignorovano) {
+      // Stara ci vyrobcem omezena PDF API nesmi pokazit zobrazeni stranky.
+    }
+    return odkazy;
+  }
+
+  @PluginMethod
+  public void otevriPdfWebOdkaz699DAZ(PluginCall call) {
+    String adresa = call.getString("url");
+    if (adresa == null || adresa.length() > 4096) {
+      call.reject("Neplatná adresa PDF odkazu.");
+      return;
+    }
+
+    Uri uri = Uri.parse(adresa);
+    String schema = uri.getScheme();
+    if (schema == null || uri.getHost() == null ||
+        !("https".equalsIgnoreCase(schema) || "http".equalsIgnoreCase(schema))) {
+      call.reject("LubaReader otevře pouze bezpečné webové adresy HTTP/HTTPS.");
+      return;
+    }
+
+    Intent zamer = new Intent(Intent.ACTION_VIEW, uri);
+    zamer.addCategory(Intent.CATEGORY_BROWSABLE);
+    try {
+      getActivity().startActivity(zamer);
+      call.resolve();
+    } catch (ActivityNotFoundException | SecurityException chyba) {
+      call.reject("V telefonu není dostupný prohlížeč pro tento odkaz.", chyba);
     }
   }
 

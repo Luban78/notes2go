@@ -40,6 +40,7 @@
   let pdfViewerUrl = null;
   let pdfViewerRenderToken = 0;
   let pdfViewerPrvky = null;
+  let pdfWebOdkazCasovac699DAZ = null;
 
   const PDF_ZOOM_MIN = 0.5;
   const PDF_ZOOM_MAX = 3;
@@ -255,6 +256,64 @@
     });
   }
 
+  function zrusCekajiciPdfOdkaz699DAZ() {
+    if (pdfWebOdkazCasovac699DAZ !== null) {
+      clearTimeout(pdfWebOdkazCasovac699DAZ);
+      pdfWebOdkazCasovac699DAZ = null;
+    }
+  }
+
+  // Obdelniky odkazu vraci Android v bodech PDF. Dotyk prepocteme podle
+  // aktualniho skutecneho rozmeru obrazku, takze funguje i Fit, zoom a scroll.
+  function najdiPdfWebOdkaz699DAZ(clientX, clientY) {
+    const stav = pdfViewerStav;
+    const obrazek = pdfViewerPrvky?.image;
+    if (!stav?.native || stav.pinch || !obrazek ||
+        !Array.isArray(stav.webOdkazy699DAZ) ||
+        !(stav.pdfWidthPoints699DAZ > 0) || !(stav.pdfHeightPoints699DAZ > 0)) {
+      return null;
+    }
+
+    const rect = obrazek.getBoundingClientRect();
+    if (!(rect.width > 0) || !(rect.height > 0) ||
+        clientX < rect.left || clientX > rect.right ||
+        clientY < rect.top || clientY > rect.bottom) {
+      return null;
+    }
+
+    const x = (clientX - rect.left) * stav.pdfWidthPoints699DAZ / rect.width;
+    const y = (clientY - rect.top) * stav.pdfHeightPoints699DAZ / rect.height;
+    const toleranceX = 4 * stav.pdfWidthPoints699DAZ / rect.width;
+    const toleranceY = 4 * stav.pdfHeightPoints699DAZ / rect.height;
+
+    for (const odkaz of stav.webOdkazy699DAZ) {
+      if (typeof odkaz?.url !== 'string' ||
+          !/^https?:\/\//i.test(odkaz.url) || !Array.isArray(odkaz.rects)) continue;
+      for (const oblast of odkaz.rects) {
+        if (x >= Number(oblast.left) - toleranceX &&
+            x <= Number(oblast.right) + toleranceX &&
+            y >= Number(oblast.top) - toleranceY &&
+            y <= Number(oblast.bottom) + toleranceY) {
+          return odkaz.url;
+        }
+      }
+    }
+    return null;
+  }
+
+  async function otevriPdfWebOdkaz699DAZ(url) {
+    try {
+      const plugin = ziskejNativniPlugin();
+      if (typeof plugin?.otevriPdfWebOdkaz699DAZ !== 'function') {
+        throw new Error('APK nemá podporu otevírání PDF odkazů 699D-AZ.');
+      }
+      await plugin.otevriPdfWebOdkaz699DAZ({ url });
+    } catch (error) {
+      console.error('Otevření odkazu z PDF selhalo:', error);
+      zobrazChybu('PDF', editorDocT('pdf.linkOpenFailed', 'Odkaz z PDF se nepodařilo otevřít.'));
+    }
+  }
+
   function zajistiPdfViewer() {
     if (pdfViewerPrvky) {
       return pdfViewerPrvky;
@@ -420,6 +479,7 @@
         };
 
         pdfViewerStav.posledniTap = null;
+        zrusCekajiciPdfOdkaz699DAZ();
         pdfViewerStav.blokujTapDo = performance.now() + 500;
         prvky.native.classList.add("is-pinching");
       },
@@ -610,6 +670,8 @@
         return;
       }
 
+      zrusCekajiciPdfOdkaz699DAZ();
+
       pointerTap = {
         id: event.pointerId,
         x: event.clientX,
@@ -664,16 +726,33 @@
 
       if (jeDvojtap) {
         pdfViewerStav.posledniTap = null;
+        zrusCekajiciPdfOdkaz699DAZ();
 
         if (nactiPdfNastaveni().dvojtapFullscreen) {
           nastavPdfFullscreen(!pdfViewerStav.fullscreen);
         }
       } else {
-        pdfViewerStav.posledniTap = {
+        const tentoTap = {
           x: event.clientX,
           y: event.clientY,
           cas: ted
         };
+        pdfViewerStav.posledniTap = tentoTap;
+
+        const url = najdiPdfWebOdkaz699DAZ(event.clientX, event.clientY);
+        if (url) {
+          // Nechat 360 ms na druhy tap, aby klik neprebil fullscreen gesto.
+          const stavPriTapnuti = pdfViewerStav;
+          pdfWebOdkazCasovac699DAZ = setTimeout(() => {
+            pdfWebOdkazCasovac699DAZ = null;
+            if (pdfViewerStav === stavPriTapnuti &&
+                pdfViewerStav?.posledniTap === tentoTap &&
+                !pdfViewerStav.pinch) {
+              pdfViewerStav.posledniTap = null;
+              void otevriPdfWebOdkaz699DAZ(url);
+            }
+          }, 380);
+        }
       }
 
       pointerTap = null;
@@ -764,6 +843,8 @@
     }
 
     const token = ++pdfViewerRenderToken;
+    zrusCekajiciPdfOdkaz699DAZ();
+    pdfViewerStav.webOdkazy699DAZ = [];
     const viewportWidth = ziskejPdfViewportWidth();
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     const targetWidth = Math.min(2600, Math.max(520,
@@ -800,6 +881,11 @@
       `${Math.round(viewportWidth * pdfViewerStav.zoom)}px`;
 
     await pockejNaNacteniPdfObrazku();
+    if (token !== pdfViewerRenderToken || !pdfViewerStav?.native) return;
+    pdfViewerStav.pdfWidthPoints699DAZ = Number(vysledek.pdfWidthPoints) || 0;
+    pdfViewerStav.pdfHeightPoints699DAZ = Number(vysledek.pdfHeightPoints) || 0;
+    pdfViewerStav.webOdkazy699DAZ = Array.isArray(vysledek.links)
+      ? vysledek.links : [];
     aktualizujPdfVycentrovani();
 
     if (zobrazitNacitani) {
@@ -1583,6 +1669,9 @@
         pinch: null,
         posledniTap: null,
         blokujTapDo: 0,
+        webOdkazy699DAZ: [],
+        pdfWidthPoints699DAZ: 0,
+        pdfHeightPoints699DAZ: 0,
         nazevSouboru: soubor.nazevSouboru || "dokument.pdf",
         exportPreview: soubor.exportPreview === true,
         navratNaPdfExport: soubor.navratNaPdfExport === true
@@ -1625,6 +1714,7 @@
   }
 
   async function zavriPdfViewer() {
+    zrusCekajiciPdfOdkaz699DAZ();
     if (!pdfViewerPrvky || !pdfViewerStav) {
       return false;
     }
