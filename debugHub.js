@@ -2901,6 +2901,32 @@ async function zkopirujNavrat685G(tlacitko) {
   setTimeout(() => { tlacitko.textContent = puvodni; }, 1500);
 }
 
+/* 699D-BG – Krátký diagnostický report jediného caretu. Čteme pouze
+ * výsledky CARET-BF z existujícího bufferu; žádné síťové/sync záznamy,
+ * obsah poznámek, IDs ani zdroje obrázků se nekopírují. */
+async function zkopirujVykonCaretu699DBG(tlacitko) {
+  const puvodni = tlacitko.textContent;
+  const vsechny = window.LubaNoteStartupDiag?.radky?.() || [];
+  const mereni = vsechny.filter((radek) => /\|\s*CARET-BF\s*\|/.test(String(radek)));
+  if (!mereni.length) {
+    tlacitko.textContent = "Zatím žádné měření – přesuň a pusť caret";
+    setTimeout(() => { tlacitko.textContent = puvodni; }, 2500);
+    return;
+  }
+
+  const report = [
+    "LUBANOTE 699D-BG – MĚŘENÍ VÝKONU CARETU",
+    `build: ${window.LUBANOTE_VERSION || "DEV"}`,
+    `čas: ${new Date().toISOString()}`,
+    `počet výsledků: ${mereni.length} (posledních ${Math.min(mereni.length, 6)})`,
+    ...mereni.slice(-6)
+  ].join("\n");
+  let ok = false;
+  try { ok = await zkopirujTextRobustne(report); } catch (_error) { ok = false; }
+  tlacitko.textContent = ok ? "Měření caretu zkopírováno ✓" : "Kopírování selhalo";
+  setTimeout(() => { tlacitko.textContent = puvodni; }, 1800);
+}
+
 
 
   function vytvorHub() {
@@ -2944,6 +2970,7 @@ async function zkopirujNavrat685G(tlacitko) {
       <pre class="ln-dh-log">Diagnostika zatím neběží.</pre>
 
       <div class="ln-dh-footer">
+        <button type="button" class="ln-dh-copy" data-dh="copy-caret-699DBG" style="grid-column:1/-1">Kopírovat měření caretu</button>
         <!-- Primary SYNC + reminders report is attached on demand by 691BA. -->
         <details class="ln-dh-report-extras">
           <summary>Další reporty a nástroje</summary>
@@ -3119,6 +3146,10 @@ async function zkopirujNavrat685G(tlacitko) {
       }
       if (akce === "copy-resume") {
         zkopirujNavrat685G(tlacitko);
+        return;
+      }
+      if (akce === "copy-caret-699DBG") {
+        void zkopirujVykonCaretu699DBG(tlacitko);
         return;
       }
 

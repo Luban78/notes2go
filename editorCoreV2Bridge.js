@@ -4952,6 +4952,12 @@
     document.addEventListener(typ, (event) => {
       if (!aktivni || (!hostitel?.contains(event.target) && !v2SelectionScroll?.handleDrag)) return;
       if (v2SelectionScroll?.handleDrag?.autoSmer) return;
+      /* 699D-BG – Pouze diagnostika 673D: jeden vlastní caret má svůj
+         modelový drag a měření CARET-BF. Každých 90 ms zde jinak zbytečně
+         čteme Selection, skládáme text a překreslujeme diagnostiku.
+         Dvouúchytový selection drag a běžné dotyky zůstávají logované. */
+      if (probihaSingleCaretDrag699DBD() ||
+          event.target?.closest?.(".ln-v2-single-caret-handle")) return;
       const ted = performance.now();
       if (ted - diagSelectionMoveCas < 90) return;
       diagSelectionMoveCas = ted;
