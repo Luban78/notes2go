@@ -155,7 +155,13 @@
         `bounds=${statistika(profil.bounds)}ms ` +
         `rectReads=${profil.rectReads} ` +
         `hit=${statistika(profil.hit)}ms ` +
+        `hitPoint=${statistika(profil.hitPoint)}ms ` +
+        `hitMap=${statistika(profil.hitMap)}ms ` +
+        `hitModel=${statistika(profil.hitModel)}ms ` +
         `lupa=${statistika(profil.lupa)}ms ` +
+        `lupaEnsure=${statistika(profil.lupaEnsure)}ms ` +
+        `lupaText=${statistika(profil.lupaText)}ms ` +
+        `lupaMove=${statistika(profil.lupaMove)}ms ` +
         `caret=${statistika(profil.caret)}ms ` +
         `img=${obrazky}/${viditelne}`;
       window.LubaNoteStartupDiag?.zapis?.("CARET-BF", radek);
@@ -231,7 +237,11 @@
     const pozice = posledniVyber?.sbaleny ? posledniVyber.konec : null;
     const blok = pozice && dokument?.bloky?.[pozice.blok];
     if (!blok || !jeTextovyBlok(blok)) return;
+    const profilBJ = v2CaretProfil699DBF;
+    const zacatekEnsureBJ = profilBJ ? performance.now() : 0;
     const lupa = zajistiV2CaretLupu699DBC();
+    if (profilBJ) pridejCasCaretu699DBF("lupaEnsure", performance.now() - zacatekEnsureBJ);
+    const zacatekTextBJ = profilBJ ? performance.now() : 0;
     const klic = `${pozice.blok}:${pozice.offset}`;
     if (drag.lupaTextKlic !== klic) {
       const text = textBloku(blok);
@@ -240,6 +250,8 @@
       v2CaretLupaPo699DBC.textContent = text.slice(offset, offset + 24);
       drag.lupaTextKlic = klic;
     }
+    if (profilBJ) pridejCasCaretu699DBF("lupaText", performance.now() - zacatekTextBJ);
+    const zacatekMoveBJ = profilBJ ? performance.now() : 0;
     const sirka = 148, vyska = 60, okraj = 8;
     const viewportW = Number(window.innerWidth || document.documentElement.clientWidth || 360);
     const viewportH = Number(window.innerHeight || document.documentElement.clientHeight || 640);
@@ -252,6 +264,7 @@
     const transform = `translate3d(${x}, ${y}, 0)`;
     if (lupa.style.transform !== transform) lupa.style.transform = transform;
     if (lupa.hidden) lupa.hidden = false;
+    if (profilBJ) pridejCasCaretu699DBF("lupaMove", performance.now() - zacatekMoveBJ);
   }
 
   /* 699D-BC – WebView může poslat více pointermove mezi dvěma snímky.
@@ -413,7 +426,9 @@
         v2CaretProfil699DBF = {
           zacatek: performance.now(), posledniRam: 0, ramy: 0,
           rafId: 0, rafPosledni: 0, rectReads: 0,
-          mezery: [], rafGap: [], work: [], bounds: [], hit: [], lupa: [], caret: []
+          mezery: [], rafGap: [], work: [], bounds: [], hit: [],
+          hitPoint: [], hitMap: [], hitModel: [],
+          lupa: [], lupaEnsure: [], lupaText: [], lupaMove: [], caret: []
         };
         v2SingleCaretDrag.zrusCachePriScrollu = () => {
           if (v2SingleCaretDrag) v2SingleCaretDrag.rectEditoru = null;
@@ -4810,6 +4825,8 @@
   function zrusVyberNaBoduProSelectionMenu(clientX, clientY, { behemTahuCaretu = false } = {}) {
     if (!editor || !Number.isFinite(Number(clientX)) || !Number.isFinite(Number(clientY))) return false;
 
+    const profilBJ = behemTahuCaretu ? v2CaretProfil699DBF : null;
+    const zacatekPointBJ = profilBJ ? performance.now() : 0;
     let node = null;
     let offset = 0;
     if (typeof document.caretPositionFromPoint === "function") {
@@ -4822,9 +4839,13 @@
       offset = range?.startOffset ?? 0;
     }
 
+    if (profilBJ) pridejCasCaretu699DBF("hitPoint", performance.now() - zacatekPointBJ);
     if (!node || !editor.contains(node)) return false;
+    const zacatekMapBJ = profilBJ ? performance.now() : 0;
     const pozice = domBodNaModel(node, offset);
+    if (profilBJ) pridejCasCaretu699DBF("hitMap", performance.now() - zacatekMapBJ);
     if (!pozice) return false;
+    const zacatekModelBJ = profilBJ ? performance.now() : 0;
 
     if (behemTahuCaretu && v2SingleCaretDrag) {
       /* 699D-BE – Vlastní caret už kreslíme z modelové pozice. Vyvolat
@@ -4854,6 +4875,7 @@
     aktivniFormatPozice = klicPozice(pozice);
     aktivniFormatZdroj = "";
     if (!behemTahuCaretu) aktualizujToolbarVelikosti(posledniVyber);
+    if (profilBJ) pridejCasCaretu699DBF("hitModel", performance.now() - zacatekModelBJ);
     return true;
   }
 
