@@ -605,6 +605,7 @@
             v2SingleCaretDrag.rectEditoru = null;
             v2SingleCaretDrag.viewportSirka = null;
             v2SingleCaretDrag.viewportVyska = null;
+            v2SingleCaretDrag.paddingEditoru699DBN = null;
           }
         };
         document.addEventListener("scroll", v2SingleCaretDrag.zrusCachePriScrollu, true);
@@ -825,6 +826,42 @@
     finally { try { api.end(token); } catch (_error) {} }
   }
 
+  /* 699D-BN – Během dragu se dokument NEmění a ukotvený handle zůstává
+     se svým pointer capture ve starém řádku. Samotný vizuální caret proto
+     může být dočasně fixed overlay. Čtení bounds/padding jen při invalidaci
+     a žádné čtení rectu řádku ani DOM přesuny mezi řádky v každém RAF.
+     Po pointerup se původní ukotvené vykreslení automaticky obnoví. */
+  function vykresliV2CaretPriTahu699DBN(rect, drag) {
+    if (!drag || !editor?.isConnected) return;
+    const bounds = drag.rectEditoru || editor.getBoundingClientRect();
+    if (!drag.rectEditoru) drag.rectEditoru = bounds;
+    if (!Number.isFinite(drag.paddingEditoru699DBN)) {
+      try {
+        drag.paddingEditoru699DBN = Number.parseFloat(getComputedStyle(editor).paddingTop) || 0;
+      } catch (_error) { drag.paddingEditoru699DBN = 0; }
+    }
+    const vyska = Math.max(12, Math.round(rect.height || 20));
+    const horniMez = bounds.top + Math.max(0, drag.paddingEditoru699DBN - 2);
+    if (rect.top < horniMez || rect.top + vyska > bounds.bottom ||
+        rect.left < bounds.left - 2 || rect.left > bounds.right + 2) {
+      /* Neskrývat HANDLE: display:none by uprostřed tahu zrušil capture. */
+      if (v2LubaCaret && !v2LubaCaret.hidden) v2LubaCaret.hidden = true;
+      return;
+    }
+    const caret = zajistiV2LubaCaret();
+    /* Jeden přesun do body za celý tah. Staré anchored chování zůstává pro
+       scroll, psaní a tapy, tedy všude mimo aktivní drag. */
+    if (caret.parentNode !== document.body) document.body.appendChild(caret);
+    if (caret.classList.contains("ln-v2-caret-scroll-anchored")) {
+      caret.classList.remove("ln-v2-caret-scroll-anchored");
+    }
+    if (caret.style.willChange !== "transform") caret.style.willChange = "transform";
+    if (caret.style.height !== `${vyska}px`) caret.style.height = `${vyska}px`;
+    const transform = `translate3d(${Math.round(rect.left)}px, ${Math.round(rect.top)}px, 0)`;
+    if (caret.style.transform !== transform) caret.style.transform = transform;
+    if (caret.hidden) caret.hidden = false;
+  }
+
   function vykresliV2LubaCaret(vyber = posledniVyber, geometrie699DAF = null) {
     if (!lubaCaretMaBytViditelny() || !vyber?.sbaleny) {
       skryjV2LubaCaret();
@@ -833,6 +870,10 @@
     const rect = geometrie699DAF ? geometrie699DAF.rect : merOdlozenouOperaci699DAE('caret:geometry', () => rectV2LubaCaretu(vyber.konec));
     if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.top)) {
       skryjV2LubaCaret();
+      return;
+    }
+    if (v2SingleCaretDrag && pouzivaV2UkotvenyCaret()) {
+      vykresliV2CaretPriTahu699DBN(rect, v2SingleCaretDrag);
       return;
     }
     /* FIX 511 – caret je fixed overlay nad celou stránkou. Při scrollu může
@@ -868,6 +909,8 @@
     }
 
     const caret = zajistiV2LubaCaret();
+    /* Po ukončení dragu opět běžný ukotvený caret bez trvalé GPU vrstvy. */
+    if (caret.style.willChange) caret.style.willChange = "";
     if (!pouzivaV2UkotvenyCaret() || caret.style.height !== `${vyskaCaretu}px`) {
       caret.style.height = `${vyskaCaretu}px`;
     }
