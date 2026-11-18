@@ -6080,7 +6080,15 @@ if (
   }
   
   toggleTag(tag);
-  updateTagMenuUI();
+
+  /* 699D-BB – Pouhý výběr štítku nesmí znovu sestavit celý seznam.
+   * Při odstranění a vložení tlačítek z renderTagMenuTags() totiž
+   * prohlížeč ztratil aktuální pozici scrollu a skočil nahoru.
+   * Výběr mění jen stav tlačítka, nikoli skladbu seznamu. */
+  button.classList.toggle(
+    "active",
+    activeTags.includes(tag)
+  );
 });
 
 // ==========================================
