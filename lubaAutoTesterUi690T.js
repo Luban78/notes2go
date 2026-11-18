@@ -13,7 +13,7 @@
     ['ui-real-keyboard','Běžná aplikace – psaní přes produkční příkaz LubaKeyboard'],
     ['ui-own-caret','LubaNote – vlastní modelový caret a červená kapka'],
     ['ui-own-tap','LubaNote – nativní dotyk ovládá náš caret'],
-    ['ui-own-caret-drag','LubaNote – nativní tah kapky posune caret a zobrazí lupu'],
+    ['ui-own-caret-drag','LubaNote – tah caretu, lupa, barva a skrytý panel'],
     ['ui-own-selection','LubaNote – dvojtap vytvoří náš výběr a dvě vlastní kapky'],
     ['ui-own-handle-drag','LubaNote – nativní tah obou kapek nezávisle změní výběr'],
     ['ui-real-save','Běžná aplikace – uložení tlačítkem a nové načtení']
@@ -251,7 +251,18 @@
               const h=e.target?.closest?.('.ln-v2-single-caret-handle');
               if(h){down++;hit='OWN';}
             };
-            const onMove=e=>{if(e.isTrusted)move++;};
+            const panelJeViditelny=()=>{
+              const panel=document.getElementById('selectionMenu');
+              if(!panel?.isConnected||panel.hidden)return false;
+              const styl=getComputedStyle(panel);
+              return styl.display!=='none'&&styl.visibility!=='hidden'&&panel.getBoundingClientRect().width>0;
+            };
+            let panelBehemTahu=false;
+            const onMove=e=>{
+              if(!e.isTrusted)return;
+              move++;
+              if(panelJeViditelny())panelBehemTahu=true;
+            };
             const onUp=e=>{if(e.isTrusted)up++;};
             document.addEventListener('touchstart',onDown,true);
             document.addEventListener('touchmove',onMove,true);
@@ -288,7 +299,8 @@
             assert(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','own_caret_drag_no_native_ack');
             const after=core.zachytAktualniVyber?.();
             const evidence='before='+location(before)+' after='+location(after)+
-              ' touch='+down+'/'+move+'/'+up+' hit='+hit+' magnifierSeen='+lupaVidena;
+              ' touch='+down+'/'+move+'/'+up+' hit='+hit+' magnifierSeen='+lupaVidena+
+              ' panelDuringDrag='+panelBehemTahu;
             assert(down>0&&move>0&&up>0&&hit==='OWN',
               'own_caret_drag_trusted_touch_missing: '+evidence);
             assert(after?.sbaleny===true&&after?.konec&&
@@ -296,6 +308,13 @@
               'own_caret_handle_drag_did_not_move_model: '+evidence);
             assert(lupaVidena,'own_caret_magnifier_not_visible_during_drag: '+evidence);
             assert(!lupaJeViditelna(),'own_caret_magnifier_visible_after_release: '+evidence);
+            assert(!panelBehemTahu&&!panelJeViditelny(),
+              'own_caret_context_menu_visible_during_or_after_drag: '+evidence);
+            const lupaCara=document.querySelector('.ln-v2-caret-lupa-cara-699DBC');
+            const realnyCaret=document.querySelector('.ln-v2-luba-caret');
+            assert(lupaCara&&realnyCaret&&
+              getComputedStyle(lupaCara).backgroundColor===getComputedStyle(realnyCaret).backgroundColor,
+              'own_caret_magnifier_color_not_theme_matched: '+evidence);
           }else if(i===6){
             const plugin=window.Capacitor?.Plugins?.LubaNoteNativeTester;
             assert(typeof plugin?.gestureOwnedEditor==='function','owned_native_bridge_unavailable');

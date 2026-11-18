@@ -149,7 +149,8 @@
         .ln-v2-caret-lupa-699DBC .ln-v2-caret-lupa-cara-699DBC {
           position: absolute; left: 50%; top: 12px; width: 2px;
           height: 36px; margin-left: -1px; border-radius: 2px;
-          background: #ff2020; box-shadow: 0 0 0 1px rgba(0, 0, 0, .18);
+          background: var(--ln-own-handle-color, var(--color-accent, #20abc0));
+          box-shadow: 0 0 0 1px rgba(0, 0, 0, .18);
         }
       `;
       document.head.appendChild(styl);
@@ -218,7 +219,7 @@
     const cilY = Math.max(rectEditoru.top + 2, Math.min(rectEditoru.bottom - 2, bod.y + drag.deltaY));
     const bodKlic = `${Math.round(cilX)}:${Math.round(cilY)}`;
     if (drag.posledniBodKlic !== bodKlic) {
-      zrusVyberNaBoduProSelectionMenu(cilX, cilY);
+      zrusVyberNaBoduProSelectionMenu(cilX, cilY, { behemTahuCaretu: true });
       drag.posledniBodKlic = bodKlic;
     }
     zobrazV2CaretLupu699DBC(drag, bod.x, bod.y);
@@ -232,9 +233,18 @@
     v2SingleCaretDrag = null;
     if (v2SingleCaretHandle) v2SingleCaretHandle.style.opacity = "";
     skryjV2CaretLupu699DBC();
+    /* 699D-BD – Bridge nesmí po skončení gestem odloženého contextmenu
+       znovu nabídnout Vložit / Vše. O ukončení se dozví výslovnou událostí. */
+    document.body?.classList.remove("ln-v2-single-caret-drag-699DBD");
+    document.dispatchEvent(new CustomEvent("lubanote:v2-single-caret-drag-699DBD", {
+      detail: { active: false }
+    }));
     /* Po puštění umístíme úchyt do nového řádku. Během dragu musí zůstat
        ve starém rodiči, jinak appendChild zruší pointer capture. */
     if (posledniVyber?.sbaleny) {
+      /* 699D-BD – Formátovací panel aktualizujeme jednou po puštění;
+         během tahu by přepočítával a přepisoval řadu DOM prvků za frame. */
+      aktualizujToolbarVelikosti(posledniVyber);
       naplanujV2LubaCaret(posledniVyber, "caret-drag-end");
     }
   }
@@ -323,6 +333,10 @@
           ceka: null,
           raf: 0
         };
+        document.body?.classList.add("ln-v2-single-caret-drag-699DBD");
+        document.dispatchEvent(new CustomEvent("lubanote:v2-single-caret-drag-699DBD", {
+          detail: { active: true }
+        }));
         if (event.cancelable) event.preventDefault();
         event.stopPropagation();
         try { v2SingleCaretHandle.setPointerCapture(event.pointerId); } catch (_error) {}
@@ -4682,7 +4696,7 @@
     return true;
   }
 
-  function zrusVyberNaBoduProSelectionMenu(clientX, clientY) {
+  function zrusVyberNaBoduProSelectionMenu(clientX, clientY, { behemTahuCaretu = false } = {}) {
     if (!editor || !Number.isFinite(Number(clientX)) || !Number.isFinite(Number(clientY))) return false;
 
     let node = null;
@@ -4716,7 +4730,7 @@
     aktivniFormatPsani = null;
     aktivniFormatPozice = klicPozice(pozice);
     aktivniFormatZdroj = "";
-    aktualizujToolbarVelikosti(posledniVyber);
+    if (!behemTahuCaretu) aktualizujToolbarVelikosti(posledniVyber);
     return true;
   }
 
@@ -11011,11 +11025,29 @@
       setTimeout(dorovnejPoOtevreni, 140);
     });
 
+    /* 699D-BD – Modelový DOM guard zůstává plně aktivní pro text, obrázky,
+       TODO i smíšené dávky mutací. Samotný pohyb našich DVOU vizuálních
+       helperů ale není změna modelu: změny jejich style/class/hidden nebo
+       jejich přesun mezi řádky nesmějí pokaždé skenovat celou poznámku. */
+    const jeJenVizualniCaretMutace699DBD = (m) => {
+      const jePomucka = (n) => n === v2LubaCaret || n === v2SingleCaretHandle;
+      if (m.type === "attributes") {
+        return jePomucka(m.target) &&
+          (m.attributeName === "style" || m.attributeName === "class" || m.attributeName === "hidden");
+      }
+      if (m.type === "childList") {
+        const zmeneneUzly = [...m.addedNodes, ...m.removedNodes];
+        return zmeneneUzly.length > 0 && zmeneneUzly.every(jePomucka);
+      }
+      return false;
+    };
+
     observerDomu = new MutationObserver((mutace) => {
       if (!editor || !mutace.length) return;
       /* FIX 434: starý Android má během živé composition krátké povolené DOM
          okno. Model jej převezme atomicky při compositionend. */
       if (v2ImeKompozice?.nativni) return;
+      if (mutace.every(jeJenVizualniCaretMutace699DBD)) return;
       const chyba = overDomProtiModelu();
       if (!chyba) return;
       nastavStav(`DOM GUARD: WebView změnil DOM mimo model · ${chyba} · vracím model`, true);

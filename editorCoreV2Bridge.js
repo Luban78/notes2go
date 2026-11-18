@@ -431,6 +431,23 @@
     skryjV2SelectionMenu();
   }
 
+  /* 699D-BD – Jediný caret má vlastní drag, odlišný od dvou úchytů
+     selection. Bridge při něm nesmí znovu otevírat Vložit / Vše. */
+  function probihaSingleCaretDrag699DBD() {
+    return document.body?.classList.contains("ln-v2-single-caret-drag-699DBD") === true;
+  }
+  document.addEventListener("lubanote:v2-single-caret-drag-699DBD", (event) => {
+    if (!aktivni) return;
+    potlacV2SelectionMenuDo = Math.max(
+      potlacV2SelectionMenuDo,
+      performance.now() + (event.detail?.active === true ? 750 : 450)
+    );
+    v2PosledniTapSelection = null;
+    v2ZacatekDotykuDvojtap = null;
+    v2PrimyDruhyTap = null;
+    skryjV2SelectionMenu();
+  }, true);
+
   function zajistiV2PastePanel() {
     if (v2PastePanel || !selectionMenu) return;
 
@@ -839,7 +856,9 @@
   }
 
   function zobrazV2SelectionMenuProOznaceni(rozsah = null, moznosti = {}) {
-    if (jeDesktopSelection || !aktivni || !selectionMenu || v2SelectionMenuNuceneSkryty || v2SelectionScroll?.handleDrag) return false;
+    if (jeDesktopSelection || !aktivni || !selectionMenu || v2SelectionMenuNuceneSkryty ||
+        v2SelectionScroll?.handleDrag || probihaSingleCaretDrag699DBD() ||
+        performance.now() < potlacV2SelectionMenuDo) return false;
     const vyber = window.getSelection();
     const range = rozsah || (vyber?.rangeCount ? vyber.getRangeAt(0) : null);
     if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return false;
@@ -888,7 +907,8 @@
   }
 
   function zobrazV2SelectionMenuProKurzor(bod = null) {
-    if (jeDesktopSelection || !aktivni || !selectionMenu) return false;
+    if (jeDesktopSelection || !aktivni || !selectionMenu || probihaSingleCaretDrag699DBD() ||
+        performance.now() < potlacV2SelectionMenuDo) return false;
     core()?.zachytAktualniVyber?.();
     nastavV2SelectionMenuTlacitka(true);
     v2SelectionMenuAktivni = true;
@@ -3000,6 +3020,11 @@
       visibility: hidden !important;
       pointer-events: none !important;
     }
+    body.ln-v2-single-caret-drag-699DBD #selectionMenu {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
     .ln-v2-selection-handle-custom[${V2_SELECTION_HANDLE_ATTR}="start"] {
       transform: translate(-100%, 0);
     }
@@ -5073,6 +5098,12 @@
   }, true);
 
   document.addEventListener("contextmenu", (event) => {
+    if (probihaSingleCaretDrag699DBD() ||
+        event.target.closest?.(".ln-v2-single-caret-handle") ||
+        performance.now() < potlacV2SelectionMenuDo) {
+      if (event.cancelable) event.preventDefault();
+      return;
+    }
     if (jeMediaObrazekPodDotykem(event)) return;
     if (jeDesktopSelection || !aktivni || !hostitel?.contains(event.target)) return;
     zapisV2Stabilitu("CONTEXTMENU", `x=${Math.round(event.clientX)} y=${Math.round(event.clientY)}`);
