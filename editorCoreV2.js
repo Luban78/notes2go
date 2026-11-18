@@ -110,6 +110,134 @@
      Výběr dvou slovních úchytů z Bridge je nezávislý. */
   let v2SingleCaretHandle = null;
   let v2SingleCaretDrag = null;
+  /* 699D-BC – Samostatný (sbalený) caret potřebuje vlastní lupu.
+     Lupa z Bridge 677 patří pouze ke dvěma úchytům textového výběru. */
+  let v2CaretLupa699DBC = null;
+  let v2CaretLupaPred699DBC = null;
+  let v2CaretLupaPo699DBC = null;
+
+  function zajistiV2CaretLupu699DBC() {
+    if (v2CaretLupa699DBC?.isConnected) return v2CaretLupa699DBC;
+    if (!document.getElementById("ln-v2-caret-lupa-style-699DBC")) {
+      const styl = document.createElement("style");
+      styl.id = "ln-v2-caret-lupa-style-699DBC";
+      /* Stejný tvar a typografie jako existující lupa výběru v Bridge.
+         Samostatná třída zamezí zásahu do jejího selection/menu enginu. */
+      styl.textContent = `
+        .ln-v2-caret-lupa-699DBC {
+          position: fixed; width: 148px; height: 60px;
+          z-index: 2147483300; overflow: hidden; border-radius: 31px;
+          border: 2px solid rgba(128, 203, 196, .96);
+          background: var(--color-surface, #082533);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, .34);
+          pointer-events: none; user-select: none; -webkit-user-select: none;
+          contain: layout paint;
+        }
+        .ln-v2-caret-lupa-699DBC[hidden] { display: none !important; }
+        .ln-v2-caret-lupa-699DBC .ln-v2-caret-lupa-text-699DBC {
+          position: absolute; top: 50%; width: max-content;
+          color: var(--color-text, #eef7fa); font-size: 26px;
+          font-weight: 500; line-height: 1.1; white-space: pre;
+          transform: translateY(-50%); pointer-events: none;
+        }
+        .ln-v2-caret-lupa-699DBC .ln-v2-caret-lupa-pred-699DBC {
+          right: calc(50% + 4px); text-align: right;
+        }
+        .ln-v2-caret-lupa-699DBC .ln-v2-caret-lupa-po-699DBC {
+          left: calc(50% + 4px); text-align: left;
+        }
+        .ln-v2-caret-lupa-699DBC .ln-v2-caret-lupa-cara-699DBC {
+          position: absolute; left: 50%; top: 12px; width: 2px;
+          height: 36px; margin-left: -1px; border-radius: 2px;
+          background: #ff2020; box-shadow: 0 0 0 1px rgba(0, 0, 0, .18);
+        }
+      `;
+      document.head.appendChild(styl);
+    }
+    const lupa = document.createElement("div");
+    lupa.className = "ln-v2-caret-lupa-699DBC";
+    lupa.setAttribute("aria-hidden", "true");
+    lupa.hidden = true;
+    const pred = document.createElement("span");
+    pred.className = "ln-v2-caret-lupa-text-699DBC ln-v2-caret-lupa-pred-699DBC";
+    const po = document.createElement("span");
+    po.className = "ln-v2-caret-lupa-text-699DBC ln-v2-caret-lupa-po-699DBC";
+    const cara = document.createElement("span");
+    cara.className = "ln-v2-caret-lupa-cara-699DBC";
+    lupa.append(pred, po, cara);
+    document.body.appendChild(lupa);
+    v2CaretLupa699DBC = lupa;
+    v2CaretLupaPred699DBC = pred;
+    v2CaretLupaPo699DBC = po;
+    return lupa;
+  }
+
+  function skryjV2CaretLupu699DBC() {
+    if (v2CaretLupa699DBC && !v2CaretLupa699DBC.hidden) {
+      v2CaretLupa699DBC.hidden = true;
+    }
+  }
+
+  function zobrazV2CaretLupu699DBC(drag, touchX, touchY) {
+    if (!drag?.lupaAktivni || !editor?.isConnected ||
+        editor.dataset.lnV2OwnCaretOnly !== "1") return;
+    const pozice = posledniVyber?.sbaleny ? posledniVyber.konec : null;
+    const blok = pozice && dokument?.bloky?.[pozice.blok];
+    if (!blok || !jeTextovyBlok(blok)) return;
+    const lupa = zajistiV2CaretLupu699DBC();
+    const klic = `${pozice.blok}:${pozice.offset}`;
+    if (drag.lupaTextKlic !== klic) {
+      const text = textBloku(blok);
+      const offset = Math.max(0, Math.min(text.length, pozice.offset));
+      v2CaretLupaPred699DBC.textContent = text.slice(Math.max(0, offset - 24), offset);
+      v2CaretLupaPo699DBC.textContent = text.slice(offset, offset + 24);
+      drag.lupaTextKlic = klic;
+    }
+    const sirka = 148, vyska = 60, okraj = 8;
+    const viewportW = Number(window.innerWidth || document.documentElement.clientWidth || 360);
+    const viewportH = Number(window.innerHeight || document.documentElement.clientHeight || 640);
+    const left = Math.max(okraj, Math.min(viewportW - sirka - okraj, touchX - sirka / 2));
+    let top = touchY - 94;
+    if (top < okraj) top = touchY + 38;
+    top = Math.max(okraj, Math.min(viewportH - vyska - okraj, top));
+    const x = `${Math.round(left)}px`, y = `${Math.round(top)}px`;
+    if (lupa.style.left !== x) lupa.style.left = x;
+    if (lupa.style.top !== y) lupa.style.top = y;
+    if (lupa.hidden) lupa.hidden = false;
+  }
+
+  /* 699D-BC – WebView může poslat více pointermove mezi dvěma snímky.
+     Hit-test DOM / Range / geometry proto běží maximálně jednou za frame.
+     Poslední bod při pointerup zpracujeme synchronně, aby se neztratil. */
+  function provedV2SingleCaretPohyb699DBC(drag) {
+    const bod = drag?.ceka;
+    if (!bod || !editor?.isConnected) return;
+    drag.ceka = null;
+    const rectEditoru = editor.getBoundingClientRect();
+    const cilX = Math.max(rectEditoru.left + 2, Math.min(rectEditoru.right - 2, bod.x + drag.deltaX));
+    const cilY = Math.max(rectEditoru.top + 2, Math.min(rectEditoru.bottom - 2, bod.y + drag.deltaY));
+    const bodKlic = `${Math.round(cilX)}:${Math.round(cilY)}`;
+    if (drag.posledniBodKlic !== bodKlic) {
+      zrusVyberNaBoduProSelectionMenu(cilX, cilY);
+      drag.posledniBodKlic = bodKlic;
+    }
+    zobrazV2CaretLupu699DBC(drag, bod.x, bod.y);
+  }
+
+  function ukonciV2SingleCaretDrag699DBC(drag, ulozitPosledniBod = false) {
+    if (!drag || v2SingleCaretDrag !== drag) return;
+    if (drag.raf) cancelAnimationFrame(drag.raf);
+    drag.raf = 0;
+    if (ulozitPosledniBod) provedV2SingleCaretPohyb699DBC(drag);
+    v2SingleCaretDrag = null;
+    if (v2SingleCaretHandle) v2SingleCaretHandle.style.opacity = "";
+    skryjV2CaretLupu699DBC();
+    /* Po puštění umístíme úchyt do nového řádku. Během dragu musí zůstat
+       ve starém rodiči, jinak appendChild zruší pointer capture. */
+    if (posledniVyber?.sbaleny) {
+      naplanujV2LubaCaret(posledniVyber, "caret-drag-end");
+    }
+  }
   /* 691BO – Core V2 own-caret visibility follows the MODEL, not a body
      class. MOVE hides the old position; only a successfully positioned
      text tap (or real model text input) can release the visual caret. */
@@ -186,29 +314,47 @@
         v2SingleCaretDrag = {
           pointerId: event.pointerId,
           deltaX: rect.left - event.clientX,
-          deltaY: rect.top + rect.height / 2 - event.clientY
+          deltaY: rect.top + rect.height / 2 - event.clientY,
+          startX: event.clientX,
+          startY: event.clientY,
+          lupaAktivni: false,
+          lupaTextKlic: "",
+          posledniBodKlic: "",
+          ceka: null,
+          raf: 0
         };
         if (event.cancelable) event.preventDefault();
         event.stopPropagation();
         try { v2SingleCaretHandle.setPointerCapture(event.pointerId); } catch (_error) {}
       }, { passive: false });
       v2SingleCaretHandle.addEventListener("pointermove", (event) => {
-        if (!v2SingleCaretDrag || v2SingleCaretDrag.pointerId !== event.pointerId || !editor?.isConnected) return;
+        const drag = v2SingleCaretDrag;
+        if (!drag || drag.pointerId !== event.pointerId || !editor?.isConnected) return;
         if (event.cancelable) event.preventDefault();
         event.stopPropagation();
-        const rectEditoru = editor.getBoundingClientRect();
-        const cilX = Math.max(rectEditoru.left + 2, Math.min(rectEditoru.right - 2, event.clientX + v2SingleCaretDrag.deltaX));
-        const cilY = Math.max(rectEditoru.top + 2, Math.min(rectEditoru.bottom - 2, event.clientY + v2SingleCaretDrag.deltaY));
-        zrusVyberNaBoduProSelectionMenu(cilX, cilY);
+        if (!drag.lupaAktivni && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 4) {
+          drag.lupaAktivni = true;
+          /* Opacity nezruší pointer capture; hidden/display:none by ho zrušily. */
+          v2SingleCaretHandle.style.opacity = "0";
+        }
+        drag.ceka = { x: event.clientX, y: event.clientY };
+        if (!drag.raf) {
+          drag.raf = requestAnimationFrame(() => {
+            drag.raf = 0;
+            if (v2SingleCaretDrag === drag) provedV2SingleCaretPohyb699DBC(drag);
+          });
+        }
       }, { passive: false });
       const ukonci = (event) => {
-        if (!v2SingleCaretDrag || v2SingleCaretDrag.pointerId !== event.pointerId) return;
-        v2SingleCaretDrag = null;
+        const drag = v2SingleCaretDrag;
+        if (!drag || drag.pointerId !== event.pointerId) return;
         if (event.cancelable) event.preventDefault();
         event.stopPropagation();
+        ukonciV2SingleCaretDrag699DBC(drag, event.type === "pointerup");
       };
       v2SingleCaretHandle.addEventListener("pointerup", ukonci, { passive: false });
       v2SingleCaretHandle.addEventListener("pointercancel", ukonci, { passive: false });
+      v2SingleCaretHandle.addEventListener("lostpointercapture", ukonci);
       document.body.appendChild(v2SingleCaretHandle);
     }
     return v2SingleCaretHandle;
@@ -441,9 +587,11 @@
         if (caret.parentNode !== radek) merOdlozenouOperaci699DAE('caret:moveCaret', () => radek.appendChild(caret));
         const uchyt = ziskejV2SingleCaretHandle();
         if (!uchyt.classList.contains("ln-v2-caret-scroll-anchored")) uchyt.classList.add("ln-v2-caret-scroll-anchored");
-        if (uchyt.style.left !== `${x}px`) uchyt.style.left = `${x}px`;
-        if (uchyt.style.top !== `${y + vyskaCaretu}px`) uchyt.style.top = `${y + vyskaCaretu}px`;
-        if (uchyt.parentNode !== radek) merOdlozenouOperaci699DAE('caret:moveHandle', () => radek.appendChild(uchyt));
+        if (!v2SingleCaretDrag) {
+          if (uchyt.style.left !== `${x}px`) uchyt.style.left = `${x}px`;
+          if (uchyt.style.top !== `${y + vyskaCaretu}px`) uchyt.style.top = `${y + vyskaCaretu}px`;
+          if (uchyt.parentNode !== radek) merOdlozenouOperaci699DAE('caret:moveHandle', () => radek.appendChild(uchyt));
+        }
         if (caret.hidden) caret.hidden = false;
         if (uchyt.hidden) uchyt.hidden = false;
       });
@@ -9958,6 +10106,8 @@
 
   function zavriVHostu() {
     if (!jadroEditoru || !vlozenyRezim) return;
+    ukonciV2SingleCaretDrag699DBC(v2SingleCaretDrag);
+    skryjV2CaretLupu699DBC();
     v2LubaCaretCekaNaNovyTapPoMove = false;
     ochranaPohleduSeznamu?.ukonci?.();
     zrusSpodniProstorSbaleni();

@@ -13,7 +13,7 @@
     ['ui-real-keyboard','Běžná aplikace – psaní přes produkční příkaz LubaKeyboard'],
     ['ui-own-caret','LubaNote – vlastní modelový caret a červená kapka'],
     ['ui-own-tap','LubaNote – nativní dotyk ovládá náš caret'],
-    ['ui-own-caret-drag','LubaNote – nativní tah vlastní kapky posune caret'],
+    ['ui-own-caret-drag','LubaNote – nativní tah kapky posune caret a zobrazí lupu'],
     ['ui-own-selection','LubaNote – dvojtap vytvoří náš výběr a dvě vlastní kapky'],
     ['ui-own-handle-drag','LubaNote – nativní tah obou kapek nezávisle změní výběr'],
     ['ui-real-save','Běžná aplikace – uložení tlačítkem a nové načtení']
@@ -256,11 +256,31 @@
             document.addEventListener('touchstart',onDown,true);
             document.addEventListener('touchmove',onMove,true);
             document.addEventListener('touchend',onUp,true);
+            /* 699D-BC – PASS už nestačí jen za pohyb modelu. Viditelnost
+               lupy sledujeme v reálném DOM BĚHEM nativního MotionEvent tahu.
+               Test po skončení gesta nesmí dodatečně sám lupu zapnout. */
+            const lupaJeViditelna=()=>{
+              const lupa=document.querySelector('.ln-v2-caret-lupa-699DBC');
+              if(!lupa?.isConnected||lupa.hidden)return false;
+              const styl=getComputedStyle(lupa);
+              const rect=lupa.getBoundingClientRect();
+              return styl.display!=='none'&&styl.visibility!=='hidden'&&
+                rect.width>50&&rect.height>20&&rect.right>0&&rect.bottom>0&&
+                rect.left<innerWidth&&rect.top<innerHeight;
+            };
+            let lupaVidena=false;
+            const pozorovatelLupy=new MutationObserver(()=>{
+              if(!lupaVidena&&lupaJeViditelna())lupaVidena=true;
+            });
+            pozorovatelLupy.observe(document.body,{
+              childList:true,subtree:true,attributes:true,attributeFilter:['hidden']
+            });
             let ack;
             try{
               ack=await plugin.gestureOwnedEditor({id,target:'caret-handle',type:'swipe'});
               await wait(260);
             }finally{
+              pozorovatelLupy.disconnect();
               document.removeEventListener('touchstart',onDown,true);
               document.removeEventListener('touchmove',onMove,true);
               document.removeEventListener('touchend',onUp,true);
@@ -268,12 +288,14 @@
             assert(ack?.delivery==='WEBVIEW_DISPATCH_TOUCH_EVENT','own_caret_drag_no_native_ack');
             const after=core.zachytAktualniVyber?.();
             const evidence='before='+location(before)+' after='+location(after)+
-              ' touch='+down+'/'+move+'/'+up+' hit='+hit;
+              ' touch='+down+'/'+move+'/'+up+' hit='+hit+' magnifierSeen='+lupaVidena;
             assert(down>0&&move>0&&up>0&&hit==='OWN',
               'own_caret_drag_trusted_touch_missing: '+evidence);
             assert(after?.sbaleny===true&&after?.konec&&
               (after.konec.blok!==before.konec.blok||after.konec.offset!==before.konec.offset),
               'own_caret_handle_drag_did_not_move_model: '+evidence);
+            assert(lupaVidena,'own_caret_magnifier_not_visible_during_drag: '+evidence);
+            assert(!lupaJeViditelna(),'own_caret_magnifier_visible_after_release: '+evidence);
           }else if(i===6){
             const plugin=window.Capacitor?.Plugins?.LubaNoteNativeTester;
             assert(typeof plugin?.gestureOwnedEditor==='function','owned_native_bridge_unavailable');
