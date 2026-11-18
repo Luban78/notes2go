@@ -45,12 +45,15 @@
   }
 
   function zapis(typ, text, detail = null) {
-    const radek = vytvorRadek(typ, zkrat(text));
+    // CARET-BF diagnostika ma vice poli nez bezny startup log.
+    // Ostatni typy zachovavaji puvodni limit 180 znaku.
+    const zkracenyText = zkrat(text, String(typ).trim() === "CARET-BF" ? 500 : 180);
+    const radek = vytvorRadek(typ, zkracenyText);
 
     zaznamy.push({
       cas: cas(),
       typ,
-      text: zkrat(text),
+      text: zkracenyText,
       detail,
       radek
     });
