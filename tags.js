@@ -5246,6 +5246,61 @@ async function ziskejTajneStitkyProEditor() {
   return nazvy;
 }
 
+/* PATCH 699D-BA – Editor: nový štítek na vlastním řádku,
+ * ostatní štítky v zarovnaném bloku. Scroll i delegovaný klik
+ * zůstávají na .tagOptions; tlačítko pro vytvoření je nad scrollem
+ * a zachovává původní vlastní klik i dlouhý stisk.
+ * Všechny barvy řeší běžný aktivní/neaktivní stav motivu.
+ */
+function pripravRozlozeniStitku699DBA() {
+  if (!tagOptions || !createTagButton) return tagOptions;
+
+  if (!document.getElementById("ln-editor-tags-style-699DBA")) {
+    const styl = document.createElement("style");
+    styl.id = "ln-editor-tags-style-699DBA";
+    styl.textContent = `
+      #tagMenu .lnEditorTagCreate699DBA {
+        display: flex;
+        justify-content: flex-start;
+        margin: 8px 0 9px;
+      }
+      #tagMenu .lnEditorTagCreate699DBA .createTagButton {
+        padding: 6px 10px;
+        border: 1px dashed color-mix(in srgb, var(--color-editor-text) 22%, transparent);
+        border-radius: 12px;
+        background: transparent;
+        color: var(--color-editor-text);
+        font: inherit;
+        font-size: 1rem;
+        opacity: 0.9;
+      }
+      #tagMenu .tagOptions.lnEditorTags699DBA {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 110px), 1fr));
+        align-content: flex-start;
+        gap: 6px;
+      }
+      #tagMenu .tagOptions.lnEditorTags699DBA > button[data-tag] {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        text-align: center;
+      }
+    `;
+    document.head.appendChild(styl);
+  }
+
+  tagOptions.classList.add("lnEditorTags699DBA");
+
+  let radekVytvoreni = tagMenu.querySelector(".lnEditorTagCreate699DBA");
+  if (!radekVytvoreni) {
+    radekVytvoreni = document.createElement("div");
+    radekVytvoreni.className = "lnEditorTagCreate699DBA";
+    tagOptions.insertAdjacentElement("beforebegin", radekVytvoreni);
+  }
+  radekVytvoreni.appendChild(createTagButton);
+  return tagOptions;
+}
+
 async function renderTagMenuTags() {
   /*
    * Editor používá stejný seznam štítků
@@ -5283,7 +5338,7 @@ async function renderTagMenuTags() {
     });
 
   /*
-   * Editor má jen tři řádky štítků, proto musí být nejdůležitější
+    * Editor má omezenou výšku seznamu, proto musí být nejdůležitější
    * ovládání vždy na začátku:
    * 1. + Nový štítek
    * 2. štítek právě vytvořený v editoru
@@ -5322,10 +5377,8 @@ async function renderTagMenuTags() {
       button.remove();
     });
 
-  /* + Nový štítek musí být vždy úplně první. */
-  tagOptions.prepend(createTagButton);
-
-  let posledniTlacitko = createTagButton;
+  /* Samostatný řádek + Nový štítek, pod ním blok štítků. */
+  const seznamStitku = pripravRozlozeniStitku699DBA();
   
   serazeneStitky.forEach((tag) => {
     const button =
@@ -5334,9 +5387,9 @@ async function renderTagMenuTags() {
     button.type = "button";
     button.dataset.tag = tag;
     
-    button.dataset.tagColor =
-      ziskejBarvuStitku(tag);
-    aplikujKontrastStitku683AB(button, button.dataset.tagColor);
+    /* Barva štítku se v editoru záměrně nepoužívá. Bez atributu
+     * data-tag-color může motiv jasně odlišit .active od ostatních;
+     * barva samotného štítku na kartách se nijak nemění. */
 
     button.textContent = tag;
     
@@ -5351,12 +5404,7 @@ async function renderTagMenuTags() {
       );
     }
 
-    posledniTlacitko.insertAdjacentElement(
-      "afterend",
-      button
-    );
-
-    posledniTlacitko = button;
+    seznamStitku.appendChild(button);
   });
 
   requestAnimationFrame(
@@ -6393,3 +6441,4 @@ window.addEventListener(
     }
   }
 );
+
