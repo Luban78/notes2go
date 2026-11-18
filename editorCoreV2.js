@@ -132,24 +132,32 @@
         const styl = document.createElement("style");
         styl.id = "ln-v2-caret-test-style-699DBL";
         styl.textContent = `
-          .ln-v2-caret-test-699DBL { position:fixed; inset:0; z-index:2147483550;
-            background:rgba(0,0,0,.66); display:flex; align-items:center;
-            justify-content:center; padding:14px; box-sizing:border-box; }
-          .ln-v2-caret-test-699DBL[hidden] { display:none !important; }
-          .ln-v2-caret-test-box-699DBL { box-sizing:border-box; width:min(100%,390px);
-            max-height:86vh; overflow:auto; border-radius:16px; padding:18px;
+          /* 699D-BM – stejné plovoucí okno jako Debug Hub, žádná clona přes editor. */
+          .ln-v2-caret-test-699DBL { position:fixed; left:12px; top:120px;
+            z-index:2147483550; width:312px; max-width:calc(100vw - 16px);
+            box-sizing:border-box; border-radius:12px; overflow:hidden;
             color:var(--color-text,#eef7fa); background:var(--color-surface,#102e3b);
-            border:1px solid var(--color-accent,#21acc0); box-shadow:0 12px 40px #0009;
-            font:15px/1.4 system-ui,sans-serif; }
-          .ln-v2-caret-test-box-699DBL h3 { margin:0 0 8px; font-size:18px; }
-          .ln-v2-caret-test-box-699DBL p { margin:7px 0 12px; font-size:13px; }
+            border:1px solid var(--color-accent,#21acc0);
+            box-shadow:0 10px 32px #0009; font:13px/1.35 system-ui,sans-serif; }
+          .ln-v2-caret-test-699DBL[hidden] { display:none !important; }
+          .ln-v2-caret-test-head-699DBM { display:flex; align-items:center;
+            justify-content:space-between; gap:8px; min-height:38px; padding:3px 8px 3px 11px;
+            touch-action:none; user-select:none; -webkit-user-select:none;
+            cursor:move; border-bottom:1px solid #80808050; }
+          .ln-v2-caret-test-head-699DBM strong { font-size:14px; }
+          .ln-v2-caret-test-head-699DBM button { width:31px; height:31px;
+            flex-shrink:0; border:0; border-radius:8px;
+            background:transparent; color:inherit; font-size:23px; }
+          .ln-v2-caret-test-body-699DBM { box-sizing:border-box; overflow:auto;
+            max-height:min(310px, calc(100dvh - 70px)); padding:8px 12px 12px; }
+          .ln-v2-caret-test-box-699DBL p { margin:4px 0 7px; font-size:12px; }
           .ln-v2-caret-test-box-699DBL label { display:flex; align-items:center; gap:10px;
-            padding:10px 0; border-bottom:1px solid #80808040; }
-          .ln-v2-caret-test-box-699DBL input { width:22px; height:22px;
+            padding:6px 0; border-bottom:1px solid #80808040; }
+          .ln-v2-caret-test-box-699DBL input { width:19px; height:19px;
             accent-color:var(--color-accent,#20abc0); flex-shrink:0; }
-          .ln-v2-caret-test-actions-699DBL { display:flex; gap:10px; margin-top:15px; }
-          .ln-v2-caret-test-actions-699DBL button { flex:1; padding:11px 7px;
-            border-radius:10px; border:1px solid var(--color-accent,#20abc0);
+          .ln-v2-caret-test-actions-699DBL { display:flex; gap:8px; margin-top:9px; }
+          .ln-v2-caret-test-actions-699DBL button { flex:1; padding:8px 6px;
+            border-radius:8px; border:1px solid var(--color-accent,#20abc0);
             color:var(--color-text,#eef7fa); background:transparent; font:inherit; }
           .ln-v2-caret-test-actions-699DBL button[data-ln-caret-close] {
             background:var(--color-accent,#146d7a); color:#fff; }
@@ -159,11 +167,15 @@
       const panel = document.createElement("div");
       panel.className = "ln-v2-caret-test-699DBL";
       panel.hidden = true;
-      panel.setAttribute("role", "presentation");
+      panel.setAttribute("role", "dialog");
+      panel.setAttribute("aria-modal", "false");
+      panel.setAttribute("aria-label", "Diagnostika FPS caretu");
       panel.innerHTML = `
-        <div class="ln-v2-caret-test-box-699DBL" role="dialog" aria-modal="true"
-             aria-label="Diagnostika FPS caretu">
-          <h3>🧪 Výkon caretu · 699D-BL</h3>
+        <div class="ln-v2-caret-test-head-699DBM" data-ln-caret-drag>
+          <strong>⠿ 🧪 Výkon caretu · 699D-BM</strong>
+          <button type="button" data-ln-caret-close aria-label="Zavřít diagnostiku">×</button>
+        </div>
+        <div class="ln-v2-caret-test-box-699DBL ln-v2-caret-test-body-699DBM">
           <p>Vypínej vždy jen jednu položku, zavři okno a proveď stejný rychlý tah.
              Vypnutí může dočasně vyřadit část ovládání caretu.</p>
           <label><input type="checkbox" data-ln-caret-test="hit" checked>
@@ -178,7 +190,7 @@
              měření CARET-BF. Nastavení se po restartu APK samo obnoví.</p>
           <div class="ln-v2-caret-test-actions-699DBL">
             <button type="button" data-ln-caret-reset>Vše zapnout</button>
-            <button type="button" data-ln-caret-close>Zavřít</button>
+            <button type="button" data-ln-caret-close>Hotovo</button>
           </div>
         </div>`;
       panel.addEventListener("change", (event) => {
@@ -189,7 +201,7 @@
         }
       });
       panel.addEventListener("click", (event) => {
-        if (event.target === panel || event.target.closest?.("[data-ln-caret-close]")) {
+        if (event.target.closest?.("[data-ln-caret-close]")) {
           panel.hidden = true;
         } else if (event.target.closest?.("[data-ln-caret-reset]")) {
           for (const klic of Object.keys(v2CaretTest699DBL)) v2CaretTest699DBL[klic] = true;
@@ -198,12 +210,61 @@
           });
         }
       });
+      /* 699D-BM – přesně jako Debug Hub: tah za hlavičku s pointer capture,
+         i mimo její původní hranice. Mimo obrazovku necháváme 72 px okraje
+         okna dostupných; do obsahu editoru ani jeho gest nesaháme. */
+      const hlavicka = panel.querySelector("[data-ln-caret-drag]");
+      let tah = null;
+      const omezPozici = (left, top, sirka, vyska) => ({
+        left: Math.max(Math.min(0, 72 - sirka), Math.min(Math.max(0, window.innerWidth - 72), left)),
+        top: Math.max(0, Math.min(Math.max(0, window.innerHeight - Math.min(72, Math.max(44, vyska))), top))
+      });
+      hlavicka?.addEventListener("pointerdown", (event) => {
+        if (event.button > 0 || event.target.closest?.("button, input, select, textarea, a")) return;
+        const rect = panel.getBoundingClientRect();
+        tah = {
+          id: event.pointerId, x: event.clientX, y: event.clientY,
+          left: rect.left, top: rect.top, sirka: rect.width, vyska: rect.height
+        };
+        try { hlavicka.setPointerCapture(event.pointerId); } catch (_error) {}
+        if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
+      }, { passive: false });
+      window.addEventListener("pointermove", (event) => {
+        if (!tah || tah.id !== event.pointerId || panel.hidden) return;
+        const nova = omezPozici(
+          tah.left + event.clientX - tah.x,
+          tah.top + event.clientY - tah.y,
+          tah.sirka, tah.vyska
+        );
+        panel.style.left = `${Math.round(nova.left)}px`;
+        panel.style.top = `${Math.round(nova.top)}px`;
+        if (event.cancelable) event.preventDefault();
+      }, { capture: true, passive: false });
+      const ukonciTah = (event) => {
+        if (tah && (event.pointerId == null || event.pointerId === tah.id)) tah = null;
+      };
+      window.addEventListener("pointerup", ukonciTah, true);
+      window.addEventListener("pointercancel", ukonciTah, true);
+      hlavicka?.addEventListener("lostpointercapture", ukonciTah);
+      window.addEventListener("resize", () => {
+        if (panel.hidden) return;
+        const rect = panel.getBoundingClientRect();
+        const nova = omezPozici(rect.left, rect.top, rect.width, rect.height);
+        panel.style.left = `${Math.round(nova.left)}px`;
+        panel.style.top = `${Math.round(nova.top)}px`;
+      }, { passive: true });
       document.body.appendChild(panel);
       v2CaretTestPanel699DBL = panel;
     }
     v2CaretTestPanel699DBL.querySelectorAll("input[data-ln-caret-test]").forEach((prvek) => {
       prvek.checked = v2CaretTest699DBL[prvek.dataset.lnCaretTest] !== false;
     });
+    if (v2CaretTestPanel699DBL.dataset.lnCaretPosition !== "1") {
+      v2CaretTestPanel699DBL.style.left = `${Math.max(8, Math.round((window.innerWidth - 312) / 2))}px`;
+      v2CaretTestPanel699DBL.style.top = `${Math.max(8, Math.min(120, Math.round((window.innerHeight - 330) / 2)))}px`;
+      v2CaretTestPanel699DBL.dataset.lnCaretPosition = "1";
+    }
     v2CaretTestPanel699DBL.hidden = false;
     return true;
   }
