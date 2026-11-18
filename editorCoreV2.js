@@ -288,6 +288,7 @@
   function ukonciV2SingleCaretDrag699DBC(drag, ulozitPosledniBod = false) {
     if (!drag || v2SingleCaretDrag !== drag) return;
     if (drag.raf) cancelAnimationFrame(drag.raf);
+    if (drag.zrusCachePriScrollu) document.removeEventListener("scroll", drag.zrusCachePriScrollu, true);
     drag.raf = 0;
     if (ulozitPosledniBod) provedV2SingleCaretPohyb699DBC(drag);
     v2SingleCaretDrag = null;
@@ -400,6 +401,10 @@
           rafId: 0, rafPosledni: 0,
           mezery: [], rafGap: [], work: [], bounds: [], hit: [], lupa: [], caret: []
         };
+        v2SingleCaretDrag.zrusCachePriScrollu = () => {
+          if (v2SingleCaretDrag) v2SingleCaretDrag.rectEditoru = null;
+        };
+        document.addEventListener("scroll", v2SingleCaretDrag.zrusCachePriScrollu, true);
         v2SingleCaretDrag.profil699DBF = v2CaretProfil699DBF;
         const profil699DBF = v2CaretProfil699DBF;
         const sledujRaf699DBF = (ted) => {
