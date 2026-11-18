@@ -119,6 +119,95 @@
      žádný průběžný DOM výpis ani logování textu či zdrojů obrázků. */
   let v2CaretProfil699DBF = null;
 
+  /* 699D-BL – Krátkodobý diagnostický přepínač jednotlivých částí dragu.
+     Pouze RAM, po restartu jsou všechny části opět zapnuté. Nezasahuje
+     do modelu dokumentu, ukládání ani synchronizace. */
+  const v2CaretTest699DBL = { hit: true, caret: true, lupa: true, poloha: true };
+  let v2CaretTestPanel699DBL = null;
+
+  function otevriDiagnostikuCaretu699DBL() {
+    if (window.LubaNoteAdminTools?.isAllowed?.() !== true) return false;
+    if (!v2CaretTestPanel699DBL?.isConnected) {
+      if (!document.getElementById("ln-v2-caret-test-style-699DBL")) {
+        const styl = document.createElement("style");
+        styl.id = "ln-v2-caret-test-style-699DBL";
+        styl.textContent = `
+          .ln-v2-caret-test-699DBL { position:fixed; inset:0; z-index:2147483550;
+            background:rgba(0,0,0,.66); display:flex; align-items:center;
+            justify-content:center; padding:14px; box-sizing:border-box; }
+          .ln-v2-caret-test-699DBL[hidden] { display:none !important; }
+          .ln-v2-caret-test-box-699DBL { box-sizing:border-box; width:min(100%,390px);
+            max-height:86vh; overflow:auto; border-radius:16px; padding:18px;
+            color:var(--color-text,#eef7fa); background:var(--color-surface,#102e3b);
+            border:1px solid var(--color-accent,#21acc0); box-shadow:0 12px 40px #0009;
+            font:15px/1.4 system-ui,sans-serif; }
+          .ln-v2-caret-test-box-699DBL h3 { margin:0 0 8px; font-size:18px; }
+          .ln-v2-caret-test-box-699DBL p { margin:7px 0 12px; font-size:13px; }
+          .ln-v2-caret-test-box-699DBL label { display:flex; align-items:center; gap:10px;
+            padding:10px 0; border-bottom:1px solid #80808040; }
+          .ln-v2-caret-test-box-699DBL input { width:22px; height:22px;
+            accent-color:var(--color-accent,#20abc0); flex-shrink:0; }
+          .ln-v2-caret-test-actions-699DBL { display:flex; gap:10px; margin-top:15px; }
+          .ln-v2-caret-test-actions-699DBL button { flex:1; padding:11px 7px;
+            border-radius:10px; border:1px solid var(--color-accent,#20abc0);
+            color:var(--color-text,#eef7fa); background:transparent; font:inherit; }
+          .ln-v2-caret-test-actions-699DBL button[data-ln-caret-close] {
+            background:var(--color-accent,#146d7a); color:#fff; }
+        `;
+        document.head.appendChild(styl);
+      }
+      const panel = document.createElement("div");
+      panel.className = "ln-v2-caret-test-699DBL";
+      panel.hidden = true;
+      panel.setAttribute("role", "presentation");
+      panel.innerHTML = `
+        <div class="ln-v2-caret-test-box-699DBL" role="dialog" aria-modal="true"
+             aria-label="Diagnostika FPS caretu">
+          <h3>🧪 Výkon caretu · 699D-BL</h3>
+          <p>Vypínej vždy jen jednu položku, zavři okno a proveď stejný rychlý tah.
+             Vypnutí může dočasně vyřadit část ovládání caretu.</p>
+          <label><input type="checkbox" data-ln-caret-test="hit" checked>
+            <span>Hledání pozice v textu (H)</span></label>
+          <label><input type="checkbox" data-ln-caret-test="caret" checked>
+            <span>Překreslování caretu (C)</span></label>
+          <label><input type="checkbox" data-ln-caret-test="lupa" checked>
+            <span>Zobrazení celé lupy (L)</span></label>
+          <label><input type="checkbox" data-ln-caret-test="poloha" checked>
+            <span>Průběžný pohyb lupy (P)</span></label>
+          <p>1 = zapnuto, 0 = vypnuto. Stav H/C/L/P se připíše ke každému
+             měření CARET-BF. Nastavení se po restartu APK samo obnoví.</p>
+          <div class="ln-v2-caret-test-actions-699DBL">
+            <button type="button" data-ln-caret-reset>Vše zapnout</button>
+            <button type="button" data-ln-caret-close>Zavřít</button>
+          </div>
+        </div>`;
+      panel.addEventListener("change", (event) => {
+        const vstup = event.target.closest?.("input[data-ln-caret-test]");
+        const klic = vstup?.dataset.lnCaretTest;
+        if (klic && Object.hasOwn(v2CaretTest699DBL, klic)) {
+          v2CaretTest699DBL[klic] = vstup.checked;
+        }
+      });
+      panel.addEventListener("click", (event) => {
+        if (event.target === panel || event.target.closest?.("[data-ln-caret-close]")) {
+          panel.hidden = true;
+        } else if (event.target.closest?.("[data-ln-caret-reset]")) {
+          for (const klic of Object.keys(v2CaretTest699DBL)) v2CaretTest699DBL[klic] = true;
+          panel.querySelectorAll("input[data-ln-caret-test]").forEach((prvek) => {
+            prvek.checked = true;
+          });
+        }
+      });
+      document.body.appendChild(panel);
+      v2CaretTestPanel699DBL = panel;
+    }
+    v2CaretTestPanel699DBL.querySelectorAll("input[data-ln-caret-test]").forEach((prvek) => {
+      prvek.checked = v2CaretTest699DBL[prvek.dataset.lnCaretTest] !== false;
+    });
+    v2CaretTestPanel699DBL.hidden = false;
+    return true;
+  }
+
   function pridejCasCaretu699DBF(klic, cas) {
     const profil = v2CaretProfil699DBF;
     if (!profil || profil[klic].length >= 600) return;
@@ -163,7 +252,11 @@
         `lupaText=${statistika(profil.lupaText)}ms ` +
         `lupaMove=${statistika(profil.lupaMove)}ms ` +
         `caret=${statistika(profil.caret)}ms ` +
-        `img=${obrazky}/${viditelne}`;
+        `img=${obrazky}/${viditelne} ` +
+        `test=H${Number(profil.prepinace699DBL.hit)}` +
+        `C${Number(profil.prepinace699DBL.caret)}` +
+        `L${Number(profil.prepinace699DBL.lupa)}` +
+        `P${Number(profil.prepinace699DBL.poloha)}`;
       window.LubaNoteStartupDiag?.zapis?.("CARET-BF", radek);
     }, 0);
   }
@@ -234,14 +327,20 @@
   function zobrazV2CaretLupu699DBC(drag, touchX, touchY) {
     if (!drag?.lupaAktivni || !editor?.isConnected ||
         editor.dataset.lnV2OwnCaretOnly !== "1") return;
+    if (!v2CaretTest699DBL.lupa) {
+      skryjV2CaretLupu699DBC();
+      return;
+    }
+    const profil = v2CaretProfil699DBF;
     const pozice = posledniVyber?.sbaleny ? posledniVyber.konec : null;
     const blok = pozice && dokument?.bloky?.[pozice.blok];
     if (!blok || !jeTextovyBlok(blok)) return;
-    const profilBJ = v2CaretProfil699DBF;
-    const zacatekEnsureBJ = profilBJ ? performance.now() : 0;
+    /* 699D-BJ – časy podfází jen během jednoho skutečného tahu.
+       Žádné další DOM dotazy, logy ani zásahy do modelu. */
+    const zacatekEnsure = profil ? performance.now() : 0;
     const lupa = zajistiV2CaretLupu699DBC();
-    if (profilBJ) pridejCasCaretu699DBF("lupaEnsure", performance.now() - zacatekEnsureBJ);
-    const zacatekTextBJ = profilBJ ? performance.now() : 0;
+    if (profil) pridejCasCaretu699DBF("lupaEnsure", performance.now() - zacatekEnsure);
+    const zacatekText = profil ? performance.now() : 0;
     const klic = `${pozice.blok}:${pozice.offset}`;
     if (drag.lupaTextKlic !== klic) {
       const text = textBloku(blok);
@@ -250,21 +349,27 @@
       v2CaretLupaPo699DBC.textContent = text.slice(offset, offset + 24);
       drag.lupaTextKlic = klic;
     }
-    if (profilBJ) pridejCasCaretu699DBF("lupaText", performance.now() - zacatekTextBJ);
-    const zacatekMoveBJ = profilBJ ? performance.now() : 0;
-    const sirka = 148, vyska = 60, okraj = 8;
-    const viewportW = Number(window.innerWidth || document.documentElement.clientWidth || 360);
-    const viewportH = Number(window.innerHeight || document.documentElement.clientHeight || 640);
-    const left = Math.max(okraj, Math.min(viewportW - sirka - okraj, touchX - sirka / 2));
-    let top = touchY - 94;
-    if (top < okraj) top = touchY + 38;
-    top = Math.max(okraj, Math.min(viewportH - vyska - okraj, top));
-    const x = `${Math.round(left)}px`, y = `${Math.round(top)}px`;
-    /* 699D-BI – posun lupy přes compositor; left/top vyvolávaly layout. */
-    const transform = `translate3d(${x}, ${y}, 0)`;
-    if (lupa.style.transform !== transform) lupa.style.transform = transform;
+    if (profil) pridejCasCaretu699DBF("lupaText", performance.now() - zacatekText);
+    const zacatekMove = profil ? performance.now() : 0;
+    if (v2CaretTest699DBL.poloha || !drag.lupaPolohaNastavena) {
+      const sirka = 148, vyska = 60, okraj = 8;
+      /* 699D-BL – viewport během jednoho tahu neměříme v každém snímku.
+         Skutečný scroll/resize cache ruší stejně jako rect editoru. */
+      if (!Number.isFinite(drag.viewportSirka) || !Number.isFinite(drag.viewportVyska)) {
+        drag.viewportSirka = Number(window.innerWidth || document.documentElement.clientWidth || 360);
+        drag.viewportVyska = Number(window.innerHeight || document.documentElement.clientHeight || 640);
+      }
+      const left = Math.max(okraj, Math.min(drag.viewportSirka - sirka - okraj, touchX - sirka / 2));
+      let top = touchY - 94;
+      if (top < okraj) top = touchY + 38;
+      top = Math.max(okraj, Math.min(drag.viewportVyska - vyska - okraj, top));
+      const transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+      /* 699D-BI – posun lupy přes compositor; left/top vyvolávaly layout. */
+      if (lupa.style.transform !== transform) lupa.style.transform = transform;
+      drag.lupaPolohaNastavena = true;
+    }
     if (lupa.hidden) lupa.hidden = false;
-    if (profilBJ) pridejCasCaretu699DBF("lupaMove", performance.now() - zacatekMoveBJ);
+    if (profil) pridejCasCaretu699DBF("lupaMove", performance.now() - zacatekMove);
   }
 
   /* 699D-BC – WebView může poslat více pointermove mezi dvěma snímky.
@@ -295,7 +400,7 @@
     const cilX = Math.max(rectEditoru.left + 2, Math.min(rectEditoru.right - 2, bod.x + drag.deltaX));
     const cilY = Math.max(rectEditoru.top + 2, Math.min(rectEditoru.bottom - 2, bod.y + drag.deltaY));
     const bodKlic = `${Math.round(cilX)}:${Math.round(cilY)}`;
-    if (drag.posledniBodKlic !== bodKlic) {
+    if (v2CaretTest699DBL.hit && drag.posledniBodKlic !== bodKlic) {
       const zacatekHit = profil ? performance.now() : 0;
       zrusVyberNaBoduProSelectionMenu(cilX, cilY, { behemTahuCaretu: true });
       if (profil) pridejCasCaretu699DBF("hit", performance.now() - zacatekHit);
@@ -419,6 +524,9 @@
           startY: event.clientY,
           lupaAktivni: false,
           lupaTextKlic: "",
+          lupaPolohaNastavena: false,
+          viewportSirka: null,
+          viewportVyska: null,
           posledniBodKlic: "",
           ceka: null,
           raf: 0
@@ -426,12 +534,17 @@
         v2CaretProfil699DBF = {
           zacatek: performance.now(), posledniRam: 0, ramy: 0,
           rafId: 0, rafPosledni: 0, rectReads: 0,
+          prepinace699DBL: { ...v2CaretTest699DBL },
           mezery: [], rafGap: [], work: [], bounds: [], hit: [],
           hitPoint: [], hitMap: [], hitModel: [],
           lupa: [], lupaEnsure: [], lupaText: [], lupaMove: [], caret: []
         };
         v2SingleCaretDrag.zrusCachePriScrollu = () => {
-          if (v2SingleCaretDrag) v2SingleCaretDrag.rectEditoru = null;
+          if (v2SingleCaretDrag) {
+            v2SingleCaretDrag.rectEditoru = null;
+            v2SingleCaretDrag.viewportSirka = null;
+            v2SingleCaretDrag.viewportVyska = null;
+          }
         };
         document.addEventListener("scroll", v2SingleCaretDrag.zrusCachePriScrollu, true);
         window.addEventListener("resize", v2SingleCaretDrag.zrusCachePriScrollu);
@@ -4825,8 +4938,9 @@
   function zrusVyberNaBoduProSelectionMenu(clientX, clientY, { behemTahuCaretu = false } = {}) {
     if (!editor || !Number.isFinite(Number(clientX)) || !Number.isFinite(Number(clientY))) return false;
 
-    const profilBJ = behemTahuCaretu ? v2CaretProfil699DBF : null;
-    const zacatekPointBJ = profilBJ ? performance.now() : 0;
+    /* 699D-BJ – rozdělení hit-testu bez změny jeho rozhodování. */
+    const profil = behemTahuCaretu ? v2CaretProfil699DBF : null;
+    const zacatekPoint = profil ? performance.now() : 0;
     let node = null;
     let offset = 0;
     if (typeof document.caretPositionFromPoint === "function") {
@@ -4839,24 +4953,33 @@
       offset = range?.startOffset ?? 0;
     }
 
-    if (profilBJ) pridejCasCaretu699DBF("hitPoint", performance.now() - zacatekPointBJ);
+    if (profil) pridejCasCaretu699DBF("hitPoint", performance.now() - zacatekPoint);
     if (!node || !editor.contains(node)) return false;
-    const zacatekMapBJ = profilBJ ? performance.now() : 0;
+    const zacatekMap = profil ? performance.now() : 0;
     const pozice = domBodNaModel(node, offset);
-    if (profilBJ) pridejCasCaretu699DBF("hitMap", performance.now() - zacatekMapBJ);
+    if (profil) pridejCasCaretu699DBF("hitMap", performance.now() - zacatekMap);
     if (!pozice) return false;
-    const zacatekModelBJ = profilBJ ? performance.now() : 0;
 
+    const zacatekModel = profil ? performance.now() : 0;
     if (behemTahuCaretu && v2SingleCaretDrag) {
       /* 699D-BE – Vlastní caret už kreslíme z modelové pozice. Vyvolat
          zde removeAllRanges/addRange při každém pixelu spouští opakované
          selectionchange handlery Core i Bridge a zpomaluje WebView. */
-      posledniPozice = { ...pozice };
-      posledniVyber = {
-        zacatek: { ...pozice }, konec: { ...pozice }, sbaleny: true
-      };
-      ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
-      naplanujV2LubaCaret(posledniVyber, "caret-drag-preview-699DBE");
+      /* 699D-BL – jeden modelový offset může odpovídat několika pixelům.
+         Není důvod při každém takovém pohybu přeměřovat Range a caret. */
+      const stejne = posledniVyber?.sbaleny &&
+        posledniVyber.konec.blok === pozice.blok &&
+        posledniVyber.konec.offset === pozice.offset;
+      if (!stejne) {
+        posledniPozice = { ...pozice };
+        posledniVyber = {
+          zacatek: { ...pozice }, konec: { ...pozice }, sbaleny: true
+        };
+        ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
+        if (v2CaretTest699DBL.caret) {
+          naplanujV2LubaCaret(posledniVyber, "caret-drag-preview-699DBE");
+        }
+      }
     } else {
       nastavVyberModelu(pozice, pozice);
     }
@@ -4875,7 +4998,7 @@
     aktivniFormatPozice = klicPozice(pozice);
     aktivniFormatZdroj = "";
     if (!behemTahuCaretu) aktualizujToolbarVelikosti(posledniVyber);
-    if (profilBJ) pridejCasCaretu699DBF("hitModel", performance.now() - zacatekModelBJ);
+    if (profil) pridejCasCaretu699DBF("hitModel", performance.now() - zacatekModel);
     return true;
   }
 
@@ -11261,6 +11384,7 @@
     vlozExterniObsahZeSchranky,
     vyberVseProSelectionMenu,
     zrusVyberNaBoduProSelectionMenu,
+    otevriDiagnostikuCaretu699DBL,
     maVyberPolozkySeznamu: maV2VyberPolozkySeznamu,
     zrusVyberPolozkySeznamu: zrusV2VyberPolozkySeznamu,
     jeInterakcePresunuSeznamu: jeV2InterakcePresunuSeznamu,

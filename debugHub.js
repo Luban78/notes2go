@@ -2971,6 +2971,7 @@ async function zkopirujVykonCaretu699DBG(tlacitko) {
 
       <div class="ln-dh-footer">
         <button type="button" class="ln-dh-copy" data-dh="copy-caret-699DBG" style="grid-column:1/-1">Kopírovat měření caretu</button>
+        <button type="button" class="ln-dh-copy" data-dh="caret-test-699DBL" style="grid-column:1/-1">🧪 Test viníků FPS caretu</button>
         <!-- Primary SYNC + reminders report is attached on demand by 691BA. -->
         <details class="ln-dh-report-extras">
           <summary>Další reporty a nástroje</summary>
@@ -3150,6 +3151,14 @@ async function zkopirujVykonCaretu699DBG(tlacitko) {
       }
       if (akce === "copy-caret-699DBG") {
         void zkopirujVykonCaretu699DBG(tlacitko);
+        return;
+      }
+      if (akce === "caret-test-699DBL") {
+        if (window.LubaNoteEditorV2?.otevriDiagnostikuCaretu699DBL?.() !== true) {
+          const textPred = tlacitko.textContent;
+          tlacitko.textContent = "Panel caretu není dostupný";
+          setTimeout(() => { tlacitko.textContent = textPred; }, 1800);
+        }
         return;
       }
 
