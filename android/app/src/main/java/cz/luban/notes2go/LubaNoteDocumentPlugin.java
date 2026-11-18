@@ -76,6 +76,16 @@ public class LubaNoteDocumentPlugin extends Plugin {
   /* 652C – dočasný PDF soubor používaný pouze pro vlastní náhled exportu. */
   private File pdfNahledSoubor = null;
 
+  /* 699D-AY: PDF z IndexedDB se prenasi po blocich do privatni cache.
+   * Zadny zaznam knihovny ani puvodni Blob se pri prohlizeni nemeni. */
+  private static final int PDF_WEB_BLOK_MAX_699DAY = 256 * 1024;
+  private static final int PDF_WEB_CELE_MAX_699DAY = 100 * 1024 * 1024;
+  private File pdfWebPrenosSoubor699DAY = null;
+  private File pdfWebOtevrenySoubor699DAY = null;
+  private String pdfWebPrenosToken699DAY = null;
+  private int pdfWebPrenosVelikost699DAY = 0;
+  private int pdfWebPrenosZapsano699DAY = 0;
+
   /* Zdroj PDF držený jen po dobu systémového dialogu „Uložit kopii“. */
   private Uri cekajiciPdfZdrojUri = null;
 
@@ -95,6 +105,17 @@ public class LubaNoteDocumentPlugin extends Plugin {
     File[] soubory = slozka.listFiles();
     if (soubory != null) {
       for (File soubor : soubory) {
+        if (soubor.isFile() && soubor.getName().endsWith(".tmp")) {
+          try { soubor.delete(); } catch (Exception ignored) {}
+        }
+      }
+    }
+
+    // Jen nase dočasne soubory z predchoziho ukonceneho procesu.
+    File pdfCache = new File(getContext().getCacheDir(), "ln-library-pdf-699DAY");
+    File[] pdfSoubory = pdfCache.listFiles();
+    if (pdfSoubory != null) {
+      for (File soubor : pdfSoubory) {
         if (soubor.isFile() && soubor.getName().endsWith(".tmp")) {
           try { soubor.delete(); } catch (Exception ignored) {}
         }
@@ -648,6 +669,148 @@ public class LubaNoteDocumentPlugin extends Plugin {
     }
   }
 
+  private void zrusPdfPrenosInterni699DAY() {
+    if (pdfWebPrenosSoubor699DAY != null) {
+      try { pdfWebPrenosSoubor699DAY.delete(); } catch (Exception ignored) {}
+    }
+    pdfWebPrenosSoubor699DAY = null;
+    pdfWebPrenosToken699DAY = null;
+    pdfWebPrenosVelikost699DAY = 0;
+    pdfWebPrenosZapsano699DAY = 0;
+  }
+
+  @PluginMethod
+  public void zacniPdfZKnihovny699DAY(PluginCall call) {
+    Integer velikost = call.getInt("totalBytes");
+    if (velikost == null || velikost < 5 || velikost > PDF_WEB_CELE_MAX_699DAY) {
+      call.reject("Neplatná velikost PDF (maximum 100 MB).");
+      return;
+    }
+
+    synchronized (pdfViewerLock) {
+      zrusPdfPrenosInterni699DAY();
+      File slozka = new File(getContext().getCacheDir(), "ln-library-pdf-699DAY");
+      if (!slozka.isDirectory() && !slozka.mkdirs()) {
+        call.reject("Android nevytvořil dočasnou složku PDF.");
+        return;
+      }
+
+      File soubor = new File(slozka, UUID.randomUUID().toString() + ".tmp");
+      try {
+        if (!soubor.createNewFile()) {
+          throw new IOException("Dočasný soubor PDF už existuje.");
+        }
+        pdfWebPrenosSoubor699DAY = soubor;
+        pdfWebPrenosToken699DAY = UUID.randomUUID().toString();
+        pdfWebPrenosVelikost699DAY = velikost;
+        pdfWebPrenosZapsano699DAY = 0;
+
+        JSObject odpoved = new JSObject();
+        odpoved.put("token", pdfWebPrenosToken699DAY);
+        call.resolve(odpoved);
+      } catch (IOException chyba) {
+        try { soubor.delete(); } catch (Exception ignored) {}
+        call.reject("Příprava PDF z knihovny selhala.", chyba);
+      }
+    }
+  }
+
+  @PluginMethod
+  public void zapisPdfBlok699DAY(PluginCall call) {
+    String token = call.getString("token");
+    Integer offset = call.getInt("offset");
+    String data = call.getString("data");
+    synchronized (pdfViewerLock) {
+      if (pdfWebPrenosSoubor699DAY == null || token == null ||
+          !token.equals(pdfWebPrenosToken699DAY) || offset == null ||
+          offset != pdfWebPrenosZapsano699DAY || data == null ||
+          data.length() > 4 * ((PDF_WEB_BLOK_MAX_699DAY + 2) / 3) + 4) {
+        call.reject("Neplatný blok přenosu PDF.");
+        return;
+      }
+
+      try {
+        byte[] bajty = Base64.decode(data, Base64.NO_WRAP);
+        if (bajty.length == 0 || bajty.length > PDF_WEB_BLOK_MAX_699DAY ||
+            pdfWebPrenosZapsano699DAY + bajty.length > pdfWebPrenosVelikost699DAY) {
+          call.reject("Blok PDF překračuje povolenou velikost.");
+          return;
+        }
+
+        try (FileOutputStream vystup = new FileOutputStream(pdfWebPrenosSoubor699DAY, true)) {
+          vystup.write(bajty);
+        }
+        pdfWebPrenosZapsano699DAY += bajty.length;
+        JSObject odpoved = new JSObject();
+        odpoved.put("written", pdfWebPrenosZapsano699DAY);
+        call.resolve(odpoved);
+      } catch (IOException | IllegalArgumentException chyba) {
+        call.reject("Zápis PDF z knihovny selhal.", chyba);
+      }
+    }
+  }
+
+  @PluginMethod
+  public void dokoncitPdfZKnihovny699DAY(PluginCall call) {
+    String token = call.getString("token");
+    synchronized (pdfViewerLock) {
+      if (pdfWebPrenosSoubor699DAY == null || token == null ||
+          !token.equals(pdfWebPrenosToken699DAY) ||
+          pdfWebPrenosZapsano699DAY != pdfWebPrenosVelikost699DAY ||
+          pdfWebPrenosSoubor699DAY.length() != pdfWebPrenosVelikost699DAY) {
+        call.reject("Přenos PDF není kompletní.");
+        return;
+      }
+
+      // Zavrit pouze drive otevreny viewer; rozpracovany prenos zachovat.
+      zavriPdfViewerInterni();
+      ParcelFileDescriptor descriptor = null;
+      PdfRenderer renderer = null;
+      try {
+        descriptor = ParcelFileDescriptor.open(
+          pdfWebPrenosSoubor699DAY, ParcelFileDescriptor.MODE_READ_ONLY
+        );
+        renderer = new PdfRenderer(descriptor);
+        if (renderer.getPageCount() <= 0) {
+          throw new IOException("PDF neobsahuje žádné stránky.");
+        }
+
+        pdfViewerDescriptor = descriptor;
+        pdfViewerRenderer = renderer;
+        pdfViewerUri = Uri.fromFile(pdfWebPrenosSoubor699DAY);
+        pdfWebOtevrenySoubor699DAY = pdfWebPrenosSoubor699DAY;
+        pdfWebPrenosSoubor699DAY = null;
+        pdfWebPrenosToken699DAY = null;
+        pdfWebPrenosVelikost699DAY = 0;
+        pdfWebPrenosZapsano699DAY = 0;
+
+        JSObject odpoved = new JSObject();
+        odpoved.put("opened", true);
+        odpoved.put("pageCount", renderer.getPageCount());
+        call.resolve(odpoved);
+      } catch (Exception chyba) {
+        if (renderer != null) {
+          try { renderer.close(); } catch (Exception ignored) {}
+        }
+        if (descriptor != null) {
+          try { descriptor.close(); } catch (Exception ignored) {}
+        }
+        call.reject("PDF z knihovny se nepodařilo nativně otevřít.", chyba);
+      }
+    }
+  }
+
+  @PluginMethod
+  public void zrusPdfPrenos699DAY(PluginCall call) {
+    String token = call.getString("token");
+    synchronized (pdfViewerLock) {
+      if (token != null && token.equals(pdfWebPrenosToken699DAY)) {
+        zrusPdfPrenosInterni699DAY();
+      }
+    }
+    call.resolve();
+  }
+
   private JSObject otevriPdfProViewer(
     Uri uri,
     String nazevSouboru,
@@ -828,6 +991,11 @@ public class LubaNoteDocumentPlugin extends Plugin {
         // Náhled je pouze dočasný cache soubor.
       }
       pdfNahledSoubor = null;
+    }
+
+    if (pdfWebOtevrenySoubor699DAY != null) {
+      try { pdfWebOtevrenySoubor699DAY.delete(); } catch (Exception ignored) {}
+      pdfWebOtevrenySoubor699DAY = null;
     }
 
     pdfViewerUri = null;

@@ -28,6 +28,7 @@
   const STORE_FOLDERS = 'folders';
   const STORE_FILES = 'files';
   const MAX_PDF_BYTES = 100 * 1024 * 1024;
+  const PDF_ANDROID_BLOK_699DAY = 256 * 1024;
   const MAX_DOCX_BYTES = 20 * 1024 * 1024;
   const MAX_DOC_BYTES = 24 * 1024 * 1024;
   const MAX_EPUB_BYTES = 100 * 1024 * 1024;
@@ -50,6 +51,7 @@
   });
 
   let dbPromise = null;
+  let pdfZKnihovnyOtevirani699DAY = false;
   let aktivniSlozkaId = null;
   let dokumentyPrvky = null;
   let posledniSlozky = [];
@@ -4441,6 +4443,62 @@
     };
   }
 
+  function pdfBajtyDoBase64_699DAY(bajty) {
+    let binarni = '';
+    for (let index = 0; index < bajty.length; index += 16384) {
+      binarni += String.fromCharCode(...bajty.subarray(index, index + 16384));
+    }
+    return btoa(binarni);
+  }
+
+  // 699D-AY: PDF ulozene v IndexedDB je treba na Androidu predat
+  // nativnimu PdfRendereru. Prenos probiha po blocich do docasne cache;
+  // zaznam ani jeho Blob v knihovne se nijak nemeni.
+  async function otevriWebPdfNativne699DAY(plugin, blob) {
+    const potrebneMetody = [
+      'zacniPdfZKnihovny699DAY',
+      'zapisPdfBlok699DAY',
+      'dokoncitPdfZKnihovny699DAY',
+      'zrusPdfPrenos699DAY'
+    ];
+    if (potrebneMetody.some((metoda) => typeof plugin?.[metoda] !== 'function')) {
+      throw new Error('V APK chybí nativní podpora PDF z knihovny 699D-AY. Je potřeba sestavit a nainstalovat aktualizovanou APK.');
+    }
+    if (!(blob instanceof Blob) || blob.size <= 0 || blob.size > MAX_PDF_BYTES) {
+      throw new Error('PDF v knihovně nemá platnou velikost (maximum 100 MB).');
+    }
+
+    let token = null;
+    let hotovo = false;
+    try {
+      const priprava = await plugin.zacniPdfZKnihovny699DAY({ totalBytes: blob.size });
+      token = priprava?.token;
+      if (!token) throw new Error('Android nepotvrdil přípravu PDF.');
+
+      for (let offset = 0; offset < blob.size; offset += PDF_ANDROID_BLOK_699DAY) {
+        const cast = blob.slice(offset, offset + PDF_ANDROID_BLOK_699DAY);
+        const bajty = new Uint8Array(await cast.arrayBuffer());
+        await plugin.zapisPdfBlok699DAY({
+          token,
+          offset,
+          data: pdfBajtyDoBase64_699DAY(bajty)
+        });
+      }
+
+      const vysledek = await plugin.dokoncitPdfZKnihovny699DAY({ token });
+      if (!vysledek?.opened || !(Number(vysledek.pageCount) > 0)) {
+        throw new Error('Nativní prohlížeč PDF neotevřel.');
+      }
+      hotovo = true;
+      return vysledek;
+    } finally {
+      if (token && !hotovo) {
+        try { await plugin.zrusPdfPrenos699DAY({ token }); }
+        catch (error) { console.warn('Úklid neúspěšného PDF přenosu selhal:', error); }
+      }
+    }
+  }
+
   async function otevriSoubor(idSouboru) {
     const record = await nactiSoubor(idSouboru);
     if (!record) {
@@ -4510,6 +4568,8 @@
       return;
     }
 
+    if (pdfZKnihovnyOtevirani699DAY) return;
+    pdfZKnihovnyOtevirani699DAY = true;
     try {
       if (record.storageMode === 'android') {
         const plugin = ziskejNativniPlugin();
@@ -4536,6 +4596,20 @@
         throw new Error('PDF data nejsou dostupná.');
       }
 
+      if (jeAndroid()) {
+        const vysledek = await otevriWebPdfNativne699DAY(
+          ziskejNativniPlugin(), record.blob
+        );
+        await viewer({
+          typ: 'pdf',
+          native: true,
+          pageCount: Number(vysledek.pageCount),
+          nazevSouboru: record.name,
+          mimeType: 'application/pdf'
+        });
+        return;
+      }
+
       await viewer({
         typ: 'pdf',
         file: record.blob,
@@ -4544,7 +4618,15 @@
       });
     } catch (error) {
       console.error('Otevření uloženého PDF selhalo:', error);
-      zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.pdfOpenFailed', 'PDF se nepodařilo otevřít.'));
+      const text = String(error?.message || '');
+      zobrazChybu(
+        docT('documents.title', 'Dokumenty'),
+        text.includes('699D-AY')
+          ? text
+          : docT('documents.pdfOpenFailed', 'PDF se nepodařilo otevřít.')
+      );
+    } finally {
+      pdfZKnihovnyOtevirani699DAY = false;
     }
   }
 
