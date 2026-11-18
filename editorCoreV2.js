@@ -153,6 +153,7 @@
         `rafGap=${statistika(profil.rafGap)}ms ` +
         `work=${statistika(profil.work)}ms ` +
         `bounds=${statistika(profil.bounds)}ms ` +
+        `rectReads=${profil.rectReads} ` +
         `hit=${statistika(profil.hit)}ms ` +
         `lupa=${statistika(profil.lupa)}ms ` +
         `caret=${statistika(profil.caret)}ms ` +
@@ -170,13 +171,13 @@
          Samostatná třída zamezí zásahu do jejího selection/menu enginu. */
       styl.textContent = `
         .ln-v2-caret-lupa-699DBC {
-          position: fixed; width: 148px; height: 60px;
+          position: fixed; left: 0; top: 0; width: 148px; height: 60px;
           z-index: 2147483300; overflow: hidden; border-radius: 31px;
           border: 2px solid rgba(128, 203, 196, .96);
           background: var(--color-surface, #082533);
           box-shadow: 0 8px 24px rgba(0, 0, 0, .34);
           pointer-events: none; user-select: none; -webkit-user-select: none;
-          contain: layout paint;
+          contain: layout paint; will-change: transform;
         }
         .ln-v2-caret-lupa-699DBC[hidden] { display: none !important; }
         .ln-v2-caret-lupa-699DBC .ln-v2-caret-lupa-text-699DBC {
@@ -247,8 +248,9 @@
     if (top < okraj) top = touchY + 38;
     top = Math.max(okraj, Math.min(viewportH - vyska - okraj, top));
     const x = `${Math.round(left)}px`, y = `${Math.round(top)}px`;
-    if (lupa.style.left !== x) lupa.style.left = x;
-    if (lupa.style.top !== y) lupa.style.top = y;
+    /* 699D-BI – posun lupy přes compositor; left/top vyvolávaly layout. */
+    const transform = `translate3d(${x}, ${y}, 0)`;
+    if (lupa.style.transform !== transform) lupa.style.transform = transform;
     if (lupa.hidden) lupa.hidden = false;
   }
 
@@ -268,7 +270,14 @@
     }
     drag.ceka = null;
     const zacatekBounds = profil ? performance.now() : 0;
-    const rectEditoru = editor.getBoundingClientRect();
+    /* 699D-BI – čtení getBoundingClientRect() v každém snímku vynucovalo
+       synchronní přepočet layoutu. Cache žije jen po dobu jednoho tahu;
+       invalidace probíhá událostmi scroll/resize, ne čtením clientWidth. */
+    if (!drag.rectEditoru) {
+      drag.rectEditoru = editor.getBoundingClientRect();
+      if (profil) profil.rectReads++;
+    }
+    const rectEditoru = drag.rectEditoru;
     if (profil) pridejCasCaretu699DBF("bounds", performance.now() - zacatekBounds);
     const cilX = Math.max(rectEditoru.left + 2, Math.min(rectEditoru.right - 2, bod.x + drag.deltaX));
     const cilY = Math.max(rectEditoru.top + 2, Math.min(rectEditoru.bottom - 2, bod.y + drag.deltaY));
@@ -288,9 +297,14 @@
   function ukonciV2SingleCaretDrag699DBC(drag, ulozitPosledniBod = false) {
     if (!drag || v2SingleCaretDrag !== drag) return;
     if (drag.raf) cancelAnimationFrame(drag.raf);
-    if (drag.zrusCachePriScrollu) document.removeEventListener("scroll", drag.zrusCachePriScrollu, true);
     drag.raf = 0;
     if (ulozitPosledniBod) provedV2SingleCaretPohyb699DBC(drag);
+    if (drag.zrusCachePriScrollu) {
+      document.removeEventListener("scroll", drag.zrusCachePriScrollu, true);
+      window.removeEventListener("resize", drag.zrusCachePriScrollu);
+      window.visualViewport?.removeEventListener("resize", drag.zrusCachePriScrollu);
+      window.visualViewport?.removeEventListener("scroll", drag.zrusCachePriScrollu);
+    }
     v2SingleCaretDrag = null;
     if (v2SingleCaretHandle) v2SingleCaretHandle.style.opacity = "";
     skryjV2CaretLupu699DBC();
@@ -398,13 +412,16 @@
         };
         v2CaretProfil699DBF = {
           zacatek: performance.now(), posledniRam: 0, ramy: 0,
-          rafId: 0, rafPosledni: 0,
+          rafId: 0, rafPosledni: 0, rectReads: 0,
           mezery: [], rafGap: [], work: [], bounds: [], hit: [], lupa: [], caret: []
         };
         v2SingleCaretDrag.zrusCachePriScrollu = () => {
           if (v2SingleCaretDrag) v2SingleCaretDrag.rectEditoru = null;
         };
         document.addEventListener("scroll", v2SingleCaretDrag.zrusCachePriScrollu, true);
+        window.addEventListener("resize", v2SingleCaretDrag.zrusCachePriScrollu);
+        window.visualViewport?.addEventListener("resize", v2SingleCaretDrag.zrusCachePriScrollu);
+        window.visualViewport?.addEventListener("scroll", v2SingleCaretDrag.zrusCachePriScrollu);
         v2SingleCaretDrag.profil699DBF = v2CaretProfil699DBF;
         const profil699DBF = v2CaretProfil699DBF;
         const sledujRaf699DBF = (ted) => {
