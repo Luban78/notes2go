@@ -115,6 +115,51 @@
   let v2CaretLupa699DBC = null;
   let v2CaretLupaPred699DBC = null;
   let v2CaretLupaPo699DBC = null;
+  /* 699D-BF – Diagnostika JEDINÉHO reálného tahu; žádné změny obsahu,
+     žádný průběžný DOM výpis ani logování textu či zdrojů obrázků. */
+  let v2CaretProfil699DBF = null;
+
+  function pridejCasCaretu699DBF(klic, cas) {
+    const profil = v2CaretProfil699DBF;
+    if (!profil || profil[klic].length >= 600) return;
+    profil[klic].push(Math.max(0, Number(cas) || 0));
+  }
+
+  function uzavriProfilCaretu699DBF(profil) {
+    if (!profil || v2CaretProfil699DBF !== profil) return;
+    if (profil.rafId) cancelAnimationFrame(profil.rafId);
+    v2CaretProfil699DBF = null;
+    profil.trvani = performance.now() - profil.zacatek;
+    /* Náročnější statistiku a jediný log provedeme až PO skončení tahu. */
+    setTimeout(() => {
+      const statistika = (hodnoty) => {
+        if (!hodnoty.length) return "-/-";
+        const razene = [...hodnoty].sort((a, b) => a - b);
+        const prumer = hodnoty.reduce((a, b) => a + b, 0) / hodnoty.length;
+        return `${prumer.toFixed(1)}/${razene[Math.ceil(razene.length * .95) - 1].toFixed(1)}`;
+      };
+      let obrazky = 0, viditelne = 0;
+      try {
+        const bounds = editor?.getBoundingClientRect();
+        const prvky = editor?.querySelectorAll(".ln-v2-obrazek img") || [];
+        obrazky = prvky.length;
+        for (const img of prvky) {
+          const r = img.getBoundingClientRect();
+          if (bounds && r.bottom > bounds.top && r.top < bounds.bottom &&
+              r.right > bounds.left && r.left < bounds.right) viditelne++;
+        }
+      } catch (_error) {}
+      const radek = `n=${profil.ramy} gesture=${Math.round(profil.trvani)}ms ` +
+        `rafGap=${statistika(profil.rafGap)}ms ` +
+        `work=${statistika(profil.work)}ms ` +
+        `bounds=${statistika(profil.bounds)}ms ` +
+        `hit=${statistika(profil.hit)}ms ` +
+        `lupa=${statistika(profil.lupa)}ms ` +
+        `caret=${statistika(profil.caret)}ms ` +
+        `img=${obrazky}/${viditelne}`;
+      window.LubaNoteStartupDiag?.zapis?.("CARET-BF", radek);
+    }, 0);
+  }
 
   function zajistiV2CaretLupu699DBC() {
     if (v2CaretLupa699DBC?.isConnected) return v2CaretLupa699DBC;
@@ -213,16 +258,31 @@
   function provedV2SingleCaretPohyb699DBC(drag) {
     const bod = drag?.ceka;
     if (!bod || !editor?.isConnected) return;
+    const profil = v2CaretProfil699DBF;
+    const zacatekPrace = profil ? performance.now() : 0;
+    if (profil) {
+      const ted = performance.now();
+      if (profil.posledniRam) pridejCasCaretu699DBF("mezery", ted - profil.posledniRam);
+      profil.posledniRam = ted;
+      profil.ramy++;
+    }
     drag.ceka = null;
+    const zacatekBounds = profil ? performance.now() : 0;
     const rectEditoru = editor.getBoundingClientRect();
+    if (profil) pridejCasCaretu699DBF("bounds", performance.now() - zacatekBounds);
     const cilX = Math.max(rectEditoru.left + 2, Math.min(rectEditoru.right - 2, bod.x + drag.deltaX));
     const cilY = Math.max(rectEditoru.top + 2, Math.min(rectEditoru.bottom - 2, bod.y + drag.deltaY));
     const bodKlic = `${Math.round(cilX)}:${Math.round(cilY)}`;
     if (drag.posledniBodKlic !== bodKlic) {
+      const zacatekHit = profil ? performance.now() : 0;
       zrusVyberNaBoduProSelectionMenu(cilX, cilY, { behemTahuCaretu: true });
+      if (profil) pridejCasCaretu699DBF("hit", performance.now() - zacatekHit);
       drag.posledniBodKlic = bodKlic;
     }
+    const zacatekLupy = profil ? performance.now() : 0;
     zobrazV2CaretLupu699DBC(drag, bod.x, bod.y);
+    if (profil) pridejCasCaretu699DBF("lupa", performance.now() - zacatekLupy);
+    if (profil) pridejCasCaretu699DBF("work", performance.now() - zacatekPrace);
   }
 
   function ukonciV2SingleCaretDrag699DBC(drag, ulozitPosledniBod = false) {
@@ -248,6 +308,7 @@
       nastavVyberModelu(cil, cil);
       aktualizujToolbarVelikosti(posledniVyber);
     }
+    uzavriProfilCaretu699DBF(drag.profil699DBF);
   }
   /* 691BO – Core V2 own-caret visibility follows the MODEL, not a body
      class. MOVE hides the old position; only a successfully positioned
@@ -334,6 +395,24 @@
           ceka: null,
           raf: 0
         };
+        v2CaretProfil699DBF = {
+          zacatek: performance.now(), posledniRam: 0, ramy: 0,
+          rafId: 0, rafPosledni: 0,
+          mezery: [], rafGap: [], work: [], bounds: [], hit: [], lupa: [], caret: []
+        };
+        v2SingleCaretDrag.profil699DBF = v2CaretProfil699DBF;
+        const profil699DBF = v2CaretProfil699DBF;
+        const sledujRaf699DBF = (ted) => {
+          if (v2CaretProfil699DBF !== profil699DBF ||
+              v2SingleCaretDrag?.profil699DBF !== profil699DBF ||
+              ted - profil699DBF.zacatek > 20000) return;
+          if (profil699DBF.rafPosledni) {
+            pridejCasCaretu699DBF("rafGap", ted - profil699DBF.rafPosledni);
+          }
+          profil699DBF.rafPosledni = ted;
+          profil699DBF.rafId = requestAnimationFrame(sledujRaf699DBF);
+        };
+        profil699DBF.rafId = requestAnimationFrame(sledujRaf699DBF);
         document.body?.classList.add("ln-v2-single-caret-drag-699DBD");
         document.dispatchEvent(new CustomEvent("lubanote:v2-single-caret-drag-699DBD", {
           detail: { active: true }
@@ -654,15 +733,19 @@
               posunV2CaretPoVstupuDoViditelneOblasti(snapshot, geometrie));
             // Even a clamped scroll is treated as invalidation. Read fresh
             // coordinates if the original scroll routine requested a move.
+            const zacatekCaret699DBF = v2CaretProfil699DBF ? performance.now() : 0;
             merOdlozenouOperaci699DAE('caret:source:' + zdroj699DAG, () =>
               merOdlozenouOperaci699DAE('caret:raf', () =>
                 vykresliV2LubaCaret(snapshot, posun ? null : geometrie)));
+            if (zacatekCaret699DBF) pridejCasCaretu699DBF("caret", performance.now() - zacatekCaret699DBF);
           });
           return;
         }
       }
+      const zacatekCaret699DBF = v2CaretProfil699DBF ? performance.now() : 0;
       merOdlozenouOperaci699DAE('caret:source:' + zdroj699DAG, () =>
         merOdlozenouOperaci699DAE('caret:raf', () => vykresliV2LubaCaret(snapshot)));
+      if (zacatekCaret699DBF) pridejCasCaretu699DBF("caret", performance.now() - zacatekCaret699DBF);
     });
   }
 
