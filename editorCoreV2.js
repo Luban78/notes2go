@@ -122,7 +122,10 @@
   /* 699D-BL – Krátkodobý diagnostický přepínač jednotlivých částí dragu.
      Pouze RAM, po restartu jsou všechny části opět zapnuté. Nezasahuje
      do modelu dokumentu, ukládání ani synchronizace. */
-  const v2CaretTest699DBL = { hit: true, caret: true, lupa: true, poloha: true };
+  const v2CaretTest699DBL = {
+    hit: true, caret: true, geometrie: true, vykresleni: true,
+    lupa: true, poloha: true
+  };
   let v2CaretTestPanel699DBL = null;
 
   function otevriDiagnostikuCaretu699DBL() {
@@ -172,7 +175,7 @@
       panel.setAttribute("aria-label", "Diagnostika FPS caretu");
       panel.innerHTML = `
         <div class="ln-v2-caret-test-head-699DBM" data-ln-caret-drag>
-          <strong>⠿ 🧪 Výkon caretu · 699D-BM</strong>
+          <strong>⠿ 🧪 Výkon caretu · 699D-BO</strong>
           <button type="button" data-ln-caret-close aria-label="Zavřít diagnostiku">×</button>
         </div>
         <div class="ln-v2-caret-test-box-699DBL ln-v2-caret-test-body-699DBM">
@@ -181,13 +184,18 @@
           <label><input type="checkbox" data-ln-caret-test="hit" checked>
             <span>Hledání pozice v textu (H)</span></label>
           <label><input type="checkbox" data-ln-caret-test="caret" checked>
-            <span>Překreslování caretu (C)</span></label>
+            <span>Celý náhled caretu (C)</span></label>
+          <label><input type="checkbox" data-ln-caret-test="geometrie" checked>
+            <span>Výpočet přesné geometrie (G)</span></label>
+          <label><input type="checkbox" data-ln-caret-test="vykresleni" checked>
+            <span>Vizuální změny caretu (V)</span></label>
           <label><input type="checkbox" data-ln-caret-test="lupa" checked>
             <span>Zobrazení celé lupy (L)</span></label>
           <label><input type="checkbox" data-ln-caret-test="poloha" checked>
             <span>Průběžný pohyb lupy (P)</span></label>
-          <p>1 = zapnuto, 0 = vypnuto. Stav H/C/L/P se připíše ke každému
-             měření CARET-BF. Nastavení se po restartu APK samo obnoví.</p>
+          <p>G vypnuté = přibližná poloha podle prstu. V vypnuté = caret během
+             tahu stojí. Stav H/C/L/P/G/V se uloží do měření CARET-BF.
+             Po restartu APK se všechny volby obnoví.</p>
           <div class="ln-v2-caret-test-actions-699DBL">
             <button type="button" data-ln-caret-reset>Vše zapnout</button>
             <button type="button" data-ln-caret-close>Hotovo</button>
@@ -313,11 +321,15 @@
         `lupaText=${statistika(profil.lupaText)}ms ` +
         `lupaMove=${statistika(profil.lupaMove)}ms ` +
         `caret=${statistika(profil.caret)}ms ` +
+        `geom=${statistika(profil.caretGeom699DBO)}ms ` +
+        `visual=${statistika(profil.caretVisual699DBO)}ms ` +
         `img=${obrazky}/${viditelne} ` +
         `test=H${Number(profil.prepinace699DBL.hit)}` +
         `C${Number(profil.prepinace699DBL.caret)}` +
         `L${Number(profil.prepinace699DBL.lupa)}` +
-        `P${Number(profil.prepinace699DBL.poloha)}`;
+        `P${Number(profil.prepinace699DBL.poloha)}` +
+        `G${Number(profil.prepinace699DBL.geometrie)}` +
+        `V${Number(profil.prepinace699DBL.vykresleni)}`;
       window.LubaNoteStartupDiag?.zapis?.("CARET-BF", radek);
     }, 0);
   }
@@ -460,6 +472,9 @@
     if (profil) pridejCasCaretu699DBF("bounds", performance.now() - zacatekBounds);
     const cilX = Math.max(rectEditoru.left + 2, Math.min(rectEditoru.right - 2, bod.x + drag.deltaX));
     const cilY = Math.max(rectEditoru.top + 2, Math.min(rectEditoru.bottom - 2, bod.y + drag.deltaY));
+    /* 699D-BO – pouze diagnostický bod pro G=0: vizuální změny zůstanou
+       aktivní, ale bez dalšího Range/getClientRects. Přesnost je záměrně nižší. */
+    drag.posledniCil699DBO = { x: cilX, y: cilY };
     const bodKlic = `${Math.round(cilX)}:${Math.round(cilY)}`;
     if (v2CaretTest699DBL.hit && drag.posledniBodKlic !== bodKlic) {
       const zacatekHit = profil ? performance.now() : 0;
@@ -581,6 +596,8 @@
           pointerId: event.pointerId,
           deltaX: rect.left - event.clientX,
           deltaY: rect.top + rect.height / 2 - event.clientY,
+          puvodniRect699DBO: { left: rect.left, top: rect.top, height: rect.height },
+          posledniCil699DBO: { x: rect.left, y: rect.top + rect.height / 2 },
           startX: event.clientX,
           startY: event.clientY,
           lupaAktivni: false,
@@ -598,7 +615,8 @@
           prepinace699DBL: { ...v2CaretTest699DBL },
           mezery: [], rafGap: [], work: [], bounds: [], hit: [],
           hitPoint: [], hitMap: [], hitModel: [],
-          lupa: [], lupaEnsure: [], lupaText: [], lupaMove: [], caret: []
+          lupa: [], lupaEnsure: [], lupaText: [], lupaMove: [], caret: [],
+          caretGeom699DBO: [], caretVisual699DBO: []
         };
         v2SingleCaretDrag.zrusCachePriScrollu = () => {
           if (v2SingleCaretDrag) {
@@ -867,13 +885,37 @@
       skryjV2LubaCaret();
       return;
     }
-    const rect = geometrie699DAF ? geometrie699DAF.rect : merOdlozenouOperaci699DAE('caret:geometry', () => rectV2LubaCaretu(vyber.konec));
+    /* 699D-BO – dva nezávislé testy pouze pro aktivní tah: G provádí
+       drahé měření Range, V provádí DOM/CSS zápisy. Běžný caret beze změny. */
+    const tah699DBO = v2SingleCaretDrag && pouzivaV2UkotvenyCaret() ? v2SingleCaretDrag : null;
+    const meri699DBO = Boolean(tah699DBO && v2CaretProfil699DBF);
+    const zacatekGeometrie699DBO = meri699DBO ? performance.now() : 0;
+    let rect;
+    if (tah699DBO && !v2CaretTest699DBL.geometrie) {
+      /* Jen pro test bez Range: caret zhruba sleduje prst, modelový hit-test
+         i skutečné umístění po puštění zůstávají zachovány. */
+      const puvodni = tah699DBO.puvodniRect699DBO;
+      const cil = tah699DBO.posledniCil699DBO;
+      const vyska = Math.max(12, Number(puvodni?.height) || 20);
+      rect = {
+        left: Number.isFinite(cil?.x) ? cil.x : puvodni.left,
+        top: Number.isFinite(cil?.y) ? cil.y - vyska / 2 : puvodni.top,
+        height: vyska
+      };
+    } else {
+      rect = geometrie699DAF ? geometrie699DAF.rect : merOdlozenouOperaci699DAE('caret:geometry', () => rectV2LubaCaretu(vyber.konec));
+    }
+    if (meri699DBO) pridejCasCaretu699DBF("caretGeom699DBO", performance.now() - zacatekGeometrie699DBO);
     if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.top)) {
-      skryjV2LubaCaret();
+      if (!tah699DBO) skryjV2LubaCaret();
       return;
     }
-    if (v2SingleCaretDrag && pouzivaV2UkotvenyCaret()) {
-      vykresliV2CaretPriTahu699DBN(rect, v2SingleCaretDrag);
+    if (tah699DBO) {
+      if (v2CaretTest699DBL.vykresleni) {
+        const zacatekVykresleni699DBO = meri699DBO ? performance.now() : 0;
+        vykresliV2CaretPriTahu699DBN(rect, tah699DBO);
+        if (meri699DBO) pridejCasCaretu699DBF("caretVisual699DBO", performance.now() - zacatekVykresleni699DBO);
+      }
       return;
     }
     /* FIX 511 – caret je fixed overlay nad celou stránkou. Při scrollu může
@@ -968,7 +1010,7 @@
       v2LubaCaretRaf = 0;
       const pending = v2CaretScroll699DAF;
       v2CaretScroll699DAF = null;
-      if (pending && pending.editor === editor && pending.doc === dokument &&
+      if (!v2SingleCaretDrag && pending && pending.editor === editor && pending.doc === dokument &&
           stejneMisto699DAF(snapshot, pending.vyber) && stejneMisto699DAF(snapshot, posledniVyber) &&
           pouzivaV2UkotvenyCaret() && lubaCaretMaBytViditelny()) {
         // Verify the live DOM selection too; never auto-scroll a stale edit
