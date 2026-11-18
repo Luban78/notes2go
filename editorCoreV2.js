@@ -242,10 +242,11 @@
     /* Po puštění umístíme úchyt do nového řádku. Během dragu musí zůstat
        ve starém rodiči, jinak appendChild zruší pointer capture. */
     if (posledniVyber?.sbaleny) {
-      /* 699D-BD – Formátovací panel aktualizujeme jednou po puštění;
-         během tahu by přepočítával a přepisoval řadu DOM prvků za frame. */
+      /* 699D-BE – Preview během tahu neměnilo nativní Selection.
+         Jediný skutečný DOM Range zapíšeme až po puštění prstu. */
+      const cil = { ...posledniVyber.konec };
+      nastavVyberModelu(cil, cil);
       aktualizujToolbarVelikosti(posledniVyber);
-      naplanujV2LubaCaret(posledniVyber, "caret-drag-end");
     }
   }
   /* 691BO – Core V2 own-caret visibility follows the MODEL, not a body
@@ -1683,6 +1684,11 @@
   }
 
   function aktualniVyberModelu() {
+    /* 699D-BE – Při gestu je zdrojem pravdy posouvaná modelová preview
+       pozice, ne starý nativní Range, který zůstává nedotčen až do pointerup. */
+    if (v2SingleCaretDrag && posledniVyber?.sbaleny) {
+      return klonVyberu(posledniVyber);
+    }
     const vyber = window.getSelection();
     if (!vyber?.rangeCount) return posledniVyber ? klonVyberu(posledniVyber) : vyberZPosledniPozice();
 
@@ -4715,7 +4721,19 @@
     const pozice = domBodNaModel(node, offset);
     if (!pozice) return false;
 
-    nastavVyberModelu(pozice, pozice);
+    if (behemTahuCaretu && v2SingleCaretDrag) {
+      /* 699D-BE – Vlastní caret už kreslíme z modelové pozice. Vyvolat
+         zde removeAllRanges/addRange při každém pixelu spouští opakované
+         selectionchange handlery Core i Bridge a zpomaluje WebView. */
+      posledniPozice = { ...pozice };
+      posledniVyber = {
+        zacatek: { ...pozice }, konec: { ...pozice }, sbaleny: true
+      };
+      ulozenyFormatovaciVyber = klonVyberu(posledniVyber);
+      naplanujV2LubaCaret(posledniVyber, "caret-drag-preview-699DBE");
+    } else {
+      nastavVyberModelu(pozice, pozice);
+    }
     /* 691BO – release AFTER Core V2 has updated the real model selection.
        The next caret rAF uses this new position; no old-location flash.
        No CSS blockers, no native-Range polling and no delayed timers. */
