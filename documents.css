@@ -3980,3 +3980,18 @@ body.documents-epub-viewer-open {
     );
   }
 }
+
+/* 699D-BR – potvrzení trvalého smazání: dotyková tlačítka jako ve správě dokumentů. */
+.documentsFileDeleteForeverDialog .documentsFolderActions {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.documentsFileDeleteForeverDialog .documentsFolderActions button {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 600;
+  padding: 12px 16px;
+}

@@ -169,6 +169,10 @@
     return mime === EPUB_MIME || nazev.endsWith('.epub');
   }
 
+  function jeTxtSoubor(soubor) {
+    return String(soubor?.name || '').toLowerCase().endsWith('.txt');
+  }
+
   function jeSqlSoubor(soubor) {
     const nazev = String(soubor?.name || '').toLowerCase();
     return nazev.endsWith('.sql');
@@ -179,6 +183,7 @@
     if (jeDocSoubor(soubor)) return 'doc';
     if (jeEpubSoubor(soubor)) return 'epub';
     if (jeSqlSoubor(soubor)) return 'sql';
+    if (jeTxtSoubor(soubor)) return 'txt';
     if (jePdfSoubor(soubor)) return 'pdf';
     return 'other';
   }
@@ -189,6 +194,7 @@
     if (typ === 'doc') return 'DOC';
     if (typ === 'epub') return 'EPUB';
     if (typ === 'sql') return 'SQL';
+    if (typ === 'txt') return 'TXT';
     if (typ === 'pdf') return 'PDF';
     return 'SOUBOR';
   }
@@ -199,6 +205,7 @@
     if (typ === 'doc') return 'doc';
     if (typ === 'epub') return 'epub';
     if (typ === 'sql') return 'sql';
+    if (typ === 'txt') return 'txt';
     return 'pdf';
   }
 
@@ -388,7 +395,7 @@
 
   function normalizujNazevSouboru(value, pripona = 'pdf') {
     let nazev = String(value || '').trim().replace(/\s+/g, ' ');
-    const ext = ['docx', 'doc', 'epub', 'sql'].includes(pripona) ? pripona : 'pdf';
+    const ext = ['docx', 'doc', 'epub', 'sql', 'txt'].includes(pripona) ? pripona : 'pdf';
     if (!nazev) return '';
 
     const regex = new RegExp(`\\.${ext}$`, 'i');
@@ -397,7 +404,7 @@
       return zaklad ? `${zaklad}.${ext}` : '';
     }
 
-    nazev = nazev.replace(/\.(pdf|docx|doc|epub|sql)$/i, '').trim().slice(0, 116);
+    nazev = nazev.replace(/\.(pdf|docx|doc|epub|sql|txt)$/i, '').trim().slice(0, 116);
     return nazev ? `${nazev}.${ext}` : '';
   }
 
@@ -1655,6 +1662,10 @@
             <span class="documentsAddFileType is-epub">EPUB</span>
             <span><strong>${docT('documents.epubBook', 'Elektronická kniha EPUB')}</strong><small>${docT('documents.epubDescription', 'otevře se v lokálním LubaReaderu')}</small></span>
           </button>
+          <button type="button" class="documentsAddFileChoice documentsAddTxtChoice">
+            <span class="documentsAddFileType is-sql">TXT</span>
+            <span><strong>Text TXT</strong><small>Otevře se pouze ke čtení v Dokumentech</small></span>
+          </button>
           <button type="button" class="documentsAddFileChoice documentsAddSqlChoice">
             <span class="documentsAddFileType is-sql">SQL</span>
             <span><strong>${docT('documents.sqlScript', 'SQL skript')}</strong><small>${docT('documents.sqlDescription', 'otevře se lokálně jen ke čtení jako zdrojový kód')}</small></span>
@@ -1669,6 +1680,7 @@
     const doc = modal.querySelector('.documentsAddDocChoice');
     const epub = modal.querySelector('.documentsAddEpubChoice');
     const sql = modal.querySelector('.documentsAddSqlChoice');
+    const txt = modal.querySelector('.documentsAddTxtChoice');
     const cancel = modal.querySelector('.documentsAddFileCancel');
 
     const zavrit = () => {
@@ -1698,6 +1710,11 @@
     epub.addEventListener('click', () => {
       zavrit();
       void pridatEpub();
+    });
+
+    txt.addEventListener('click', () => {
+      zavrit();
+      void pridatTxt();
     });
 
     sql.addEventListener('click', () => {
@@ -1803,7 +1820,7 @@
       }
     }
 
-    if (typ === 'sql') {
+    if (typ === 'txt' || typ === 'sql') {
       if (file.size > MAX_SQL_BYTES) {
         zobrazChybu(docT('documents.title', 'Dokumenty'), docT('documents.sqlTooLarge', 'SQL je příliš velký. Maximální velikost je 10 MB.'));
         return null;
@@ -1818,8 +1835,8 @@
 
         return {
           ...zaklad,
-          name: normalizujNazevSouboru(nazev || 'skript.sql', 'sql') || 'skript.sql',
-          mime: SQL_MIME,
+          name: normalizujNazevSouboru(nazev || (typ === 'txt' ? 'text.txt' : 'skript.sql'), typ) || (typ === 'txt' ? 'text.txt' : 'skript.sql'),
+          mime: typ === 'txt' ? 'text/plain' : SQL_MIME,
           sqlText
         };
       } catch (error) {
@@ -1845,7 +1862,8 @@
         DOCX_MIME, '.docx',
         DOC_MIME, '.doc',
         EPUB_MIME, '.epub',
-        SQL_MIME, 'text/x-sql', '.sql'
+        SQL_MIME, 'text/x-sql', '.sql',
+        'text/plain', '.txt'
       ].join(',');
       input.hidden = true;
 
@@ -2305,6 +2323,36 @@
       document.body.appendChild(input);
       input.click();
     });
+  }
+
+  async function pridatTxt() {
+    const prvky = zajistiPrvky();
+    if (!prvky) return;
+    prvky.addPdf.disabled = true;
+    if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = true;
+    try {
+      const file = await new Promise(resolve => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.txt,text/plain';
+        input.hidden = true;
+        input.addEventListener('change', () => { const selected = input.files?.[0] || null; input.remove(); resolve(selected); }, { once: true });
+        document.body.appendChild(input);
+        input.click();
+      });
+      if (!file) return;
+      const record = await vytvorRecordZVybranehoDokumentu(file);
+      if (!record) return;
+      await ulozDoStore(STORE_FILES, record);
+      await refresh();
+      zobrazZpravu('Dokumenty', `Přidáno: TXT „${record.name}“.`);
+    } catch (error) {
+      console.error('Import TXT selhal:', error);
+      zobrazChybu('Dokumenty', 'TXT se nepodařilo přidat.');
+    } finally {
+      prvky.addPdf.disabled = false;
+      if (prvky.addPdfFloating) prvky.addPdfFloating.disabled = false;
+    }
   }
 
   async function pridatSql() {
@@ -3049,14 +3097,14 @@
 
   async function otevriSqlViewer(record) {
     if (!(record?.blob instanceof Blob)) {
-      throw new Error('SQL data nejsou dostupná.');
+      throw new Error('Textová data nejsou dostupná.');
     }
 
     const prvky = zajistiDocxViewer();
     uvolniDocxObjectUrls();
     nastavDocViewerFullscreen(false);
     prvky.title.textContent = record.name || 'skript.sql';
-    prvky.subtitle.textContent = docT('documents.sqlReadOnly', 'SQL · POUZE ČTENÍ');
+    prvky.subtitle.textContent = jeTxtSoubor(record) ? 'TXT · POUZE ČTENÍ' : docT('documents.sqlReadOnly', 'SQL · POUZE ČTENÍ');
     prvky.copy.hidden = true;
     docxViewerSqlText = '';
     prvky.loadingText.textContent = docT('documents.openingSql', 'Otevírám SQL…');
@@ -4547,7 +4595,7 @@
       return;
     }
 
-    if (typ === 'sql') {
+    if (typ === 'sql' || typ === 'txt') {
       try {
         await otevriSqlViewer(record);
       } catch (error) {

@@ -54,6 +54,7 @@
         <data android:mimeType="application/epub+zip" />
         <data android:mimeType="application/x-epub+zip" />
         <data android:mimeType="application/sql" />
+        <data android:mimeType="application/x-sql" />
         <data android:mimeType="text/x-sql" />
         <data android:mimeType="text/sql" />
         <data android:mimeType="text/html" />
@@ -73,6 +74,7 @@
         <data android:mimeType="application/epub+zip" />
         <data android:mimeType="application/x-epub+zip" />
         <data android:mimeType="application/sql" />
+        <data android:mimeType="application/x-sql" />
         <data android:mimeType="text/x-sql" />
         <data android:mimeType="text/sql" />
         <data android:mimeType="text/plain" />
