@@ -189,6 +189,120 @@
     }
   }
 
+  /* 699D-BW: novou soukromou E2E poznamku smi prevest jen jeji vlastnik
+   * a jen kdyz serverovy ciphertext odpovida aktualnimu obsahu editoru.
+   * Puvodni E2E envelope se NIKDY neposila jako plaintext do shared RPC. */
+  function vyberOsobniStavProSdileni(task) {
+    const vysledek = {};
+    for (const pole of [
+      "date", "reminder", "favorite", "notificationId", "area", "pinned",
+      "tags", "repeat", "plannedItems", "completed", "planned"
+    ]) {
+      if (Object.prototype.hasOwnProperty.call(task, pole)) {
+        vysledek[pole] = task[pole];
+      }
+    }
+    return vysledek;
+  }
+
+  async function pripravBezpecneSdileniE2E(klient, noteId) {
+    /* Pro druhou pozvanku se nikdy nesmi znovu prevest stary Root-Key
+     * snapshot: sdileny obsah mohl mezitim zmenit spolupracovnik. */
+    const existujici = await klient.rpc("lubanote_get_e2e_shared_notes_v1");
+    if (existujici.error) throw existujici.error;
+    if (existujici.data?.ok !== true || !Array.isArray(existujici.data?.notes)) {
+      throw new Error("shared_e2e_status_unavailable");
+    }
+    if (existujici.data.notes.some(row => String(row?.note_id) === noteId &&
+        row.role === "owner")) {
+      if (window.LubaNoteSharingConversionHost?.muzePrevest?.(noteId) === false) {
+        throw new Error("shared_e2e_save_draft_first");
+      }
+      return { sifrovana: true, prevedena: false };
+    }
+
+    const odpoved = await klient.rpc("lubanote_get_notes_by_ids_safe", {
+      p_note_ids: [noteId]
+    });
+    if (odpoved.error || !Array.isArray(odpoved.data) ||
+        odpoved.data.length !== 1) {
+      throw new Error("shared_e2e_preflight_failed");
+    }
+    const row = odpoved.data[0];
+    const { data: auth, error: authError } = await klient.auth.getUser();
+    const userId = auth?.user?.id;
+    if (authError || !userId || row.id !== noteId ||
+        row.user_id !== userId || row.deleted_at || !row.data) {
+      throw new Error("shared_e2e_owner_or_note_mismatch");
+    }
+    if (row.data.__lubanoteSharedContentE2E === true) {
+      return { sifrovana: true, prevedena: false };
+    }
+    if (row.data.__lubanoteE2ENote !== true) {
+      return { sifrovana: false, prevedena: false }; // legacy: nedotykat se
+    }
+
+    if (window.LubaNoteSharingConversionHost?.muzePrevest?.(noteId) === false) {
+      throw new Error("shared_e2e_save_draft_first");
+    }
+
+    const noteCrypto = window.LubaNoteNotesCrypto;
+    const sharedCrypto = window.LubaNoteSharedMediaCrypto;
+    const task = ziskejAktualniPoznamku(noteId);
+    if (!task || task.isSecret === true || task.trashedAt ||
+        !noteCrypto?.desifruj ||
+        !sharedCrypto?.zajistiObalkyProPoznamku ||
+        !sharedCrypto?.vyberSdilenyObsahE2E ||
+        !sharedCrypto?.zasifrujSdilenyObsah) {
+      throw new Error("shared_e2e_client_not_ready");
+    }
+    const serverovaRoot = await noteCrypto.desifruj(row.data, userId, noteId);
+    const serverova = window.LubaNoteMediaCrypto
+      ?.desifrujPoznamkuZCloudu
+      ? await window.LubaNoteMediaCrypto.desifrujPoznamkuZCloudu(serverovaRoot)
+      : serverovaRoot;
+    const lokalni = sharedCrypto.vyberSdilenyObsahE2E(task);
+    const remote = sharedCrypto.vyberSdilenyObsahE2E(serverova);
+    if (JSON.stringify(lokalni) !== JSON.stringify(remote)) {
+      throw new Error("shared_e2e_note_needs_sync");
+    }
+    if (JSON.stringify(vyberOsobniStavProSdileni(task)) !==
+        JSON.stringify(vyberOsobniStavProSdileni(serverova))) {
+      throw new Error("shared_e2e_note_needs_sync");
+    }
+
+    const klic = await sharedCrypto.zajistiObalkyProPoznamku(noteId);
+    if (klic?.ok !== true || !(klic.noteKey instanceof Uint8Array)) {
+      throw new Error(klic?.reason || "shared_e2e_owner_key_not_ready");
+    }
+    const dataProMedia = await sharedCrypto.pripravSdilenouPoznamkuProCloud(task);
+    const obsah = sharedCrypto.vyberSdilenyObsahE2E(dataProMedia);
+    const obalka = await sharedCrypto.zasifrujSdilenyObsah(
+      noteId, obsah, klic.noteKey
+    );
+    /* V ramci predani serveru se nikdy neposila title/note/richContent/todos. */
+    const converted = await klient.rpc("lubanote_convert_private_e2e_to_shared_v1", {
+      p_note_id: noteId,
+      p_expected_revision: Number(row.revision),
+      p_shared_envelope: obalka,
+      /* Osobni metadata byla dosud uvnitr soukromeho E2E obsahu.
+       * Nesmime je poslat plaintextem ani pri zmene typu poznamky. */
+      p_owner_private_envelope: await noteCrypto.zasifruj({
+        id: noteId,
+        isSecret: false,
+        ...vyberOsobniStavProSdileni(task)
+      }, userId)
+    });
+    if (converted.error || converted.data?.ok !== true) {
+      throw new Error(converted.error?.message ||
+        converted.data?.reason || "shared_e2e_conversion_rejected");
+    }
+    await window.LubaNoteSharingNotes?.obnovZeServeru?.({
+      tichy: true, vykreslit: true
+    });
+    return { sifrovana: true, prevedena: true };
+  }
+
   function aktualizujShareButton() {
     const task = ziskejAktualniPoznamku();
     const jeOtevrenyEditor = !!taskModal && !taskModal.hidden;
@@ -295,6 +409,11 @@
 
   function zpravaProSendChybu(error) {
     const text = chybaText(error);
+
+    if (text.includes("shared_e2e_save_draft_first") ||
+        text.includes("shared_e2e_note_needs_sync")) {
+      return "Nejdřív ulož poznámku a počkej na synchronizaci. Pak pozvánku odešli znovu.";
+    }
 
     if (text.includes("username") && text.includes("required")) {
       return t(
@@ -443,6 +562,15 @@
 
       if (error) throw error;
       if (data?.ok === false) throw new Error(data.reason || "remove_failed");
+
+      /* Posledni odebrani E2E poznamky musi vratit aktualni obsah
+       * do osobni Root-Key obalky, jinak by editace zustala v sidecaru. */
+      const odpojeni = await window.LubaNoteSharedEditor
+        ?.bezpecneUkonciSdileniE2E?.(shareNoteId);
+      if (odpojeni?.handled === true && odpojeni.ok === false &&
+          odpojeni.reason !== "sharing_still_active") {
+        throw new Error(odpojeni.reason || "shared_e2e_detach_failed");
+      }
 
       nastavShareStatus(
         t(
@@ -851,6 +979,13 @@
           if (error) throw error;
           if (data?.ok === false) throw new Error(data.reason || "cancel_failed");
 
+          const odpojeni = await window.LubaNoteSharedEditor
+            ?.bezpecneUkonciSdileniE2E?.(shareNoteId);
+          if (odpojeni?.handled === true && odpojeni.ok === false &&
+              odpojeni.reason !== "sharing_still_active") {
+            throw new Error(odpojeni.reason || "shared_e2e_detach_failed");
+          }
+
           await nactiShareData();
         } catch (error) {
           console.error("Sdílení: pozvánku se nepodařilo zrušit.", error);
@@ -916,13 +1051,49 @@
       if (collabResponse.error) throw collabResponse.error;
       if (pendingResponse.error) throw pendingResponse.error;
 
-      renderCollaborators(
-        ziskejRadky(collabResponse.data, ["collaborators", "users"])
+      const spolupracovnici = ziskejRadky(
+        collabResponse.data, ["collaborators", "users"]
       );
+      const cekajici = ziskejRadky(
+        pendingResponse.data, ["invitations", "pending"]
+      );
+      renderCollaborators(spolupracovnici);
+      renderPending(cekajici);
 
-      renderPending(
-        ziskejRadky(pendingResponse.data, ["invitations", "pending"])
-      );
+      /* Pokud vsichni odejdou nebo pozvanku odmitnou, sidecar nesmi
+       * uviznout bez moznosti vratit poznamku do soukromeho rezimu.
+       * Oproti automatickemu odpojeni vyzaduje tento krok klik ownera. */
+      const sdilenaE2E = window.LubaNoteSharingNotes
+        ?.ziskejSdilenePoznamky?.()
+        ?.find(note => note?.id === noteIdPriStartu &&
+          note.__lubanoteSharedRole === "owner" &&
+          note.__lubanoteSharedContentE2E === true);
+      if (sdilenaE2E && cekajici.length === 0 &&
+          spolupracovnici.every(row => row?.role === "owner")) {
+        const ukoncit = document.createElement("button");
+        ukoncit.type = "button";
+        ukoncit.className = "sharingSmallButton sharingDangerButton";
+        ukoncit.textContent = "Ukončit E2E sdílení";
+        ukoncit.addEventListener("click", async () => {
+          if (ukoncit.disabled) return;
+          ukoncit.disabled = true;
+          try {
+            const vysledek = await window.LubaNoteSharedEditor
+              ?.bezpecneUkonciSdileniE2E?.(noteIdPriStartu);
+            if (vysledek?.ok !== true) {
+              throw new Error(vysledek?.reason || "shared_e2e_detach_failed");
+            }
+            nastavShareStatus("Poznámka je znovu soukromá.", "success");
+            await nactiShareData();
+          } catch (error) {
+            console.warn("Sdílení: návrat do soukromého E2E selhal.", error);
+            nastavShareStatus("Sdílení se nepodařilo bezpečně ukončit.", "error");
+          } finally {
+            ukoncit.disabled = false;
+          }
+        });
+        shareModal.pendingList.appendChild(ukoncit);
+      }
 
       /* PATCH 653C – owner po načtení vztahů připraví jednu E2E
          note_key obálku pro sebe, aktivní collaboratory i pending
@@ -1000,9 +1171,15 @@
       napoveda: "-"
     };
 
+    let zavritStaryEditor = false;
+
     try {
       const klient = await zajistiSupabase();
       if (!klient) throw new Error("supabase_unavailable");
+
+      pokus699DBU.faze = "kontrola-e2e";
+      const e2ePriprava = await pripravBezpecneSdileniE2E(klient, shareNoteId);
+      zavritStaryEditor = e2ePriprava.sifrovana === true;
 
       pokus699DBU.faze = "rpc-odeslano";
       const { data, error, status } = await klient.rpc(
@@ -1021,12 +1198,22 @@
         throw new Error(data.reason || data.message || "send_failed");
       }
 
+      let chybiKlicPrijemce = false;
+      if (e2ePriprava.sifrovana) {
+        pokus699DBU.faze = "predani-e2e-klice";
+        const sharedCrypto = window.LubaNoteSharedMediaCrypto;
+        const predani = await sharedCrypto?.zajistiObalkyProPoznamku?.(shareNoteId);
+        chybiKlicPrijemce = predani?.ok !== true || predani.missingIdentity > 0;
+      }
+
       pokus699DBU.faze = "uspech";
 
       modal.input.value = "";
       nastavShareStatus(
-        t("sharing.shareSendSuccess", "Pozvánka byla odeslána."),
-        "success"
+        chybiKlicPrijemce
+          ? "Pozvánka je odeslaná, ale druhý účet ještě nemá připravený E2E klíč. Po jeho přihlášení znovu otevři správu sdílení."
+          : t("sharing.shareSendSuccess", "Pozvánka byla odeslána."),
+        chybiKlicPrijemce ? "warning" : "success"
       );
 
       await nactiShareData();
@@ -1042,6 +1229,9 @@
       console.error("Sdílení: pozvánku se nepodařilo odeslat.", error);
       nastavShareStatus(zpravaProSendChybu(error), "error");
     } finally {
+      if (zavritStaryEditor) {
+        window.LubaNoteSharingConversionHost?.zavriPoPrevodu?.(shareNoteId);
+      }
       ulozPokus699DBU(pokus699DBU, username);
       shareBusy = false;
       modal.send.disabled = false;

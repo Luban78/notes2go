@@ -1402,13 +1402,16 @@
   async function pripravSdilenouPoznamkuProCloud(note) {
     if (!note?.id) return note;
 
+    const sifrovatSpolecnyText = note[SHARED_TEXT_MARKER] === true;
+
     const maObrazekNeboRef = [
       note.richContent,
       ...(Array.isArray(note.todos) ? note.todos.map((t) => t?.html) : [])
     ].some((h) => typeof h === "string" && /<img\b/i.test(h));
     const legacyItems = note?.[SHARED_MEDIA_VAULT]?.items;
 
-    if (!maObrazekNeboRef && (!legacyItems || typeof legacyItems !== "object")) return note;
+    if (!maObrazekNeboRef && (!legacyItems || typeof legacyItems !== "object") &&
+        !sifrovatSpolecnyText) return note;
 
     const keyResult = await nactiNoteKeyProPoznamku(note.id);
     if (keyResult?.ok !== true || !(keyResult.noteKey instanceof Uint8Array)) {
@@ -1475,7 +1478,58 @@
         `SHARED-CRYPTO | MEDIA EXTERNALIZE | OK | note=${copy.id} | new=${newCount} | reused=${reusedCount} | changed=${changedCount} | uploaded=${uploadedCount} | legacy=${legacyUploaded}`
       );
     }
+
+    if (sifrovatSpolecnyText) {
+      /* Text a ToDo se sifruji AZ po externalizaci obrazku.
+       * Server v zadnem okamziku nesmi dostat plaintext spolupracovniku. */
+      if (copy.isSecret === true || copy.__lubanoteE2ENote != null) {
+        throw new Error("shared_content_invalid_source");
+      }
+      const spolecnyObsah = vyberSdilenyObsahE2E({
+        title: copy.title,
+        note: copy.note,
+        richContent: copy.richContent,
+        todos: copy.todos
+      });
+      const obalka = await zasifrujSdilenyObsah(copy.id, spolecnyObsah, keyResult.noteKey);
+      delete copy.title;
+      delete copy.note;
+      delete copy.richContent;
+      delete copy.todos;
+      delete copy.__lubanoteSharedDecrypted;
+      Object.assign(copy, obalka);
+    }
     return copy;
+  }
+
+  async function desifrujTextSdilenePoznamkyZCloudu(note) {
+    if (!note?.id || !Object.prototype.hasOwnProperty.call(note, SHARED_TEXT_MARKER)) {
+      return note;
+    }
+    if (note[SHARED_TEXT_MARKER] !== true) {
+      throw new Error("shared_content_invalid_marker");
+    }
+    /* Poze jiz jednou overeny lokalni plaintext smi mit marker i text.
+     * Serverova odpoved s obema podobami je podezrela a konci chybou. */
+    if (note.__lubanoteSharedDecrypted !== true &&
+        ["title", "note", "richContent", "todos"].some(k =>
+          Object.prototype.hasOwnProperty.call(note, k))) {
+      throw new Error("shared_content_plaintext_downgrade");
+    }
+    const keyResult = await nactiNoteKeyProPoznamku(note.id);
+    if (keyResult?.ok !== true || !(keyResult.noteKey instanceof Uint8Array)) {
+      throw new Error(keyResult?.reason || "shared_note_key_unavailable");
+    }
+    const obalka = {
+      [SHARED_TEXT_MARKER]: true,
+      version: note.version,
+      keyVersion: note.keyVersion,
+      algorithm: note.algorithm,
+      iv: note.iv,
+      ciphertext: note.ciphertext
+    };
+    const obsah = await desifrujSdilenyObsah(note.id, obalka, keyResult.noteKey);
+    return { ...note, ...obsah, __lubanoteSharedDecrypted: true };
   }
 
   function ziskejMediaIdsZHtml(html) {
@@ -1510,15 +1564,17 @@
   async function desifrujSdilenouPoznamkuZCloudu(note) {
     if (!note?.id) return note;
 
+    const odsifrovanaPoznamka = await desifrujTextSdilenePoznamkyZCloudu(note);
+
     const ids = Array.from(new Set([
-      ...ziskejMediaIdsZHtml(note.richContent),
-      ...(Array.isArray(note.todos)
-        ? note.todos.flatMap((todo) => ziskejMediaIdsZHtml(todo?.html))
+      ...ziskejMediaIdsZHtml(odsifrovanaPoznamka.richContent),
+      ...(Array.isArray(odsifrovanaPoznamka.todos)
+        ? odsifrovanaPoznamka.todos.flatMap((todo) => ziskejMediaIdsZHtml(todo?.html))
         : [])
     ]));
-    const legacyItems = note?.[SHARED_MEDIA_VAULT]?.items;
+    const legacyItems = odsifrovanaPoznamka?.[SHARED_MEDIA_VAULT]?.items;
 
-    if (ids.length === 0 && (!legacyItems || typeof legacyItems !== "object")) return note;
+    if (ids.length === 0 && (!legacyItems || typeof legacyItems !== "object")) return odsifrovanaPoznamka;
 
     const keyResult = await nactiNoteKeyProPoznamku(note.id);
     if (keyResult?.ok !== true || !(keyResult.noteKey instanceof Uint8Array)) {
@@ -1573,7 +1629,7 @@
       );
     }
 
-    const copy = klonujNote(note);
+    const copy = klonujNote(odsifrovanaPoznamka);
     if (typeof copy.richContent === "string") copy.richContent = vlozSharedDataUrlDoHtml(copy.richContent, mapa);
     if (Array.isArray(copy.todos)) {
       for (const todo of copy.todos) {
@@ -1606,6 +1662,7 @@
     desifrujSdilenyObsah,
     selfTestSdilenyObsahE2E,
     pripravSdilenouPoznamkuProCloud,
+    desifrujTextSdilenePoznamkyZCloudu,
     desifrujSdilenouPoznamkuZCloudu
   });
 })();

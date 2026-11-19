@@ -3598,6 +3598,23 @@ function zavriEditorPoLokalnimUlozeni(
   return true;
 }
 
+/* 699D-BW – konverze otevrene PRIVATE poznamky na shared musi nejprve
+ * zastavit stary editor, jinak by jeho dalsi save zapisoval private E2E
+ * ciphertext a server jej spravne odmitl. Nikdy nezavirat zmeneny draft. */
+window.LubaNoteSharingConversionHost = Object.freeze({
+  muzePrevest(noteId) {
+    if (!taskModal || taskModal.hidden ||
+        String(taskModal.dataset.taskId || "") !== String(noteId)) return true;
+    return !aktivniSdilenaEditace && !bylEditorZmenen();
+  },
+  zavriPoPrevodu(noteId) {
+    if (!taskModal || taskModal.hidden ||
+        String(taskModal.dataset.taskId || "") !== String(noteId)) return true;
+    if (aktivniSdilenaEditace || bylEditorZmenen()) return false;
+    return zavriEditorPoLokalnimUlozeni(editorSessionId);
+  }
+});
+
 async function ulozAZavriEditor(
   zpusobUlozeniNove = null,
   moznosti = {}
@@ -4558,6 +4575,11 @@ function vytvorDataSdilenehoEditoru() {
         aktivniSdilenaEditace.noteId,
       updatedAt:
         casAktualizace,
+      /* 699D-BW: mode noveho shared E2E je soucasti session a musi
+       * prezit serializaci editoru. Bez markeru by save poslal plaintext. */
+      ...(base.__lubanoteSharedContentE2E === true
+        ? { __lubanoteSharedContentE2E: true }
+        : {}),
       sharedLastEditorUsername:
         usernameEditora,
       sharedLastEditedAt:

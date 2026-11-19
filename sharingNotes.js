@@ -560,6 +560,33 @@
     };
   }
 
+  const E2E_OSOBNI_POLE = Object.freeze([
+    "date", "reminder", "favorite", "notificationId", "area", "pinned",
+    "tags", "repeat", "plannedItems", "completed", "planned"
+  ]);
+
+  async function nactiOsobniStavSdileneE2E(row, userId, noteId) {
+    const noteCrypto = window.LubaNoteNotesCrypto;
+    if (!noteCrypto?.desifruj) {
+      throw new Error("shared_e2e_personal_decrypt_missing");
+    }
+    let envelope = row?.personal_envelope;
+    if (!envelope && row?.role === "owner") {
+      /* Zachovany puvodni Root-Key ciphertext, pouze pro vlastnika.
+       * Server nesmi poslat tuto obalku collaboratorovi. */
+      envelope = row.owner_private_envelope;
+    }
+    if (!envelope) return {};
+    const osobni = await noteCrypto.desifruj(envelope, userId, noteId);
+    const stav = {};
+    for (const pole of E2E_OSOBNI_POLE) {
+      if (Object.prototype.hasOwnProperty.call(osobni, pole)) {
+        stav[pole] = osobni[pole];
+      }
+    }
+    return stav;
+  }
+
   async function zajistiSupabase() {
     if (typeof supabaseClient !== "undefined" && supabaseClient) {
       return supabaseClient;
@@ -1278,6 +1305,14 @@
       return;
     }
 
+    if (note.__lubanoteSharedE2ELocked === true) {
+      window.zobrazZpravuAplikace?.(
+        "Sdílená poznámka",
+        "Zašifrovaný obsah zatím nelze odemknout. Zkontroluj E2E heslo a zkus obnovení sdílení."
+      );
+      return;
+    }
+
     viewerNoteId = noteId;
     const modal = vytvorViewer();
     let noteProViewer = note;
@@ -1339,12 +1374,15 @@
           throw new Error("supabase_unavailable");
         }
 
-        const [prijate, vlastni] = await Promise.all([
+        const [prijate, vlastni, sifrovane] = await Promise.all([
           klient.rpc(
             "lubanote_get_shared_notes_safe"
           ),
           klient.rpc(
             "lubanote_get_my_owned_shared_notes_safe"
+          ),
+          klient.rpc(
+            "lubanote_get_e2e_shared_notes_v1"
           )
         ]);
 
@@ -1371,12 +1409,57 @@
           throw vlastni.error;
         }
 
-        const nove = [
+        if (sifrovane.error || sifrovane.data?.ok !== true) {
+          throw sifrovane.error || new Error("shared_e2e_response_invalid");
+        }
+
+        const sifrovaneRadky = ziskejRadkyZRcp(sifrovane.data);
+        const sifrovanaId = new Set(sifrovaneRadky.map(
+          row => String(row?.note_id || "")
+        ));
+
+        const prijateRadky = [
           ...ziskejRadkyZRcp(prijate.data),
           ...ziskejRadkyZRcp(vlastni.data)
         ]
-          .map(prevedRadekNaPoznamku)
-          .filter(Boolean);
+          .filter(row => !sifrovanaId.has(String(row?.note_id || "")))
+          .concat(sifrovaneRadky);
+
+        const nove = await Promise.all(prijateRadky.map(async (row) => {
+          const note = prevedRadekNaPoznamku(row);
+          if (!note) return null;
+          if (note.__lubanoteE2ENote === true) {
+            throw new Error("shared_private_root_envelope_exposed");
+          }
+          if (note.__lubanoteSharedContentE2E !== true) return note;
+          try {
+            const decrypt = window.LubaNoteSharedMediaCrypto
+              ?.desifrujTextSdilenePoznamkyZCloudu;
+            if (typeof decrypt !== "function") throw new Error("shared_e2e_client_missing");
+            const [sdilenyObsah, osobniStav] = await Promise.all([
+              decrypt(note), nactiOsobniStavSdileneE2E(row, userId, note.id)
+            ]);
+            return { ...sdilenyObsah, ...osobniStav };
+          } catch (error) {
+            /* Nikdy nesestavit prazdnou *editovatelnou* poznamku z ciphertextu.
+             * Karta zustane viditelna, ale editor ji musi odmitnout. */
+            console.warn("Sdílení: šifrovanou poznámku nelze odemknout.", error);
+            return {
+              id: note.id,
+              title: "🔒 Šifrovaná poznámka",
+              note: "",
+              richContent: "",
+              todos: [],
+              isSecret: false,
+              updatedAt: note.updatedAt,
+              __lubanoteShared: true,
+              __lubanoteSharedRole: note.__lubanoteSharedRole,
+              __lubanoteSharedOwnerUsername: note.__lubanoteSharedOwnerUsername,
+              __lubanoteSharedRevision: note.__lubanoteSharedRevision,
+              __lubanoteSharedE2ELocked: true
+            };
+          }
+        })).then(notes => notes.filter(Boolean));
 
         /*
          * Účet se mohl během await změnit. Výsledek starého účtu

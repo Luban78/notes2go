@@ -214,7 +214,8 @@
       // Autoritativní claim níže ještě ověří oprávnění.
     }
 
-    return najdiSdilenouPoznamku(noteId);
+    const note = najdiSdilenouPoznamku(noteId);
+    return note?.__lubanoteSharedE2ELocked === true ? null : note;
   }
 
   async function ziskejLock(note) {
@@ -298,13 +299,68 @@
      * Ta se nikdy nesmí zapsat zpět do notes.data.
      */
     Object.keys(data).forEach((klic) => {
-      if (klic.startsWith("__lubanoteShared")) {
+      if (klic.startsWith("__lubanoteShared") &&
+          klic !== "__lubanoteSharedContentE2E") {
         delete data[klic];
       }
     });
 
     data.isSecret = false;
     return data;
+  }
+
+  /* 699D-BW: shared E2E pouziva novy RPC, ktery prijima VYHRADNE dve
+   * kryptograficke obalky. Personalni udaje nesmi propadnout do p_data
+   * stavajiciho plaintext shared RPC. */
+  async function ulozSdilenouPoznamkuNaServer(
+    klient, note, cloudData, expectedRevision, lock, trashAction = null
+  ) {
+    if (note?.__lubanoteSharedContentE2E !== true) {
+      return await klient.rpc("lubanote_save_shared_note_safe", {
+        p_note_id: note.id,
+        p_data: cloudData,
+        p_expected_revision: expectedRevision,
+        p_device_id: lock.deviceId,
+        p_session_id: lock.sessionId
+      });
+    }
+
+    const obalka = {};
+    for (const klic of [
+      "__lubanoteSharedContentE2E", "version", "keyVersion",
+      "algorithm", "iv", "ciphertext"
+    ]) {
+      obalka[klic] = cloudData?.[klic];
+    }
+    if (obalka.__lubanoteSharedContentE2E !== true ||
+        obalka.algorithm !== "AES-256-GCM" || !obalka.iv || !obalka.ciphertext) {
+      throw new Error("shared_e2e_save_envelope_missing");
+    }
+    const noteCrypto = window.LubaNoteNotesCrypto;
+    const { data: auth, error: authError } = await klient.auth.getUser();
+    const userId = auth?.user?.id;
+    if (authError || !userId || !noteCrypto?.zasifruj) {
+      throw new Error("shared_e2e_personal_crypto_unavailable");
+    }
+    const osobni = { id: note.id, isSecret: false };
+    for (const klic of [
+      "date", "reminder", "favorite", "notificationId", "area", "pinned",
+      "tags", "repeat", "plannedItems", "completed", "planned"
+    ]) {
+      if (Object.prototype.hasOwnProperty.call(note, klic)) {
+        osobni[klic] = note[klic];
+      }
+    }
+    const soukromaObalka = await noteCrypto.zasifruj(osobni, userId);
+    return await klient.rpc("lubanote_save_shared_note_e2e_v1", {
+      p_note_id: note.id,
+      p_shared_envelope: obalka,
+      p_personal_envelope: soukromaObalka,
+      p_expected_revision: expectedRevision,
+      p_device_id: lock.deviceId,
+      p_session_id: lock.sessionId,
+      p_trash_action: trashAction
+    });
   }
 
   async function uvolniDocasnySharedLock(noteId, lock) {
@@ -397,16 +453,13 @@
       const dataProCloud = await window.LubaNoteSharedMediaCrypto
         ?.pripravSdilenouPoznamkuProCloud?.(data) || data;
 
-      const { data: vysledek, error } = await klient.rpc(
-        "lubanote_save_shared_note_safe",
-        {
-          p_note_id: note.id,
-          p_data: dataProCloud,
-          p_expected_revision:
-            Number(note.__lubanoteSharedRevision) || 0,
-          p_device_id: lock.deviceId,
-          p_session_id: lock.sessionId
-        }
+      const trashAction = note.__lubanoteSharedContentE2E === true
+        ? (data.trashedAt && !note.trashedAt ? "trash" :
+           !data.trashedAt && note.trashedAt ? "restore" : null)
+        : null;
+      const { data: vysledek, error } = await ulozSdilenouPoznamkuNaServer(
+        klient, data, dataProCloud,
+        Number(note.__lubanoteSharedRevision) || 0, lock, trashAction
       );
 
       if (error) {
@@ -564,6 +617,96 @@
     };
   }
 
+  /* 699D-BW: po odvolani posledniho sdileni musi byt aktualni E2E
+   * shared obsah znovu zasifrovan Root Key vlastnika. Pouzit puvodni
+   * private ciphertext by znamenalo ztratu editaci spolupracovnika. */
+  async function bezpecneUkonciSdileniE2E(noteId, { synchronizovat = true } = {}) {
+    if (!navigator.onLine) throw new Error("shared_e2e_detach_offline");
+    const klient = await zajistiSupabase();
+    if (!klient) throw new Error("supabase_unavailable");
+    const note = await nactiAktualniSdilenouPoznamku(noteId);
+    if (!note || note.__lubanoteSharedContentE2E !== true) {
+      return { handled: false, ok: true };
+    }
+    if (note.__lubanoteSharedRole !== "owner") {
+      throw new Error("shared_e2e_detach_not_owner");
+    }
+
+    const vztahy = await nactiVztahyProSharedDelete(klient, noteId);
+    if (vztahy.pending.length || vztahy.collaborators.some(
+      row => String(row?.role || "").toLowerCase() !== "owner"
+    )) {
+      return { handled: true, ok: false, reason: "sharing_still_active" };
+    }
+
+    const noteCrypto = window.LubaNoteNotesCrypto;
+    const sharedCrypto = window.LubaNoteSharedMediaCrypto;
+    const { data: auth, error: authError } = await klient.auth.getUser();
+    const userId = auth?.user?.id;
+    if (authError || !userId || !noteCrypto?.zasifruj ||
+        !sharedCrypto?.desifrujSdilenouPoznamkuZCloudu) {
+      throw new Error("shared_e2e_detach_crypto_unavailable");
+    }
+    const obsah = await sharedCrypto.desifrujSdilenouPoznamkuZCloudu(note);
+    const { data: puvodniRows, error: puvodniError } = await klient.rpc(
+      "lubanote_get_notes_by_ids_safe", { p_note_ids: [noteId] }
+    );
+    if (puvodniError) throw puvodniError;
+    const puvodniRow = Array.isArray(puvodniRows)
+      ? puvodniRows.find(row => String(row?.id || "") === noteId &&
+          row?.user_id === userId)
+      : null;
+    if (!puvodniRow?.data ||
+        Number(puvodniRow.revision) !== Number(note.__lubanoteSharedRevision)) {
+      throw new Error("shared_e2e_detach_stale_revision");
+    }
+    const puvodniSoukroma = await noteCrypto.desifruj(
+      puvodniRow.data, userId, noteId
+    );
+    const soukroma = {
+      ...puvodniSoukroma,
+      id: noteId,
+      updatedAt: new Date().toISOString(),
+      isSecret: false,
+      title: obsah.title || "",
+      note: obsah.note || "",
+      richContent: obsah.richContent || "",
+      todos: Array.isArray(obsah.todos) ? obsah.todos : []
+    };
+    for (const pole of [
+      "date", "reminder", "favorite", "notificationId", "area", "pinned",
+      "tags", "repeat", "plannedItems", "completed", "planned"
+    ]) {
+      if (Object.prototype.hasOwnProperty.call(note, pole)) {
+        soukroma[pole] = note[pole];
+      }
+    }
+    if (note.trashedAt) soukroma.trashedAt = note.trashedAt;
+
+    const obalka = await noteCrypto.zasifruj(soukroma, userId);
+    const { data: vysledek, error } = await klient.rpc(
+      "lubanote_detach_shared_e2e_v1", {
+        p_note_id: noteId,
+        p_expected_revision: Number(note.__lubanoteSharedRevision) || 0,
+        p_private_envelope: obalka
+      }
+    );
+    if (error || vysledek?.ok !== true) {
+      throw error || new Error(vysledek?.reason || "shared_e2e_detach_rejected");
+    }
+    await window.LubaNoteSharingNotes?.obnovZeServeru?.({
+      tichy: true, vykreslit: true
+    });
+    if (synchronizovat) {
+      try {
+        await window.LubaNoteSync?.spustRychle?.();
+      } catch (syncError) {
+        console.warn("Sdílení: private sync po bezpečném odpojení počká.", syncError);
+      }
+    }
+    return { handled: true, ok: true };
+  }
+
   async function odpojVlastniSdilenouPoznamkuPredTrvalymSmazanim(
     noteId
   ) {
@@ -686,11 +829,20 @@
         throw new Error("shared_delete_relationships_remain");
       }
 
-      await window.LubaNoteSharingNotes
-        ?.obnovZeServeru?.({
-          tichy: true,
-          vykreslit: false
+      if (note.__lubanoteSharedContentE2E === true) {
+        const odpojeni = await bezpecneUkonciSdileniE2E(noteId, {
+          synchronizovat: false
         });
+        if (odpojeni.ok !== true) {
+          throw new Error(odpojeni.reason || "shared_e2e_detach_failed");
+        }
+      } else {
+        await window.LubaNoteSharingNotes
+          ?.obnovZeServeru?.({
+            tichy: true,
+            vykreslit: false
+          });
+      }
 
       if (
         window.LubaNoteSharingNotes
@@ -982,16 +1134,9 @@
         throw new Error("supabase_unavailable");
       }
 
-      const { data: vysledek, error } = await klient.rpc(
-        "lubanote_save_shared_note_safe",
-        {
-          p_note_id: session.noteId,
-          p_data: dataProCloud,
-          p_expected_revision:
-            snapshot.context.revision,
-          p_device_id: session.deviceId,
-          p_session_id: session.sessionId
-        }
+      const { data: vysledek, error } = await ulozSdilenouPoznamkuNaServer(
+        klient, snapshot.data, dataProCloud, snapshot.context.revision,
+        { deviceId: session.deviceId, sessionId: session.sessionId }
       );
 
       if (error) {
@@ -1226,6 +1371,7 @@
     presunVlastniSdilenouPoznamkuDoKose,
     obnovVlastniSdilenouPoznamkuZKose,
     odpojVlastniSdilenouPoznamkuPredTrvalymSmazanim,
+    bezpecneUkonciSdileniE2E,
     jeAktivni: () => !!aktivniSession,
     ziskejSession: () => aktivniSession
       ? { ...aktivniSession }
