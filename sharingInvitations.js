@@ -88,6 +88,65 @@
     );
   }
 
+  /* 699D-BU – cileny report S1, zapisovany primo v okamziku RPC.
+   * V pameti zustava jen poslednich osm pokusu. Neukladame poznamku,
+   * identitu prijemce, request body ani prihlasovaci udaje. */
+  const diagnostikaPozvanek699DBU = [];
+
+  function ocistiDiagnostiku699DBU(hodnota, username = "") {
+    if (hodnota === undefined || hodnota === null || hodnota === "") {
+      return "-";
+    }
+
+    let text = String(hodnota);
+    const prijemce = normalizujUsername(username);
+    if (prijemce.length >= 3) {
+      text = text.split(prijemce).join("[username]");
+    }
+
+    return text
+      .replace(/Bearer\s+\S+/gi, "Bearer [skryto]")
+      .replace(/\beyJ[A-Za-z0-9_-]{25,}\.[A-Za-z0-9_.-]+/g, "[token]")
+      .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email]")
+      .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "[id]")
+      .slice(0, 180);
+  }
+
+  function ulozPokus699DBU(pokus, username) {
+    const povolenaPole = ["faze", "http", "kod", "zprava", "detail", "napoveda"];
+    const zaznam = { cas: pokus.cas };
+    for (const pole of povolenaPole) {
+      zaznam[pole] = ocistiDiagnostiku699DBU(pokus[pole], username);
+    }
+    diagnostikaPozvanek699DBU.push(zaznam);
+    if (diagnostikaPozvanek699DBU.length > 8) {
+      diagnostikaPozvanek699DBU.shift();
+    }
+  }
+
+  function reportPozvanek699DBU() {
+    const radky = diagnostikaPozvanek699DBU.map((pokus, index) => [
+      `#${index + 1} ${pokus.cas}`,
+      `faze=${pokus.faze} | HTTP=${pokus.http} | kod=${pokus.kod}`,
+      `zprava=${pokus.zprava}`,
+      `detail=${pokus.detail} | hint=${pokus.napoveda}`
+    ].join("\n"));
+
+    return [
+      "LUBANOTE 699D-BU – DIAGNOSTIKA POZVANKY",
+      `build: ${window.LUBANOTE_VERSION || "neznamy"}`,
+      `cas: ${new Date().toISOString()}`,
+      `pokusy: ${diagnostikaPozvanek699DBU.length}`,
+      "---",
+      ...(radky.length ? radky : [
+        "V tomto spusteni zatim nebyla odeslana zadna pozvanka.",
+        "Po instalaci tohoto buildu ji zkus jednou odeslat a zkopiruj report znovu."
+      ]),
+      "---",
+      "Bez obsahu poznamky, ID poznamky, username a tokenu."
+    ].join("\n");
+  }
+
   async function zajistiSupabase() {
     if (typeof supabaseClient !== "undefined" && supabaseClient) {
       return supabaseClient;
@@ -931,11 +990,22 @@
     modal.send.textContent = t("sharing.shareSending", "Odesílám…");
     nastavShareStatus("");
 
+    const pokus699DBU = {
+      cas: new Date().toISOString(),
+      faze: "pred-pripravou-klienta",
+      http: "-",
+      kod: "-",
+      zprava: "-",
+      detail: "-",
+      napoveda: "-"
+    };
+
     try {
       const klient = await zajistiSupabase();
       if (!klient) throw new Error("supabase_unavailable");
 
-      const { data, error } = await klient.rpc(
+      pokus699DBU.faze = "rpc-odeslano";
+      const { data, error, status } = await klient.rpc(
         "lubanote_send_note_invitation",
         {
           p_note_id: shareNoteId,
@@ -943,8 +1013,15 @@
         }
       );
 
+      pokus699DBU.http = status ?? "-";
+
       if (error) throw error;
-      if (data?.ok === false) throw new Error(data.reason || "send_failed");
+      if (data?.ok === false) {
+        pokus699DBU.kod = data.code || "data.ok=false";
+        throw new Error(data.reason || data.message || "send_failed");
+      }
+
+      pokus699DBU.faze = "uspech";
 
       modal.input.value = "";
       nastavShareStatus(
@@ -954,9 +1031,18 @@
 
       await nactiShareData();
     } catch (error) {
+      pokus699DBU.faze = "chyba";
+      pokus699DBU.http = pokus699DBU.http === "-"
+        ? (error?.status ?? "-")
+        : pokus699DBU.http;
+      pokus699DBU.kod = error?.code || pokus699DBU.kod;
+      pokus699DBU.zprava = error?.message || String(error);
+      pokus699DBU.detail = error?.details || "-";
+      pokus699DBU.napoveda = error?.hint || "-";
       console.error("Sdílení: pozvánku se nepodařilo odeslat.", error);
       nastavShareStatus(zpravaProSendChybu(error), "error");
     } finally {
+      ulozPokus699DBU(pokus699DBU, username);
       shareBusy = false;
       modal.send.disabled = false;
       modal.send.textContent = puvodniText || t("sharing.shareSend", "Poslat pozvánku");
@@ -1663,5 +1749,10 @@
     otevriPozvanky: otevriInvitationsModal,
     otevriSdileni: otevriShareModal,
     aktualizujTlacitko: aktualizujShareButton
+  };
+
+  window.LubaNoteSharingInviteDiag = {
+    report: reportPozvanek699DBU,
+    snapshot: () => diagnostikaPozvanek699DBU.map((pokus) => ({ ...pokus }))
   };
 })();

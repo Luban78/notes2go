@@ -2929,25 +2929,28 @@ async function zkopirujVykonCaretu699DBG(tlacitko) {
 
 
 
-  /* 699D-BT: Cileny read-only report o RPC pozvankach.
-     Bez obsahu poznamky, jmena prijemce, tokenu a dalsich HTTP volani. */
+  /* 699D-BU: report je napojen primo na vysledek odesilaciho RPC.
+     Startup log slouzi jen jako doplnek (HTTP status bez detailu chyby). */
   async function zkopirujPozvanku699DBT(tlacitko) {
     const puvodni = tlacitko.textContent;
+    let primeVysledky = "";
+    try {
+      primeVysledky = window.LubaNoteSharingInviteDiag?.report?.() || "";
+    } catch (_error) {}
+
     const vsechny = window.LubaNoteStartupDiag?.radky?.() || [];
     const zaznamyPozvanek = vsechny.filter(radek =>
-      /\\b(?:START|END)\\s*\\|\\s*HTTP\\s*#\\d+\\s+POST RPC lubanote_send_note_invitation\\b/i.test(String(radek))
+      /\b(?:START|END)\s*\|\s*HTTP\s*#\d+\s+POST RPC lubanote_send_note_invitation\b/i.test(String(radek))
     );
-    const vyber = zaznamyPozvanek.slice(-20);
+    const vyber = zaznamyPozvanek.slice(-8);
     const report = [
-      "LUBANOTE 699D-BT – ODESLANI POZVANKY",
-      `build: ${window.LUBANOTE_VERSION || "DEV"}`,
-      `cas: ${new Date().toISOString()}`,
-      `prostredi: ${prostredi()}`,
-      `zaznamy: ${vyber.length}/${zaznamyPozvanek.length}`,
+      primeVysledky || [
+        "LUBANOTE 699D-BU – DIAGNOSTIKA POZVANKY",
+        "Modul sdileni neni dostupny. Over, zda byl nasazen sharingInvitations.js."
+      ].join("\n"),
       "---",
-      ...(vyber.length ? vyber : ["Zatim zadne RPC pozvanky v diagnostickem bufferu. Zkus znovu odeslat pozvanku."]),
-      "---",
-      "Poznamka: HTTP status neobsahuje detail chyby serveru."
+      `HTTP startup zaznamy: ${vyber.length}/${zaznamyPozvanek.length}`,
+      ...(vyber.length ? vyber : ["Zadne HTTP zaznamy – primy report ma prednost."])
     ].join("\n");
     let ok = false;
     try { ok = await zkopirujTextRobustne(report); } catch (_error) { ok = false; }
