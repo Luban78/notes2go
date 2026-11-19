@@ -19,13 +19,33 @@
   const barEl = document.getElementById("syncTrafficBar");
 
   const SYNC_TRAFFIC_VISIBLE_KEY = "lubanoteSyncTrafficVisibleV1";
-  let panelViditelnyUzivatelem = true;
+
+  // 699D-BS: mobilni WEB ma ve vychozim stavu novou horni listu.
+  // Neplati pro nativni Capacitor APK ani pro desktop (vcetne uzkeho okna).
+  // Admin Dashboard muze RX/TX/E kdykoliv zapnout rucne pres stavajici API.
+  const jeMobilniWeb = (() => {
+    const mobilniProhlizec = /Android|iPhone|iPad|iPod/i.test(
+      navigator.userAgent || ""
+    );
+    const nativniCapacitor =
+      window.Capacitor?.isNativePlatform?.() === true ||
+      window.Capacitor?.getPlatform?.() === "android" ||
+      window.Capacitor?.getPlatform?.() === "ios";
+    return mobilniProhlizec && !nativniCapacitor;
+  })();
+
+  let panelViditelnyUzivatelem = !jeMobilniWeb;
   let ucetAktivni = false;
 
-  try {
-    panelViditelnyUzivatelem =
-      localStorage.getItem(SYNC_TRAFFIC_VISIBLE_KEY) !== "0";
-  } catch (_error) {}
+  // Na mobilnim webu ignorujeme stare ulozene "1", aby po aktualizaci
+  // zustal vychozi RX panel skryty i u stavajicich uctu.
+  // Rucni prepnuti v Admin Dashboardu funguje behem cele relace.
+  if (!jeMobilniWeb) {
+    try {
+      panelViditelnyUzivatelem =
+        localStorage.getItem(SYNC_TRAFFIC_VISIBLE_KEY) !== "0";
+    } catch (_error) {}
+  }
 
   /*
    * PATCH 679C – RX/TX/E panel vlastni i skutecny DOM stav `hidden`.
