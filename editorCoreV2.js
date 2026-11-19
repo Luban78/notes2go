@@ -115,6 +115,10 @@
   let v2CaretLupa699DBC = null;
   let v2CaretLupaPred699DBC = null;
   let v2CaretLupaPo699DBC = null;
+  /* 699D-BQ – Jedno transparentní plátno pro samotnou čárku při tahu.
+     Bitmapu lze měnit bez zápisu transform do DOM a bez zásahu do handle. */
+  let v2CaretCanvas699DBQ = null;
+  let v2CaretCanvasCtx699DBQ = null;
   /* 699D-BF – Diagnostika JEDINÉHO reálného tahu; žádné změny obsahu,
      žádný průběžný DOM výpis ani logování textu či zdrojů obrázků. */
   let v2CaretProfil699DBF = null;
@@ -125,7 +129,7 @@
   const v2CaretTest699DBL = {
     hit: true, caret: true, geometrie: true, vykresleni: true,
     transform: true, styl: true, dom: true,
-    lupa: true, poloha: true
+    lupa: true, poloha: true, canvas: true
   };
   let v2CaretTestPanel699DBL = null;
 
@@ -176,7 +180,7 @@
       panel.setAttribute("aria-label", "Diagnostika FPS caretu");
       panel.innerHTML = `
         <div class="ln-v2-caret-test-head-699DBM" data-ln-caret-drag>
-          <strong>⠿ 🧪 Výkon caretu · 699D-BP</strong>
+          <strong>⠿ 🧪 Výkon caretu · 699D-BQ</strong>
           <button type="button" data-ln-caret-close aria-label="Zavřít diagnostiku">×</button>
         </div>
         <div class="ln-v2-caret-test-box-699DBL ln-v2-caret-test-body-699DBM">
@@ -190,6 +194,8 @@
             <span>Výpočet přesné geometrie (G)</span></label>
           <label><input type="checkbox" data-ln-caret-test="vykresleni" checked>
             <span>Vizuální změny caretu (V)</span></label>
+          <label><input type="checkbox" data-ln-caret-test="canvas" checked>
+            <span>Nové kreslení bez transform (K)</span></label>
           <label><input type="checkbox" data-ln-caret-test="transform" checked>
             <span>↳ Pohyb caretu / transform (T)</span></label>
           <label><input type="checkbox" data-ln-caret-test="styl" checked>
@@ -200,10 +206,11 @@
             <span>Zobrazení celé lupy (L)</span></label>
           <label><input type="checkbox" data-ln-caret-test="poloha" checked>
             <span>Průběžný pohyb lupy (P)</span></label>
-          <p>Při G=0 je poloha jen přibližná. V=0 vypne T/S/D společně;
-             jednotlivé T/S/D lze testovat odděleně při V=1.
+          <p>K=1 kreslí caret do odděleného plátna, T/S/D se pak nepoužívají.
+             K=0 vrací původní vykreslení s přepínači T/S/D.
+             Při G=0 je poloha jen přibližná. V=0 vypne celé vykreslení.
              Během testu může caret vypadat nesprávně. Výsledek CARET-BF
-             obsahuje přepínače i počty vizuálních zápisů.
+             obsahuje přepínače a počty vizuálních zápisů.
              Po restartu APK se vše obnoví.</p>
           <div class="ln-v2-caret-test-actions-699DBL">
             <button type="button" data-ln-caret-reset>Vše zapnout</button>
@@ -333,6 +340,7 @@
         `geom=${statistika(profil.caretGeom699DBO)}ms ` +
         `visual=${statistika(profil.caretVisual699DBO)}ms ` +
         `writes=T${profil.vizOps699DBP.transform}S${profil.vizOps699DBP.styl}D${profil.vizOps699DBP.dom} ` +
+        `canvas=${profil.canvasFrames699DBQ} ` +
         `img=${obrazky}/${viditelne} ` +
         `test=H${Number(profil.prepinace699DBL.hit)}` +
         `C${Number(profil.prepinace699DBL.caret)}` +
@@ -340,6 +348,7 @@
         `P${Number(profil.prepinace699DBL.poloha)}` +
         `G${Number(profil.prepinace699DBL.geometrie)}` +
         `V${Number(profil.prepinace699DBL.vykresleni)}` +
+        `K${Number(profil.prepinace699DBL.canvas)}` +
         `T${Number(profil.prepinace699DBL.transform)}` +
         `S${Number(profil.prepinace699DBL.styl)}` +
         `D${Number(profil.prepinace699DBL.dom)}`;
@@ -514,6 +523,7 @@
     }
     v2SingleCaretDrag = null;
     if (v2SingleCaretHandle) v2SingleCaretHandle.style.opacity = "";
+    skryjV2CanvasCaret699DBQ();
     skryjV2CaretLupu699DBC();
     /* 699D-BD – Bridge nesmí po skončení gestem odloženého contextmenu
        znovu nabídnout Vložit / Vše. O ukončení se dozví výslovnou událostí. */
@@ -630,7 +640,8 @@
           hitPoint: [], hitMap: [], hitModel: [],
           lupa: [], lupaEnsure: [], lupaText: [], lupaMove: [], caret: [],
           caretGeom699DBO: [], caretVisual699DBO: [],
-          vizOps699DBP: { transform: 0, styl: 0, dom: 0 }
+          vizOps699DBP: { transform: 0, styl: 0, dom: 0 },
+          canvasFrames699DBQ: 0
         };
         v2SingleCaretDrag.zrusCachePriScrollu = () => {
           if (v2SingleCaretDrag) {
@@ -858,6 +869,94 @@
     finally { try { api.end(token); } catch (_error) {} }
   }
 
+  /* 699D-BQ – Pilotní renderer dragu: caret jako čárka o šířce 2 CSS px
+     na samostatném transparentním canvasu. Při pohybu se mění JEN bitmapa,
+     nikoliv DOM/CSS transform. Editorový model, lupa a pointer capture
+     zůstávají ve stávajícím kódu. K=0 vrací dosavadní renderer. */
+  function skryjV2CanvasCaret699DBQ() {
+    if (v2CaretCanvas699DBQ?.isConnected) v2CaretCanvas699DBQ.hidden = true;
+  }
+
+  function vykresliV2CanvasCaret699DBQ(rect, drag) {
+    if (!drag || !editor?.isConnected) return false;
+    try {
+    if (!v2CaretCanvas699DBQ?.isConnected) {
+      const platno = document.createElement("canvas");
+      platno.setAttribute("aria-hidden", "true");
+      platno.style.cssText = "position:fixed;left:0;top:0;z-index:2147482300;pointer-events:none;background:transparent;contain:strict";
+      platno.hidden = true;
+      document.body.appendChild(platno);
+      v2CaretCanvas699DBQ = platno;
+      v2CaretCanvasCtx699DBQ = null;
+    }
+    const ctx = v2CaretCanvasCtx699DBQ || v2CaretCanvas699DBQ.getContext("2d", { alpha: true });
+    if (!ctx) return false;
+    v2CaretCanvasCtx699DBQ = ctx;
+
+    if (!drag.canvasNastaven699DBQ) {
+      /* Parametry viewportu i barvu čteme pouze jednou na začátku tahu.
+         Nesmíme opakovat čtení window.innerWidth v každém RAF (699D-BI). */
+      const sirka = Math.max(1, Math.round(Number(window.innerWidth) || 1));
+      const vyska = Math.max(1, Math.round(Number(window.innerHeight) || 1));
+      const dpr = Math.max(1, Math.min(4, Number(window.devicePixelRatio) || 1));
+      v2CaretCanvas699DBQ.style.width = `${sirka}px`;
+      v2CaretCanvas699DBQ.style.height = `${vyska}px`;
+      if (v2CaretCanvas699DBQ.width !== Math.ceil(sirka * dpr) ||
+          v2CaretCanvas699DBQ.height !== Math.ceil(vyska * dpr)) {
+        v2CaretCanvas699DBQ.width = Math.ceil(sirka * dpr);
+        v2CaretCanvas699DBQ.height = Math.ceil(vyska * dpr);
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, sirka, vyska);
+      const puvodni = zajistiV2LubaCaret();
+      try {
+        const styl = getComputedStyle(puvodni);
+        drag.canvasBarva699DBQ = styl.backgroundColor || "#ff2020";
+        drag.canvasTloustka699DBQ = Math.max(1, Number.parseFloat(styl.width) || 2);
+      } catch (_error) {
+        drag.canvasBarva699DBQ = "#ff2020";
+        drag.canvasTloustka699DBQ = 2;
+      }
+      /* Skryjeme jen VIZUÁLNÍ čárku, nikoli pointer-captured handle. */
+      if (!puvodni.hidden) puvodni.hidden = true;
+      drag.canvasNastaven699DBQ = true;
+      v2CaretCanvas699DBQ.hidden = false;
+    }
+
+    const predchozi = drag.canvasPosledniRect699DBQ;
+    if (predchozi) {
+      ctx.clearRect(predchozi.x - 2, predchozi.y - 2,
+        predchozi.width + 4, predchozi.height + 4);
+      drag.canvasPosledniRect699DBQ = null;
+    }
+    const bounds = drag.rectEditoru || editor.getBoundingClientRect();
+    if (!drag.rectEditoru) drag.rectEditoru = bounds;
+    if (!Number.isFinite(drag.paddingEditoru699DBN)) {
+      try { drag.paddingEditoru699DBN = Number.parseFloat(getComputedStyle(editor).paddingTop) || 0; }
+      catch (_error) { drag.paddingEditoru699DBN = 0; }
+    }
+    const vyskaCaretu = Math.max(12, Math.round(rect.height || 20));
+    const horniMez = bounds.top + Math.max(0, drag.paddingEditoru699DBN - 2);
+    if (rect.top < horniMez || rect.top + vyskaCaretu > bounds.bottom ||
+        rect.left < bounds.left - 2 || rect.left > bounds.right + 2) return true;
+
+    const x = Math.round(rect.left);
+    const y = Math.round(rect.top);
+    const width = drag.canvasTloustka699DBQ;
+    ctx.fillStyle = drag.canvasBarva699DBQ;
+    ctx.fillRect(x, y, width, vyskaCaretu);
+    drag.canvasPosledniRect699DBQ = { x, y, width, height: vyskaCaretu };
+    if (v2CaretProfil699DBF) v2CaretProfil699DBF.canvasFrames699DBQ++;
+    return true;
+    } catch (_error) {
+      /* I při selhání Canvas API pokračujeme původním DOM rendererem. */
+      skryjV2CanvasCaret699DBQ();
+      drag.canvasNastaven699DBQ = false;
+      if (v2LubaCaret) v2LubaCaret.hidden = false;
+      return false;
+    }
+  }
+
   /* 699D-BN – Během dragu se dokument NEmění a ukotvený handle zůstává
      se svým pointer capture ve starém řádku. Samotný vizuální caret proto
      může být dočasně fixed overlay. Čtení bounds/padding jen při invalidaci
@@ -955,7 +1054,9 @@
     if (tah699DBO) {
       if (v2CaretTest699DBL.vykresleni) {
         const zacatekVykresleni699DBO = meri699DBO ? performance.now() : 0;
-        vykresliV2CaretPriTahu699DBN(rect, tah699DBO);
+        if (!v2CaretTest699DBL.canvas || !vykresliV2CanvasCaret699DBQ(rect, tah699DBO)) {
+          vykresliV2CaretPriTahu699DBN(rect, tah699DBO);
+        }
         if (meri699DBO) pridejCasCaretu699DBF("caretVisual699DBO", performance.now() - zacatekVykresleni699DBO);
       }
       return;
@@ -10568,6 +10669,7 @@
     window.LubaNoteKeyboard?.pripravEditor?.(editor);
     try { editor.blur(); } catch (_error) {}
     skryjV2LubaCaret();
+    skryjV2CanvasCaret699DBQ();
     odstranV2SelectionOverlay();
     window.LubaNoteStartupDiag?.konec?.(tokenKeyboard);
     window.LubaNoteStartupDiag?.konec?.(tokenHost);
@@ -10577,6 +10679,7 @@
   function zavriVHostu() {
     if (!jadroEditoru || !vlozenyRezim) return;
     ukonciV2SingleCaretDrag699DBC(v2SingleCaretDrag);
+    skryjV2CanvasCaret699DBQ();
     skryjV2CaretLupu699DBC();
     v2LubaCaretCekaNaNovyTapPoMove = false;
     ochranaPohleduSeznamu?.ukonci?.();
