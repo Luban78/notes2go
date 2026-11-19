@@ -795,6 +795,210 @@
     );
   }
 
+  // 699D-BV – pripravny, pouze explicitne volany E2E format SDILENEHO TEXTU.
+  // Zatim jej zadna cesta ulozeni/cteni nevyuziva: databazovy 685C3 guard
+  // zustava zapnuty. Aktivace vyzaduje atomicky serverovy prevod a oddeleni
+  // osobnich poli vlastnika (stitky, pripominky, oblast...).
+  // Klient volajici tuto nizkourovenovou funkci smi predat JEN spolecny obsah.
+  const SHARED_TEXT_MARKER = "__lubanoteSharedContentE2E";
+  const SHARED_TEXT_VERSION = 1;
+  const SHARED_TEXT_KEY_VERSION = 1;
+  const SHARED_TEXT_MAX_BYTES = 25 * 1024 * 1024;
+  const SHARED_TEXT_FIELDS = [
+    SHARED_TEXT_MARKER, "algorithm", "ciphertext", "iv", "keyVersion", "version"
+  ];
+  const SHARED_TEXT_ENCODER = new TextEncoder();
+  const SHARED_TEXT_DECODER = new TextDecoder("utf-8", { fatal: true });
+
+  function sharedTextAad(noteId) {
+    return SHARED_TEXT_ENCODER.encode(
+      `LubaNote-shared-content-v1:${noteId}:key-v${SHARED_TEXT_KEY_VERSION}`
+    );
+  }
+
+  function overSharedTextKlic(noteKey) {
+    if (!(noteKey instanceof Uint8Array) || noteKey.byteLength !== 32) {
+      throw new Error("shared_content_invalid_note_key");
+    }
+  }
+
+  function overSharedTextId(noteId) {
+    if (!jeUuid(noteId)) throw new Error("shared_content_invalid_note_id");
+  }
+
+  function decodeSharedTextBase64(value, maxBytes) {
+    if (typeof value !== "string" || !value.length ||
+        value.length > Math.ceil(maxBytes * 4 / 3) + 4 ||
+        !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+      throw new Error("shared_content_invalid_base64");
+    }
+    const bytes = base64NaBajty(value);
+    if (bytes.byteLength > maxBytes || bajtyNaBase64(bytes) !== value) {
+      throw new Error("shared_content_invalid_base64");
+    }
+    return bytes;
+  }
+
+  function jeSharedTextObalka(value) {
+    return Boolean(value && typeof value === "object" && !Array.isArray(value) &&
+      value[SHARED_TEXT_MARKER] === true);
+  }
+
+  function overSharedTextObalku(value) {
+    if (!jeSharedTextObalka(value) ||
+        value.version !== SHARED_TEXT_VERSION ||
+        value.keyVersion !== SHARED_TEXT_KEY_VERSION ||
+        value.algorithm !== "AES-256-GCM" ||
+        Object.keys(value).sort().join(",") !== SHARED_TEXT_FIELDS.slice().sort().join(",")) {
+      throw new Error("shared_content_invalid_envelope");
+    }
+  }
+
+  // Pozitivni seznam obsahu, ktery patri obema spolupracovnikum.
+  // Osobni pole (tags/area/reminder/plannedItems/...) ani nezname
+  // technicke atributy se do sifrovaneho sdileneho obsahu nedostanou.
+  // Novy typ spolecneho pole musi projit zvlastnim review pred zarazenim.
+  function vyberSdilenyObsahE2E(note) {
+    if (!note || typeof note !== "object" || Array.isArray(note) ||
+        note.isSecret === true ||
+        Object.prototype.hasOwnProperty.call(note, "__lubanoteSecret") ||
+        Object.prototype.hasOwnProperty.call(note, "__lubanoteE2ENote") ||
+        Object.prototype.hasOwnProperty.call(note, SHARED_TEXT_MARKER)) {
+      throw new Error("shared_content_invalid_source");
+    }
+    if (note.title != null && typeof note.title !== "string" ||
+        note.note != null && typeof note.note !== "string" ||
+        note.richContent != null && typeof note.richContent !== "string" ||
+        note.todos != null && !Array.isArray(note.todos)) {
+      throw new Error("shared_content_invalid_source");
+    }
+    const todos = Array.isArray(note.todos) ? note.todos : [];
+    if (todos.some(todo => !todo || typeof todo !== "object" || Array.isArray(todo))) {
+      throw new Error("shared_content_invalid_source");
+    }
+    return {
+      title: note.title || "",
+      note: note.note || "",
+      richContent: note.richContent || "",
+      todos: JSON.parse(JSON.stringify(todos))
+    };
+  }
+
+  async function zasifrujSdilenyObsah(noteId, spolecnyObsah, noteKey) {
+    overSharedTextId(noteId);
+    overSharedTextKlic(noteKey);
+    if (!spolecnyObsah || typeof spolecnyObsah !== "object" ||
+        Array.isArray(spolecnyObsah) ||
+        spolecnyObsah.isSecret === true ||
+        Object.prototype.hasOwnProperty.call(spolecnyObsah, "__lubanoteSecret") ||
+        Object.prototype.hasOwnProperty.call(spolecnyObsah, "__lubanoteE2ENote") ||
+        Object.prototype.hasOwnProperty.call(spolecnyObsah, SHARED_TEXT_MARKER)) {
+      throw new Error("shared_content_invalid_payload");
+    }
+    const json = JSON.stringify(spolecnyObsah);
+    if (typeof json !== "string") throw new Error("shared_content_invalid_payload");
+    const plain = SHARED_TEXT_ENCODER.encode(json);
+    if (plain.byteLength > SHARED_TEXT_MAX_BYTES) {
+      throw new Error("shared_content_too_large");
+    }
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await importujNoteKeyAes(noteKey);
+    const cipher = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv, additionalData: sharedTextAad(noteId), tagLength: 128 },
+      key,
+      plain
+    );
+    return {
+      [SHARED_TEXT_MARKER]: true,
+      version: SHARED_TEXT_VERSION,
+      keyVersion: SHARED_TEXT_KEY_VERSION,
+      algorithm: "AES-256-GCM",
+      iv: bajtyNaBase64(iv),
+      ciphertext: bajtyNaBase64(new Uint8Array(cipher))
+    };
+  }
+
+  async function desifrujSdilenyObsah(noteId, obalka, noteKey) {
+    overSharedTextId(noteId);
+    overSharedTextKlic(noteKey);
+    overSharedTextObalku(obalka);
+    const iv = decodeSharedTextBase64(obalka.iv, 12);
+    const cipher = decodeSharedTextBase64(
+      obalka.ciphertext, SHARED_TEXT_MAX_BYTES + 16
+    );
+    if (iv.byteLength !== 12 || cipher.byteLength < 16) {
+      throw new Error("shared_content_invalid_envelope");
+    }
+    const key = await importujNoteKeyAes(noteKey);
+    let plain;
+    try {
+      plain = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv, additionalData: sharedTextAad(noteId), tagLength: 128 },
+        key,
+        cipher
+      );
+    } catch (_) {
+      throw new Error("shared_content_auth_failed");
+    }
+    let data;
+    try {
+      data = JSON.parse(SHARED_TEXT_DECODER.decode(plain));
+    } catch (_) {
+      throw new Error("shared_content_invalid_payload");
+    }
+    if (!data || typeof data !== "object" || Array.isArray(data) ||
+        data.isSecret === true ||
+        Object.prototype.hasOwnProperty.call(data, "__lubanoteSecret") ||
+        Object.prototype.hasOwnProperty.call(data, "__lubanoteE2ENote") ||
+        Object.prototype.hasOwnProperty.call(data, SHARED_TEXT_MARKER)) {
+      throw new Error("shared_content_invalid_payload");
+    }
+    return data;
+  }
+
+  // Pouze RAM. Bez supabase RPC, lokalniho uloziste a zmen poznamek.
+  async function selfTestSdilenyObsahE2E() {
+    const id = "11111111-1111-4111-8111-111111111111";
+    const jineId = "22222222-2222-4222-8222-222222222222";
+    const klic = vytvorNoteKey();
+    const zdroj = {
+      title: "699D-BV TEST 🔒",
+      note: "Příliš žluťoučký kůň – ochrana textu",
+      todos: [{ text: "Krok jedna", completed: false }],
+      tags: ["moje tajne stitky"],
+      reminder: true,
+      area: "private",
+      plannedItems: [{ secret: "soukromy kalendar" }]
+    };
+    const original = vyberSdilenyObsahE2E(zdroj);
+    if (JSON.stringify(original).includes("tajne stitky") ||
+        JSON.stringify(original).includes("soukromy kalendar") ||
+        Object.keys(original).sort().join(",") !== "note,richContent,title,todos") {
+      throw new Error("shared_content_personal_data_leaked");
+    }
+    const obalka = await zasifrujSdilenyObsah(id, original, klic);
+    if (JSON.stringify(obalka).includes(original.title) ||
+        JSON.stringify(await desifrujSdilenyObsah(id, obalka, klic)) !==
+          JSON.stringify(original)) {
+      throw new Error("shared_content_roundtrip_failed");
+    }
+    const poskozeny = { ...obalka, ciphertext: `A${obalka.ciphertext.slice(1)}` };
+    if (poskozeny.ciphertext === obalka.ciphertext) {
+      poskozeny.ciphertext = `B${obalka.ciphertext.slice(1)}`;
+    }
+    let blokovano = 0;
+    for (const pokus of [
+      () => desifrujSdilenyObsah(jineId, obalka, klic),
+      () => desifrujSdilenyObsah(id, obalka, vytvorNoteKey()),
+      () => desifrujSdilenyObsah(id, poskozeny, klic),
+      () => desifrujSdilenyObsah(id, { ...obalka, extra: true }, klic)
+    ]) {
+      try { await pokus(); } catch (_) { blokovano += 1; }
+    }
+    if (blokovano !== 4) throw new Error("shared_content_fail_closed_test_failed");
+    return { ok: true, version: "699D-BV", checked: 6 };
+  }
+
   function jeUuid(value) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
   }
@@ -1396,6 +1600,11 @@
     nactiNoteKeyProPoznamku,
     zajistiObalkyProPoznamku,
     selfTestNoteKey,
+    jeSharedTextObalka,
+    vyberSdilenyObsahE2E,
+    zasifrujSdilenyObsah,
+    desifrujSdilenyObsah,
+    selfTestSdilenyObsahE2E,
     pripravSdilenouPoznamkuProCloud,
     desifrujSdilenouPoznamkuZCloudu
   });
