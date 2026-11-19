@@ -2929,6 +2929,32 @@ async function zkopirujVykonCaretu699DBG(tlacitko) {
 
 
 
+  /* 699D-BT: Cileny read-only report o RPC pozvankach.
+     Bez obsahu poznamky, jmena prijemce, tokenu a dalsich HTTP volani. */
+  async function zkopirujPozvanku699DBT(tlacitko) {
+    const puvodni = tlacitko.textContent;
+    const vsechny = window.LubaNoteStartupDiag?.radky?.() || [];
+    const zaznamyPozvanek = vsechny.filter(radek =>
+      /\\b(?:START|END)\\s*\\|\\s*HTTP\\s*#\\d+\\s+POST RPC lubanote_send_note_invitation\\b/i.test(String(radek))
+    );
+    const vyber = zaznamyPozvanek.slice(-20);
+    const report = [
+      "LUBANOTE 699D-BT – ODESLANI POZVANKY",
+      `build: ${window.LUBANOTE_VERSION || "DEV"}`,
+      `cas: ${new Date().toISOString()}`,
+      `prostredi: ${prostredi()}`,
+      `zaznamy: ${vyber.length}/${zaznamyPozvanek.length}`,
+      "---",
+      ...(vyber.length ? vyber : ["Zatim zadne RPC pozvanky v diagnostickem bufferu. Zkus znovu odeslat pozvanku."]),
+      "---",
+      "Poznamka: HTTP status neobsahuje detail chyby serveru."
+    ].join("\n");
+    let ok = false;
+    try { ok = await zkopirujTextRobustne(report); } catch (_error) { ok = false; }
+    tlacitko.textContent = ok ? "Diagnostika pozvanky zkopirovana ✓" : "Kopirovani selhalo";
+    setTimeout(() => { tlacitko.textContent = puvodni; }, 1800);
+  }
+
   function vytvorHub() {
     if (hub) return hub;
 
@@ -2970,8 +2996,8 @@ async function zkopirujVykonCaretu699DBG(tlacitko) {
       <pre class="ln-dh-log">Diagnostika zatím neběží.</pre>
 
       <div class="ln-dh-footer">
+        <button type="button" class="ln-dh-copy" data-dh="copy-invite-699DBT" style="grid-column:1/-1">Kopírovat diagnostiku pozvánky</button>
         <button type="button" class="ln-dh-copy" data-dh="copy-caret-699DBG" style="grid-column:1/-1">Kopírovat měření caretu</button>
-        <button type="button" class="ln-dh-copy" data-dh="caret-test-699DBL" style="grid-column:1/-1">🧪 Test viníků FPS caretu</button>
         <!-- Primary SYNC + reminders report is attached on demand by 691BA. -->
         <details class="ln-dh-report-extras">
           <summary>Další reporty a nástroje</summary>
@@ -3149,16 +3175,12 @@ async function zkopirujVykonCaretu699DBG(tlacitko) {
         zkopirujNavrat685G(tlacitko);
         return;
       }
-      if (akce === "copy-caret-699DBG") {
-        void zkopirujVykonCaretu699DBG(tlacitko);
+      if (akce === "copy-invite-699DBT") {
+        void zkopirujPozvanku699DBT(tlacitko);
         return;
       }
-      if (akce === "caret-test-699DBL") {
-        if (window.LubaNoteEditorV2?.otevriDiagnostikuCaretu699DBL?.() !== true) {
-          const textPred = tlacitko.textContent;
-          tlacitko.textContent = "Panel caretu není dostupný";
-          setTimeout(() => { tlacitko.textContent = textPred; }, 1800);
-        }
+      if (akce === "copy-caret-699DBG") {
+        void zkopirujVykonCaretu699DBG(tlacitko);
         return;
       }
 
