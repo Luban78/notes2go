@@ -124,6 +124,7 @@
      do modelu dokumentu, ukládání ani synchronizace. */
   const v2CaretTest699DBL = {
     hit: true, caret: true, geometrie: true, vykresleni: true,
+    transform: true, styl: true, dom: true,
     lupa: true, poloha: true
   };
   let v2CaretTestPanel699DBL = null;
@@ -175,7 +176,7 @@
       panel.setAttribute("aria-label", "Diagnostika FPS caretu");
       panel.innerHTML = `
         <div class="ln-v2-caret-test-head-699DBM" data-ln-caret-drag>
-          <strong>⠿ 🧪 Výkon caretu · 699D-BO</strong>
+          <strong>⠿ 🧪 Výkon caretu · 699D-BP</strong>
           <button type="button" data-ln-caret-close aria-label="Zavřít diagnostiku">×</button>
         </div>
         <div class="ln-v2-caret-test-box-699DBL ln-v2-caret-test-body-699DBM">
@@ -189,13 +190,21 @@
             <span>Výpočet přesné geometrie (G)</span></label>
           <label><input type="checkbox" data-ln-caret-test="vykresleni" checked>
             <span>Vizuální změny caretu (V)</span></label>
+          <label><input type="checkbox" data-ln-caret-test="transform" checked>
+            <span>↳ Pohyb caretu / transform (T)</span></label>
+          <label><input type="checkbox" data-ln-caret-test="styl" checked>
+            <span>↳ Viditelnost a CSS (S)</span></label>
+          <label><input type="checkbox" data-ln-caret-test="dom" checked>
+            <span>↳ Přesun caretu do DOM (D)</span></label>
           <label><input type="checkbox" data-ln-caret-test="lupa" checked>
             <span>Zobrazení celé lupy (L)</span></label>
           <label><input type="checkbox" data-ln-caret-test="poloha" checked>
             <span>Průběžný pohyb lupy (P)</span></label>
-          <p>G vypnuté = přibližná poloha podle prstu. V vypnuté = caret během
-             tahu stojí. Stav H/C/L/P/G/V se uloží do měření CARET-BF.
-             Po restartu APK se všechny volby obnoví.</p>
+          <p>Při G=0 je poloha jen přibližná. V=0 vypne T/S/D společně;
+             jednotlivé T/S/D lze testovat odděleně při V=1.
+             Během testu může caret vypadat nesprávně. Výsledek CARET-BF
+             obsahuje přepínače i počty vizuálních zápisů.
+             Po restartu APK se vše obnoví.</p>
           <div class="ln-v2-caret-test-actions-699DBL">
             <button type="button" data-ln-caret-reset>Vše zapnout</button>
             <button type="button" data-ln-caret-close>Hotovo</button>
@@ -323,13 +332,17 @@
         `caret=${statistika(profil.caret)}ms ` +
         `geom=${statistika(profil.caretGeom699DBO)}ms ` +
         `visual=${statistika(profil.caretVisual699DBO)}ms ` +
+        `writes=T${profil.vizOps699DBP.transform}S${profil.vizOps699DBP.styl}D${profil.vizOps699DBP.dom} ` +
         `img=${obrazky}/${viditelne} ` +
         `test=H${Number(profil.prepinace699DBL.hit)}` +
         `C${Number(profil.prepinace699DBL.caret)}` +
         `L${Number(profil.prepinace699DBL.lupa)}` +
         `P${Number(profil.prepinace699DBL.poloha)}` +
         `G${Number(profil.prepinace699DBL.geometrie)}` +
-        `V${Number(profil.prepinace699DBL.vykresleni)}`;
+        `V${Number(profil.prepinace699DBL.vykresleni)}` +
+        `T${Number(profil.prepinace699DBL.transform)}` +
+        `S${Number(profil.prepinace699DBL.styl)}` +
+        `D${Number(profil.prepinace699DBL.dom)}`;
       window.LubaNoteStartupDiag?.zapis?.("CARET-BF", radek);
     }, 0);
   }
@@ -616,7 +629,8 @@
           mezery: [], rafGap: [], work: [], bounds: [], hit: [],
           hitPoint: [], hitMap: [], hitModel: [],
           lupa: [], lupaEnsure: [], lupaText: [], lupaMove: [], caret: [],
-          caretGeom699DBO: [], caretVisual699DBO: []
+          caretGeom699DBO: [], caretVisual699DBO: [],
+          vizOps699DBP: { transform: 0, styl: 0, dom: 0 }
         };
         v2SingleCaretDrag.zrusCachePriScrollu = () => {
           if (v2SingleCaretDrag) {
@@ -851,6 +865,11 @@
      Po pointerup se původní ukotvené vykreslení automaticky obnoví. */
   function vykresliV2CaretPriTahu699DBN(rect, drag) {
     if (!drag || !editor?.isConnected) return;
+    /* 699D-BP – pouze během diagnostického dragu lze zvlášť zastavit
+       pravidelný transform, CSS/viditelnost a jednorázový přesun DOM.
+       Mimo drag používá editor nadále původní renderer. */
+    const volby699DBP = v2CaretTest699DBL;
+    const zapisy699DBP = v2CaretProfil699DBF?.vizOps699DBP;
     const bounds = drag.rectEditoru || editor.getBoundingClientRect();
     if (!drag.rectEditoru) drag.rectEditoru = bounds;
     if (!Number.isFinite(drag.paddingEditoru699DBN)) {
@@ -863,21 +882,44 @@
     if (rect.top < horniMez || rect.top + vyska > bounds.bottom ||
         rect.left < bounds.left - 2 || rect.left > bounds.right + 2) {
       /* Neskrývat HANDLE: display:none by uprostřed tahu zrušil capture. */
-      if (v2LubaCaret && !v2LubaCaret.hidden) v2LubaCaret.hidden = true;
+      if (volby699DBP.styl && v2LubaCaret && !v2LubaCaret.hidden) {
+        v2LubaCaret.hidden = true;
+        if (zapisy699DBP) zapisy699DBP.styl++;
+      }
       return;
     }
     const caret = zajistiV2LubaCaret();
     /* Jeden přesun do body za celý tah. Staré anchored chování zůstává pro
        scroll, psaní a tapy, tedy všude mimo aktivní drag. */
-    if (caret.parentNode !== document.body) document.body.appendChild(caret);
-    if (caret.classList.contains("ln-v2-caret-scroll-anchored")) {
-      caret.classList.remove("ln-v2-caret-scroll-anchored");
+    if (volby699DBP.dom && caret.parentNode !== document.body) {
+      document.body.appendChild(caret);
+      if (zapisy699DBP) zapisy699DBP.dom++;
     }
-    if (caret.style.willChange !== "transform") caret.style.willChange = "transform";
-    if (caret.style.height !== `${vyska}px`) caret.style.height = `${vyska}px`;
-    const transform = `translate3d(${Math.round(rect.left)}px, ${Math.round(rect.top)}px, 0)`;
-    if (caret.style.transform !== transform) caret.style.transform = transform;
-    if (caret.hidden) caret.hidden = false;
+    if (volby699DBP.styl) {
+      if (caret.classList.contains("ln-v2-caret-scroll-anchored")) {
+        caret.classList.remove("ln-v2-caret-scroll-anchored");
+        if (zapisy699DBP) zapisy699DBP.styl++;
+      }
+      if (caret.style.willChange !== "transform") {
+        caret.style.willChange = "transform";
+        if (zapisy699DBP) zapisy699DBP.styl++;
+      }
+      if (caret.style.height !== `${vyska}px`) {
+        caret.style.height = `${vyska}px`;
+        if (zapisy699DBP) zapisy699DBP.styl++;
+      }
+    }
+    if (volby699DBP.transform) {
+      const transform = `translate3d(${Math.round(rect.left)}px, ${Math.round(rect.top)}px, 0)`;
+      if (caret.style.transform !== transform) {
+        caret.style.transform = transform;
+        if (zapisy699DBP) zapisy699DBP.transform++;
+      }
+    }
+    if (volby699DBP.styl && caret.hidden) {
+      caret.hidden = false;
+      if (zapisy699DBP) zapisy699DBP.styl++;
+    }
   }
 
   function vykresliV2LubaCaret(vyber = posledniVyber, geometrie699DAF = null) {
