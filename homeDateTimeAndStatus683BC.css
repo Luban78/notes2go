@@ -130,3 +130,14 @@
     visibility: hidden !important;
   }
 }
+
+/* 699D-BX – mobilni Chrome/PWA ma systemovou listu mimo stranku,
+ * zatimco datum/SYNC/cas jsou v editoru pevne u jeho horni hrany.
+ * Vyhradime jim prostor pouze na webu. APK s vlastnim fullscreen
+ * a PC editor nechavame beze zmeny.
+ */
+@media (max-width: 899px) {
+  body:not(.nativeApp) #taskModal > #lnHomeDateTime683BC + .modalContent {
+    padding-top: max(36px, env(safe-area-inset-top, 0px));
+  }
+}
