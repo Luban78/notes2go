@@ -1,13 +1,16 @@
 package cz.luban.notes2go;
 
-import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
+import android.graphics.Typeface;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.SystemClock;
+import android.view.Gravity;
 import android.view.PixelCopy;
 import android.view.ViewGroup;
 import android.os.Build;
@@ -17,9 +20,16 @@ import android.os.Looper;
 import android.view.ActionMode;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+import org.json.JSONArray;
+import org.json.JSONTokener;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -30,20 +40,151 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
 
-  /* 699D-BY: Back na domovske obrazovce nesmi ukoncit APK bez potvrzeni. */
+  /* 699D-BZ: nativni Back potvrzeni ma vzhled LubaNote, ne Android AlertDialog. */
   private boolean potvrzeniUkonceniOtevrene699DBY = false;
+
+  private int px699DBZ(float dp) {
+    return Math.round(dp * getResources().getDisplayMetrics().density);
+  }
+
+  private GradientDrawable pozadi699DBZ(int barva, int okraj, float radius) {
+    GradientDrawable pozadi = new GradientDrawable();
+    pozadi.setColor(barva);
+    pozadi.setCornerRadius(px699DBZ(radius));
+    pozadi.setStroke(px699DBZ(1), okraj);
+    return pozadi;
+  }
+
+  private int cssBarva699DBZ(String hodnota, int vychozi) {
+    if (hodnota == null) return vychozi;
+    String text = hodnota.trim();
+    try {
+      if (text.startsWith("#")) return Color.parseColor(text);
+      // getComputedStyle() muze vratit rgb(...) / rgba(...).
+      Matcher match = Pattern.compile(
+        "rgba?\\(\\s*(\\d+)\\s*[, ]+\\s*(\\d+)\\s*[, ]+\\s*(\\d+)"
+      ).matcher(text);
+      if (match.find()) {
+        return Color.rgb(
+          Integer.parseInt(match.group(1)),
+          Integer.parseInt(match.group(2)),
+          Integer.parseInt(match.group(3))
+        );
+      }
+    } catch (RuntimeException ignored) {}
+    return vychozi;
+  }
 
   private void potvrdUkonceni699DBY() {
     if (isFinishing() || potvrzeniUkonceniOtevrene699DBY) return;
     potvrzeniUkonceniOtevrene699DBY = true;
-    AlertDialog dialog = new AlertDialog.Builder(this)
-      .setTitle("Ukončit LubaNote?")
-      .setMessage("Opravdu chceš LubaNote ukončit?")
-      .setNegativeButton("Zůstat", (d, which) -> {})
-      .setPositiveButton("Ukončit", (d, which) -> finish())
-      .create();
+
+    final int[] barvy = {
+      Color.rgb(13, 43, 58),    // --color-surface
+      Color.rgb(250, 252, 255), // --color-text
+      Color.rgb(177, 199, 212), // --color-text-secondary
+      Color.rgb(50, 89, 106),   // --color-border
+      Color.rgb(29, 182, 197),  // --color-accent
+      Color.rgb(6, 34, 45)      // --color-on-accent
+    };
+    final Dialog dialog = new Dialog(this);
+    dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+    LinearLayout obsah = new LinearLayout(this);
+    obsah.setOrientation(LinearLayout.VERTICAL);
+    obsah.setPadding(px699DBZ(22), px699DBZ(24), px699DBZ(22), px699DBZ(22));
+
+    TextView nadpis = new TextView(this);
+    nadpis.setText("Ukončit LubaNote?");
+    nadpis.setTextSize(22);
+    nadpis.setTypeface(null, Typeface.BOLD);
+    nadpis.setGravity(Gravity.CENTER);
+    obsah.addView(nadpis, new LinearLayout.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    TextView popis = new TextView(this);
+    popis.setText("Opravdu chceš LubaNote ukončit?");
+    popis.setTextSize(16);
+    popis.setGravity(Gravity.CENTER);
+    popis.setLineSpacing(px699DBZ(3), 1f);
+    LinearLayout.LayoutParams popisParams = new LinearLayout.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    popisParams.topMargin = px699DBZ(12);
+    popisParams.bottomMargin = px699DBZ(24);
+    obsah.addView(popis, popisParams);
+
+    LinearLayout akce = new LinearLayout(this);
+    akce.setOrientation(LinearLayout.HORIZONTAL);
+    TextView zustat = new TextView(this);
+    zustat.setText("Zůstat");
+    TextView ukoncit = new TextView(this);
+    ukoncit.setText("Ukončit");
+    for (TextView tlacitko : new TextView[] { zustat, ukoncit }) {
+      tlacitko.setTextSize(16);
+      tlacitko.setTypeface(null, Typeface.BOLD);
+      tlacitko.setGravity(Gravity.CENTER);
+      tlacitko.setClickable(true);
+      tlacitko.setFocusable(true);
+      LinearLayout.LayoutParams parametry = new LinearLayout.LayoutParams(
+        0, px699DBZ(48), 1f);
+      if (tlacitko == ukoncit) parametry.leftMargin = px699DBZ(10);
+      akce.addView(tlacitko, parametry);
+    }
+    obsah.addView(akce);
+
+    Runnable pouzijBarvy = () -> {
+      obsah.setBackground(pozadi699DBZ(barvy[0], barvy[3], 22f));
+      nadpis.setTextColor(barvy[1]);
+      popis.setTextColor(barvy[2]);
+      zustat.setTextColor(barvy[1]);
+      zustat.setBackground(pozadi699DBZ(barvy[0], barvy[3], 13f));
+      ukoncit.setTextColor(barvy[5]);
+      ukoncit.setBackground(pozadi699DBZ(barvy[4], barvy[4], 13f));
+    };
+    pouzijBarvy.run();
+    zustat.setOnClickListener(v -> dialog.dismiss());
+    ukoncit.setOnClickListener(v -> {
+      dialog.dismiss();
+      finish();
+    });
+
+    dialog.setContentView(obsah);
     dialog.setOnDismissListener(d -> potvrzeniUkonceniOtevrene699DBY = false);
     dialog.show();
+    Window okno = dialog.getWindow();
+    if (okno != null) {
+      okno.setBackgroundDrawableResource(android.R.color.transparent);
+      okno.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+      okno.setDimAmount(0.58f);
+      int sirka = Math.min(
+        getResources().getDisplayMetrics().widthPixels - px699DBZ(32),
+        px699DBZ(420));
+      okno.setLayout(sirka, ViewGroup.LayoutParams.WRAP_CONTENT);
+    }
+
+    // HTML tema je zdrojem barev; nativni modal ho respektuje i po prepnuti
+    // Theme Builderu. Pri nedostupnem WebView zustane bezpecna Ocean paleta.
+    if (getBridge() != null && getBridge().getWebView() != null) {
+      try {
+        getBridge().getWebView().evaluateJavascript(
+          "(function(){const s=getComputedStyle(document.body);return JSON.stringify([" +
+            "'--color-surface','--color-text','--color-text-secondary'," +
+            "'--color-border','--color-accent','--color-on-accent'" +
+          "].map(k=>s.getPropertyValue(k).trim()))})()",
+          vysledek -> {
+            if (!dialog.isShowing() || isFinishing()) return;
+            try {
+              Object rozbalene = new JSONTokener(vysledek).nextValue();
+              JSONArray pole = new JSONArray(String.valueOf(rozbalene));
+              for (int i = 0; i < barvy.length && i < pole.length(); i++) {
+                barvy[i] = cssBarva699DBZ(pole.optString(i, ""), barvy[i]);
+              }
+              pouzijBarvy.run();
+            } catch (RuntimeException ignored) {}
+          }
+        );
+      } catch (RuntimeException ignored) {}
+    }
   }
 
   /* 685Q: Pouze RAM, nikdy soubor. Snímek celého okna z doby odchodu.

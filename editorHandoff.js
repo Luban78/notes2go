@@ -63,6 +63,21 @@ function jeIosStandalonePwaEditorHandoff() {
   }
 }
 
+/* 699D-BZ: Android Chrome PWA po systemovem Back muze spustit novy
+   dokument jako navigaci typu navigate, nikoli reload. Od normalniho
+   Chrome tabu ji odlisime striktne pomoci display-mode standalone.
+   Samotne deviceId nikdy nepostacuje: dale porad vyzadujeme ticket s
+   PRESNYM sessionId, jeho stari a shodu serveroveho vlastnika. */
+function jeAndroidStandalonePwaEditorHandoff() {
+  try {
+    return !jeNativniApkEditorHandoff() &&
+      /Android/i.test(navigator.userAgent || "") &&
+      window.matchMedia?.("(display-mode: standalone)")?.matches === true;
+  } catch (_error) {
+    return false;
+  }
+}
+
 /* ==========================================
    PŘEDÁNÍ OTEVŘENÉHO EDITORU MEZI ZAŘÍZENÍMI – V1
 
@@ -151,7 +166,7 @@ function nactiWebReloadRecoveryTicket() {
   }
 
   /* PATCH 611: ticket z jiné/duplikované karty nikdy nestačí. */
-  if (!jeWebReloadNavigace()) {
+  if (!jeWebReloadNavigace() && !jeAndroidStandalonePwaEditorHandoff()) {
     smazWebReloadRecoveryTicket();
     return null;
   }

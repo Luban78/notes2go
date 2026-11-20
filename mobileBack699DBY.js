@@ -1,4 +1,4 @@
-/* 699D-BY – systémové Zpět pro mobilní Chrome a instalovanou PWA.
+/* 699D-BZ – systémové Zpět pro mobilní Chrome a instalovanou PWA.
  * Android APK používá vlastní MainActivity a nesmí se měnit jeho Back cesta.
  * Historie webu poskytne jeden záchytný krok, aby Back nejprve zavřel editor
  * stejným bezpečným handlerem (včetně Uložit/Neukládat/Zrušit).
@@ -6,22 +6,45 @@
 (() => {
   "use strict";
 
-  if (window.Capacitor?.isNativePlatform?.() === true ||
-      !window.matchMedia?.("(max-width: 899px) and (pointer: coarse)")?.matches) {
+  const jeMobilniWeb =
+    window.matchMedia?.("(max-width: 899px) and (pointer: coarse)")?.matches === true ||
+    (/Android/i.test(navigator.userAgent || "") &&
+      window.matchMedia?.("(display-mode: standalone)")?.matches === true) ||
+    (navigator.maxTouchPoints > 0 && window.innerWidth <= 899);
+  if (window.Capacitor?.isNativePlatform?.() === true || !jeMobilniWeb) {
     return;
   }
 
-  const klic = "__lubanoteWebBack699DBY";
+  const klic = "__lubanoteWebBack699DBZ";
   const identita = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const puvodniCesta = window.location.pathname + window.location.search;
   let uzivatelPotvrdilOdchod = false;
   let potvrzeni = null;
 
+  function editorJeOtevreny() {
+    const editor = document.getElementById("taskModal");
+    return !!(editor && !editor.hidden && editor.classList.contains("show"));
+  }
+
+  function editorMaZmeny() {
+    if (!editorJeOtevreny()) return false;
+    try {
+      return typeof window.bylEditorZmenen === "function" &&
+        window.bylEditorZmenen() === true;
+    } catch (error) {
+      // Pri nejistote zmeny raději chranime.
+      return true;
+    }
+  }
+
   function pripravZachytHistorie() {
+    if (uzivatelPotvrdilOdchod ||
+        window.location.pathname + window.location.search !== puvodniCesta) return false;
     if (window.history.state?.[klic] === identita) return true;
     try {
       window.history.pushState(
-        { ...(window.history.state || {}), [klic]: identita },
+        { ...(window.history.state && typeof window.history.state === "object"
+          ? window.history.state : {}), [klic]: identita },
         "", window.location.href
       );
       return true;
@@ -36,16 +59,16 @@
       const okno = document.createElement("div");
       okno.className = "appMessageModal";
       okno.hidden = true;
-      okno.id = "lnWebExitConfirm699DBY";
+      okno.id = "lnWebExitConfirm699DBZ";
 
       const dialog = document.createElement("div");
       dialog.className = "appMessageDialog";
       dialog.setAttribute("role", "dialog");
       dialog.setAttribute("aria-modal", "true");
-      dialog.setAttribute("aria-labelledby", "lnWebExitTitle699DBY");
+      dialog.setAttribute("aria-labelledby", "lnWebExitTitle699DBZ");
 
       const nadpis = document.createElement("h3");
-      nadpis.id = "lnWebExitTitle699DBY";
+      nadpis.id = "lnWebExitTitle699DBZ";
       nadpis.textContent = "Ukončit LubaNote?";
       const zprava = document.createElement("p");
       zprava.textContent = "Opravdu chceš LubaNote ukončit?";
@@ -68,11 +91,7 @@
          * další systémové Zpět už neblokujeme. */
         try { window.close(); } catch (_) {}
         try { window.history.go(-2); } catch (_) {}
-        setTimeout(() => {
-          if (!document.hidden) {
-            try { window.history.back(); } catch (_) {}
-          }
-        }, 450);
+        // Dalsi Back jiz neblokujeme; window.close() Chrome PWA nemusi povolit.
       });
 
       akce.append(zustat, ukoncit);
@@ -99,12 +118,34 @@
       potvrzeni.hidden = true;
       return;
     }
-    if (window.LubaNoteZpracujAndroidZpet?.() === true) return;
+    try {
+      if (window.LubaNoteZpracujAndroidZpet?.() === true) return;
+    } catch (error) {
+      console.error("PWA Back: chyba handleru editoru.", error);
+    }
+    if (editorJeOtevreny()) return;
     ukazPotvrzeniUkonceni();
+  });
+
+  /* Chrome muze v instalovane PWA ukoncit okno bez popstate. Pokud se
+     dokument skutecne opousti a editor ma zmeny, vyzadat potvrzeni
+     prohlizece. Mobilni OS nemusi beforeunload dorucit pri hard killu. */
+  window.addEventListener("beforeunload", (event) => {
+    if (uzivatelPotvrdilOdchod || !editorMaZmeny()) return;
+    event.preventDefault();
+    event.returnValue = "";
   });
 
   window.addEventListener("pageshow", () => {
     if (!uzivatelPotvrdilOdchod) pripravZachytHistorie();
   });
+  window.addEventListener("focus", pripravZachytHistorie);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") pripravZachytHistorie();
+  });
+  /* Jen jednou na zacatku dotyku, nikoli pri MOVE s caretem. */
+  document.addEventListener("pointerdown", () => {
+    if (history.state?.[klic] !== identita) pripravZachytHistorie();
+  }, { capture: true, passive: true });
   pripravZachytHistorie();
 })();
