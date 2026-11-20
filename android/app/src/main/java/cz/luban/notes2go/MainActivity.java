@@ -180,7 +180,7 @@ public class MainActivity extends BridgeActivity {
                 barvy[i] = cssBarva699DBZ(pole.optString(i, ""), barvy[i]);
               }
               pouzijBarvy.run();
-            } catch (RuntimeException ignored) {}
+            } catch (Exception ignored) {}
           }
         );
       } catch (RuntimeException ignored) {}
