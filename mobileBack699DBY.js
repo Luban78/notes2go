@@ -1,7 +1,9 @@
-/* 699D-CC – systémové Zpět pro mobilní Chrome a instalovanou PWA.
+/* 699D-CD – systémové Zpět pro mobilní Chrome a instalovanou PWA.
  * Android APK používá vlastní MainActivity a nesmí se měnit jeho Back cesta.
  * CloseWatcher zpracuje nativní požadavek na zavření (Android Back), který
- * nemusí vyvolat popstate. Dvojitá historie zůstává pro starší prohlížeče.
+ * nemusí vyvolat popstate. V instalované PWA při dostupném CloseWatcher
+ * nevytváříme pomocné history položky (brání window.close()).
+ * Dvojitá historie zůstává pro starší prohlížeče.
  * Editor předá Back bezpečnému handleru (Uložit/Neukládat/Zrušit).
  */
 (() => {
@@ -15,6 +17,8 @@
   if (window.Capacitor?.isNativePlatform?.() === true || !jeMobilniWeb) {
     return;
   }
+  const jeAndroidPwa = /Android/i.test(navigator.userAgent || "") &&
+    window.matchMedia?.("(display-mode: standalone)")?.matches === true;
 
   const klic = "__lubanoteWebBack699DCB";
   const identita = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -28,6 +32,7 @@
   let diagnostickyModal = null;
   let closeWatcher = null;
   let posledniZpet = { zdroj: "", cas: 0 };
+  let preskoceniHistorieZapsano = false;
 
   // Jen procesní události (nikdy text, ID poznámky, uživatel ani token).
   // localStorage přežije i okamžité ukončení PWA systémovým tlačítkem.
@@ -79,6 +84,15 @@
   function pripravZachytHistorie() {
     if (uzivatelPotvrdilOdchod ||
         window.location.pathname + window.location.search !== puvodniCesta) return false;
+    // Android PWA již zachytává Back přes CloseWatcher. Umělé položky
+    // historie by zabránily přímému zavření okna tlačítkem „Ukončit“.
+    if (jeAndroidPwa && closeWatcher) {
+      if (!preskoceniHistorieZapsano) {
+        zapisDiagnostiku("HISTORY_CW_SKIP", `len=${history.length}`);
+        preskoceniHistorieZapsano = true;
+      }
+      return true;
+    }
     const aktualniEtapa = window.history.state?.[klic];
     if (aktualniEtapa === etapaAktivni) return true;
     try {
@@ -133,20 +147,27 @@
       ukoncit.type = "button";
       ukoncit.textContent = "Ukončit";
       ukoncit.addEventListener("click", () => {
-        zapisDiagnostiku("EXIT_CONFIRM");
+        const pocetHistorie = history.length;
+        zapisDiagnostiku("EXIT_CONFIRM", `len=${pocetHistorie} cw=${closeWatcher ? "Y" : "N"}`);
         okno.hidden = true;
         uzivatelPotvrdilOdchod = true;
         // Výslovné potvrzení uživatele: další Back už nesmíme zachytávat.
         try { closeWatcher?.destroy(); } catch (_) {}
         closeWatcher = null;
-        /* Prohlížeč smí odmítnout window.close() u uživatelské PWA.
-         * Proto zkusíme opustit historii aplikace. Pokud stránka zůstane,
-         * další systémové Zpět už neblokujeme. */
+        /* S jednou položkou historie Chrome může okno zavřít přímo.
+         * Pokud zůstala stará pomocná historie (nebo browser bez CW),
+         * po neúspěšném close alespoň opustíme pomocné položky. */
         try { window.close(); } catch (_) {}
-        // Ze stavu AKTIVNI se vratime o 2 kroky na BASE. Jestli Chrome
-        // window.close() zamitne, dalsi systemove Zpet uz PWA neblokuje.
-        try { window.history.go(-2); } catch (_) {}
-        // Dalsi Back jiz neblokujeme; window.close() Chrome PWA nemusi povolit.
+        if (pocetHistorie > 1) {
+          try { window.history.go(-Math.min(2, pocetHistorie - 1)); } catch (_) {}
+        }
+        // Android může programové zavření odmítnout i bez historie;
+        // zaznamenáme to a další fyzické Back už nebudeme blokovat.
+        setTimeout(() => {
+          if (document.visibilityState === "visible") {
+            zapisDiagnostiku("EXIT_STILL_VISIBLE", `len=${history.length}`);
+          }
+        }, 800);
       });
 
       akce.append(zustat, ukoncit);
@@ -170,7 +191,7 @@
     } catch (_) {}
     const standalone = window.matchMedia?.("(display-mode: standalone)")?.matches === true;
     const radky = [
-      "LUBANOTE 699D-CC – PWA BACK DIAGNOSTIKA",
+      "LUBANOTE 699D-CD – PWA BACK DIAGNOSTIKA",
       `verze=${window.LUBANOTE_VERSION || "?"}`,
       `cas=${new Date().toISOString()}`,
       `rezim=${standalone ? "standalone" : "browser"} android=${/Android/i.test(navigator.userAgent || "") ? "Y" : "N"}`,
@@ -364,22 +385,22 @@
   window.addEventListener("pageshow", () => {
     zapisDiagnostiku("PAGESHOW", `hidden=${document.hidden ? "Y" : "N"}`);
     if (!uzivatelPotvrdilOdchod) {
-      pripravZachytHistorie();
       pripravCloseWatcher();
+      pripravZachytHistorie();
     }
   });
   window.addEventListener("pagehide", () => {
     zapisDiagnostiku("PAGEHIDE", `editor=${editorJeOtevreny() ? "Y" : "N"}`);
   });
   window.addEventListener("focus", () => {
-    if (ziskejEtapu() !== "AKTIVNI") pripravZachytHistorie();
     pripravCloseWatcher();
+    if (ziskejEtapu() !== "AKTIVNI") pripravZachytHistorie();
   });
   document.addEventListener("visibilitychange", () => {
     zapisDiagnostiku("VISIBILITY", `state=${document.visibilityState} editor=${editorJeOtevreny() ? "Y" : "N"}`);
     if (document.visibilityState === "visible") {
-      pripravZachytHistorie();
       pripravCloseWatcher();
+      pripravZachytHistorie();
     }
   });
   /* Jen jednou na zacatku dotyku, nikoli pri MOVE s caretem. */
@@ -391,8 +412,8 @@
   }, { capture: true, passive: true });
 
   zapisDiagnostiku("INIT", `len=${history.length} standalone=${window.matchMedia?.("(display-mode: standalone)")?.matches === true ? "Y" : "N"} cw=${typeof window.CloseWatcher === "function" ? "Y" : "N"}`);
-  pripravZachytHistorie();
   pripravCloseWatcher();
+  pripravZachytHistorie();
   pripojReportNaVerzi();
   window.addEventListener("load", pripojReportNaVerzi);
 })();
