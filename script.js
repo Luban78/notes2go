@@ -1827,6 +1827,11 @@ appMessageDiscardButton?.addEventListener(
     uvolniVzdalenouEditorSession(
       zahazovanyTaskId
     );
+    /* 699D-BY: Neukládat musí uvolnit i shared editor lock.
+       Bez toho druhý účet čekal až na expiraci serverové lease. */
+    uvolniSdilenyLockPriZavreni(
+      zahazovanyTaskId
+    );
     if (
       aktivniSdilenaEditace?.noteId ===
         zahazovanyTaskId

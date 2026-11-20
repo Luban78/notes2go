@@ -1,5 +1,6 @@
 package cz.luban.notes2go;
 
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
@@ -28,6 +29,22 @@ import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+
+  /* 699D-BY: Back na domovske obrazovce nesmi ukoncit APK bez potvrzeni. */
+  private boolean potvrzeniUkonceniOtevrene699DBY = false;
+
+  private void potvrdUkonceni699DBY() {
+    if (isFinishing() || potvrzeniUkonceniOtevrene699DBY) return;
+    potvrzeniUkonceniOtevrene699DBY = true;
+    AlertDialog dialog = new AlertDialog.Builder(this)
+      .setTitle("Ukončit LubaNote?")
+      .setMessage("Opravdu chceš LubaNote ukončit?")
+      .setNegativeButton("Zůstat", (d, which) -> {})
+      .setPositiveButton("Ukončit", (d, which) -> finish())
+      .create();
+    dialog.setOnDismissListener(d -> potvrzeniUkonceniOtevrene699DBY = false);
+    dialog.show();
+  }
 
   /* 685Q: Pouze RAM, nikdy soubor. Snímek celého okna z doby odchodu.
    * Overlay je pasivní (ViewOverlay), neblokuje dotyky ani WebView.
@@ -672,7 +689,7 @@ public class MainActivity extends BridgeActivity {
 
   private void zpracujSystemoveZpet() {
     if (getBridge() == null || getBridge().getWebView() == null) {
-      finish();
+      potvrdUkonceni699DBY();
       return;
     }
 
@@ -684,7 +701,7 @@ public class MainActivity extends BridgeActivity {
       "}catch(error){console.error(error);return false;}})();",
       vysledek -> {
         if (!"true".equals(vysledek)) {
-          finish();
+          potvrdUkonceni699DBY();
         }
       }
     );
