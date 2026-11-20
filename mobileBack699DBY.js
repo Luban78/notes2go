@@ -1,8 +1,8 @@
-/* 699D-CB – systémové Zpět pro mobilní Chrome a instalovanou PWA.
+/* 699D-CC – systémové Zpět pro mobilní Chrome a instalovanou PWA.
  * Android APK používá vlastní MainActivity a nesmí se měnit jeho Back cesta.
- * Historie webu poskytne dva záchytné kroky, aby rychlý dvojitý Back
- * nepřeskočil z editoru rovnou na ukončení PWA. Editor předá Back
- * stávajícímu bezpečnému handleru (Uložit/Neukládat/Zrušit).
+ * CloseWatcher zpracuje nativní požadavek na zavření (Android Back), který
+ * nemusí vyvolat popstate. Dvojitá historie zůstává pro starší prohlížeče.
+ * Editor předá Back bezpečnému handleru (Uložit/Neukládat/Zrušit).
  */
 (() => {
   "use strict";
@@ -26,6 +26,8 @@
   let uzivatelPotvrdilOdchod = false;
   let potvrzeni = null;
   let diagnostickyModal = null;
+  let closeWatcher = null;
+  let posledniZpet = { zdroj: "", cas: 0 };
 
   // Jen procesní události (nikdy text, ID poznámky, uživatel ani token).
   // localStorage přežije i okamžité ukončení PWA systémovým tlačítkem.
@@ -134,6 +136,9 @@
         zapisDiagnostiku("EXIT_CONFIRM");
         okno.hidden = true;
         uzivatelPotvrdilOdchod = true;
+        // Výslovné potvrzení uživatele: další Back už nesmíme zachytávat.
+        try { closeWatcher?.destroy(); } catch (_) {}
+        closeWatcher = null;
         /* Prohlížeč smí odmítnout window.close() u uživatelské PWA.
          * Proto zkusíme opustit historii aplikace. Pokud stránka zůstane,
          * další systémové Zpět už neblokujeme. */
@@ -165,11 +170,12 @@
     } catch (_) {}
     const standalone = window.matchMedia?.("(display-mode: standalone)")?.matches === true;
     const radky = [
-      "LUBANOTE 699D-CB – PWA BACK DIAGNOSTIKA",
+      "LUBANOTE 699D-CC – PWA BACK DIAGNOSTIKA",
       `verze=${window.LUBANOTE_VERSION || "?"}`,
       `cas=${new Date().toISOString()}`,
       `rezim=${standalone ? "standalone" : "browser"} android=${/Android/i.test(navigator.userAgent || "") ? "Y" : "N"}`,
       `historie=${history.length} etapa=${ziskejEtapu()} editor=${editorJeOtevreny() ? "open" : "closed"}`,
+      `closeWatcher=${typeof window.CloseWatcher === "function" ? "Y" : "N"} aktivni=${closeWatcher ? "Y" : "N"}`,
       `udalosti=${zaznamy.length}`,
       "---"
     ];
@@ -255,19 +261,19 @@
     });
   }
 
-  window.addEventListener("popstate", (event) => {
-    if (uzivatelPotvrdilOdchod) {
-      zapisDiagnostiku("POP_AFTER_EXIT");
+  // CloseWatcher a popstate smí vyvolat tentýž fyzický stisk Back. Druhý
+  // signál z jiného zdroje v krátkém intervalu ignorujeme, aby nevyskočily
+  // dva dialogy. Dva skutečné stisky ze stejného zdroje vždy odbavíme.
+  function zpracujZpetAplikace(zdroj) {
+    if (uzivatelPotvrdilOdchod) return;
+    if (window.location.pathname + window.location.search !== puvodniCesta) return;
+    const ted = Date.now();
+    if (posledniZpet.zdroj !== zdroj && ted - posledniZpet.cas < 300) {
+      zapisDiagnostiku("BACK_DUPLICATE", `${zdroj} po ${posledniZpet.zdroj}`);
       return;
     }
-    /* Přesun mezi stránkami Admin Dashboardu vlastní jeho vlastní router.
-     * Ten zachovává náš aktivní state, proto jeho Back nepřebíráme. */
-    if (event.state?.[klic] === etapaAktivni) return;
-    if (window.location.pathname + window.location.search !== puvodniCesta) return;
-
-    const aktualniEtapa = ziskejEtapu();
-    zapisDiagnostiku("BACK_POP", `etapa=${aktualniEtapa} editor=${editorJeOtevreny() ? "Y" : "N"}`);
-    pripravZachytHistorie();
+    posledniZpet = { zdroj, cas: ted };
+    zapisDiagnostiku("BACK_SOURCE", `${zdroj} editor=${editorJeOtevreny() ? "Y" : "N"}`);
     if (diagnostickyModal && !diagnostickyModal.obal.hidden) {
       diagnostickyModal.obal.hidden = true;
       zapisDiagnostiku("REPORT_BACK_CLOSE");
@@ -292,6 +298,55 @@
       return;
     }
     ukazPotvrzeniUkonceni();
+  }
+
+  function pripravCloseWatcher() {
+    if (uzivatelPotvrdilOdchod || closeWatcher) return;
+    if (typeof window.CloseWatcher !== "function") return;
+    if (window.location.pathname + window.location.search !== puvodniCesta) return;
+    try {
+      const watcher = new window.CloseWatcher();
+      closeWatcher = watcher;
+      watcher.addEventListener("cancel", (event) => {
+        zapisDiagnostiku("CW_CANCEL", `cancelable=${event.cancelable ? "Y" : "N"}`);
+        // Když smíme zavření zrušit, watcher zůstane aktivní i na další Back.
+        // Jinak následuje close, který zajistí obsluhu a nové přihlášení.
+        if (event.cancelable) {
+          event.preventDefault();
+          zpracujZpetAplikace("CLOSEWATCHER");
+        }
+      });
+      watcher.addEventListener("close", () => {
+        zapisDiagnostiku("CW_CLOSE");
+        if (closeWatcher === watcher) closeWatcher = null;
+        zpracujZpetAplikace("CLOSEWATCHER");
+        // Po close je původní watcher neaktivní. Obnovit po události,
+        // aby rychlý další stisk nemohl odejít mimo aplikaci.
+        queueMicrotask(() => {
+          if (!uzivatelPotvrdilOdchod) pripravCloseWatcher();
+        });
+      });
+      zapisDiagnostiku("CW_ARM");
+    } catch (error) {
+      closeWatcher = null;
+      zapisDiagnostiku("CW_ERROR", error?.name || "unknown");
+    }
+  }
+
+  window.addEventListener("popstate", (event) => {
+    if (uzivatelPotvrdilOdchod) {
+      zapisDiagnostiku("POP_AFTER_EXIT");
+      return;
+    }
+    /* Přesun mezi stránkami Admin Dashboardu vlastní jeho vlastní router.
+     * Ten zachovává náš aktivní state, proto jeho Back nepřebíráme. */
+    if (event.state?.[klic] === etapaAktivni) return;
+    if (window.location.pathname + window.location.search !== puvodniCesta) return;
+
+    const aktualniEtapa = ziskejEtapu();
+    zapisDiagnostiku("BACK_POP", `etapa=${aktualniEtapa} editor=${editorJeOtevreny() ? "Y" : "N"}`);
+    pripravZachytHistorie();
+    zpracujZpetAplikace("POPSTATE");
   });
 
   /* Chrome muze v instalovane PWA ukoncit okno bez popstate. Pokud se
@@ -308,17 +363,24 @@
 
   window.addEventListener("pageshow", () => {
     zapisDiagnostiku("PAGESHOW", `hidden=${document.hidden ? "Y" : "N"}`);
-    if (!uzivatelPotvrdilOdchod) pripravZachytHistorie();
+    if (!uzivatelPotvrdilOdchod) {
+      pripravZachytHistorie();
+      pripravCloseWatcher();
+    }
   });
   window.addEventListener("pagehide", () => {
     zapisDiagnostiku("PAGEHIDE", `editor=${editorJeOtevreny() ? "Y" : "N"}`);
   });
   window.addEventListener("focus", () => {
     if (ziskejEtapu() !== "AKTIVNI") pripravZachytHistorie();
+    pripravCloseWatcher();
   });
   document.addEventListener("visibilitychange", () => {
     zapisDiagnostiku("VISIBILITY", `state=${document.visibilityState} editor=${editorJeOtevreny() ? "Y" : "N"}`);
-    if (document.visibilityState === "visible") pripravZachytHistorie();
+    if (document.visibilityState === "visible") {
+      pripravZachytHistorie();
+      pripravCloseWatcher();
+    }
   });
   /* Jen jednou na zacatku dotyku, nikoli pri MOVE s caretem. */
   document.addEventListener("pointerdown", () => {
@@ -328,8 +390,9 @@
     }
   }, { capture: true, passive: true });
 
-  zapisDiagnostiku("INIT", `len=${history.length} standalone=${window.matchMedia?.("(display-mode: standalone)")?.matches === true ? "Y" : "N"}`);
+  zapisDiagnostiku("INIT", `len=${history.length} standalone=${window.matchMedia?.("(display-mode: standalone)")?.matches === true ? "Y" : "N"} cw=${typeof window.CloseWatcher === "function" ? "Y" : "N"}`);
   pripravZachytHistorie();
+  pripravCloseWatcher();
   pripojReportNaVerzi();
   window.addEventListener("load", pripojReportNaVerzi);
 })();
