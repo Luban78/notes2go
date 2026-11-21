@@ -849,7 +849,7 @@
 
     for (const row of rows) {
       const item = document.createElement("div");
-      item.className = "sharingPersonRow";
+      item.className = "sharingPersonRow sharingCollaboratorRow";
 
       const info = document.createElement("div");
       info.className = "sharingPersonInfo";
@@ -1319,12 +1319,24 @@
   }
 
   function invitationTitle(row) {
-    return String(
+    const nazev = String(
       row.note_title ??
       row.title ??
       row.note_name ??
       ""
-    ).trim() || "Poznámka";
+    ).trim();
+
+    /* 699D-CF – u nove E2E pozvanky server zamerne neprozrazuje
+     * desifrovany nazev. Neznamy/placeholder titul proto nepredstirame jako
+     * skutecny nazev; po prijeti ho nahradi lokalne desifrovana poznamka.
+     * Skutecne dostupny nazev starsi plaintext pozvanky zachovame. */
+    const bezNazvu = [
+      "", "bez názvu", "untitled", "ohne titel", "sin título", "bez tytułu",
+      t("sharing.sharedUntitled", "Bez názvu").toLocaleLowerCase()
+    ];
+    return bezNazvu.includes(nazev.toLocaleLowerCase())
+      ? t("sharing.encryptedInvitationTitle", "🔒 Šifrovaná poznámka")
+      : nazev;
   }
 
   function invitationInviter(row) {

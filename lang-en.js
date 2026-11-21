@@ -437,6 +437,7 @@ window.LubaNoteLanguagePacks.push({
     "sharing.loading": "Loading…",
     "sharing.loadFailed": "Sharing data could not be loaded.",
     "sharing.sharedUntitled": "Untitled",
+    "sharing.encryptedInvitationTitle": "🔒 Encrypted note",
     "sharing.sharedCardMeta": "Shared · {owner}",
     "sharing.readOnlyTitle": "Shared note",
     "sharing.readOnlyMeta": "{owner} · shared note",

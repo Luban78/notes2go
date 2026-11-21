@@ -332,6 +332,7 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "sharing.loading": "Ładowanie…",
       "sharing.loadFailed": "Nie udało się wczytać danych udostępniania.",
       "sharing.sharedUntitled": "Bez tytułu",
+      "sharing.encryptedInvitationTitle": "🔒 Zaszyfrowana notatka",
       "sharing.sharedCardMeta": "Udostępnione · {owner}",
       "sharing.readOnlyTitle": "Udostępniona notatka",
       "sharing.readOnlyMeta": "{owner} · udostępniona notatka",

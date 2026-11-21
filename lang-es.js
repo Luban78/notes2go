@@ -331,6 +331,7 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "sharing.loading": "Cargando…",
       "sharing.loadFailed": "No se pudieron cargar los datos compartidos.",
       "sharing.sharedUntitled": "Sin título",
+      "sharing.encryptedInvitationTitle": "🔒 Nota cifrada",
       "sharing.sharedCardMeta": "Compartida · {owner}",
       "sharing.readOnlyTitle": "Nota compartida",
       "sharing.readOnlyMeta": "{owner} · nota compartida",

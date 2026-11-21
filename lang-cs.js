@@ -445,6 +445,7 @@ window.LubaNoteLanguagePacks.push({
     "sharing.loading": "Načítám…",
     "sharing.loadFailed": "Data sdílení se nepodařilo načíst.",
     "sharing.sharedUntitled": "Bez názvu",
+    "sharing.encryptedInvitationTitle": "🔒 Šifrovaná poznámka",
     "sharing.sharedCardMeta": "Sdíleno · {owner}",
     "sharing.readOnlyTitle": "Sdílená poznámka",
     "sharing.readOnlyMeta": "{owner} · sdílená poznámka",

@@ -332,6 +332,7 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "sharing.loading": "Načítavam…",
       "sharing.loadFailed": "Dáta zdieľania sa nepodarilo načítať.",
       "sharing.sharedUntitled": "Bez názvu",
+      "sharing.encryptedInvitationTitle": "🔒 Šifrovaná poznámka",
       "sharing.sharedCardMeta": "Zdieľané · {owner}",
       "sharing.readOnlyTitle": "Zdieľaná poznámka",
       "sharing.readOnlyMeta": "{owner} · zdieľaná poznámka",

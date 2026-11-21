@@ -330,6 +330,7 @@ window.LubaNoteLanguagePacks = window.LubaNoteLanguagePacks || [];
       "sharing.loading": "Wird geladen…",
       "sharing.loadFailed": "Freigabedaten konnten nicht geladen werden.",
       "sharing.sharedUntitled": "Ohne Titel",
+      "sharing.encryptedInvitationTitle": "🔒 Verschlüsselte Notiz",
       "sharing.sharedCardMeta": "Geteilt · {owner}",
       "sharing.readOnlyTitle": "Geteilte Notiz",
       "sharing.readOnlyMeta": "{owner} · geteilte Notiz",

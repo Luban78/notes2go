@@ -522,6 +522,58 @@
   flex-wrap: wrap;
 }
 
+/* 699D-CF – spolupracovnik: identita na jednom radku, dve stejne velke
+   akce vedle sebe pod ni. Stejne rozmisteni na uzkych mobilech bez
+   slamu "Napsat zpravu" do uzkeho sloupecku nad "Odebrat". */
+.sharingPersonRow.sharingCollaboratorRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 11px;
+  padding: 12px;
+}
+
+.sharingCollaboratorRow .sharingPersonActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  width: 100%;
+  max-width: none;
+}
+
+.sharingCollaboratorRow .sharingPersonActions > button {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 10px;
+  font-size: calc(1rem - 0.125rem);
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+}
+
+.sharingCollaboratorRow .sharingPersonActions > :only-child {
+  grid-column: 1 / -1;
+}
+
+.sharingCollaboratorRow .sharingPersonActions > .lubanoteChatFromShareButton {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-background);
+}
+
+@media (min-width: 621px) {
+  .sharingPersonRow.sharingCollaboratorRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .sharingCollaboratorRow .sharingPersonActions {
+    width: auto;
+  }
+}
+
 .sharingDangerButton {
   border-color: rgba(255, 90, 103, 0.58);
   color: #ff8b94;
