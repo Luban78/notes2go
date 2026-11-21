@@ -18,6 +18,10 @@
    * Na rozdíl od velké cache poznámek neselže kvůli Data URL obrázkům.
    * Aktualizuje se jen po úspěšném kompletním serverovém načtení. */
   const OWNER_IDS_PREFIX = "lubanoteOwnedSharedIdsV1:";
+  /* 699D-CH: Shared karta je pro prijemce nova karta, ale nedostava
+   * private cardOrder. Minimalni poradi je pouze lokalni preference
+   * konkretniho uctu; nikdy se neposila jako obsah E2E poznamky. */
+  const SHARED_CARD_ORDER_PREFIX = "lubanoteSharedCardOrderV1:";
   const CACHE_DB_NAME = "lubanoteSharedNotesCache";
   const CACHE_DB_VERSION = 1;
   const CACHE_DB_STORE = "sharedNotes";
@@ -35,6 +39,8 @@
   let startUiPripraven = false;
   let sdilenePoznamky = [];
   let lokalniVlastniSdileneId = new Set();
+  let poradiSharedProUcet = null;
+  let poradiSdilenychKaret = new Map();
   let viewer = null;
   let viewerNoteId = null;
   let probihajiciNacteni = null;
@@ -130,6 +136,55 @@
   function ziskejUserId() {
     /* FIX 441 – lokální owner ID není aktivní serverová session. */
     return aktualniUserId || null;
+  }
+
+  function nactiPoradiSdilenychKaret() {
+    const userId = ziskejUserId();
+    if (poradiSharedProUcet === userId) return poradiSdilenychKaret;
+
+    poradiSharedProUcet = userId;
+    poradiSdilenychKaret = new Map();
+    if (!userId) return poradiSdilenychKaret;
+
+    try {
+      const raw = localStorage.getItem(`${SHARED_CARD_ORDER_PREFIX}${userId}`);
+      const ulozene = raw ? JSON.parse(raw) : null;
+      if (ulozene?.userId !== userId || !Array.isArray(ulozene.cards)) {
+        return poradiSdilenychKaret;
+      }
+      for (const zaznam of ulozene.cards) {
+        if (typeof zaznam?.id === "string" && zaznam.id &&
+            zaznam.order !== null && Number.isFinite(Number(zaznam.order))) {
+          poradiSdilenychKaret.set(zaznam.id, Number(zaznam.order));
+        }
+      }
+    } catch (error) {
+      console.warn("Sdílení: lokální pořadí karet nelze načíst.", error);
+    }
+    return poradiSdilenychKaret;
+  }
+
+  function ulozPoradiSdilenychKaret() {
+    const userId = ziskejUserId();
+    if (!userId || poradiSharedProUcet !== userId) return;
+    try {
+      localStorage.setItem(`${SHARED_CARD_ORDER_PREFIX}${userId}`, JSON.stringify({
+        userId,
+        cards: [...poradiSdilenychKaret].map(([id, order]) => ({ id, order }))
+      }));
+    } catch (error) {
+      console.warn("Sdílení: lokální pořadí karet nelze uložit.", error);
+    }
+  }
+
+  function zapomenPoradiOdebranychKaret(noteIds) {
+    if (!Array.isArray(noteIds) || !noteIds.length) return;
+    const ulozenePoradi = nactiPoradiSdilenychKaret();
+    let zmena = false;
+    for (const id of noteIds) {
+      if (ulozenePoradi.delete(String(id))) zmena = true;
+    }
+    if (zmena) ulozPoradiSdilenychKaret();
   }
 
   function cacheKey(userId = ziskejUserId()) {
@@ -684,6 +739,66 @@
       .map(({ task }) => task);
   }
 
+  function pripravPoradiPrijatychSdilenychKaret(beznePoznamky, zakladniSmer) {
+    const ulozenePoradi = nactiPoradiSdilenychKaret();
+    const prijate = sdilenePoznamky.filter(note =>
+      note?.id && note.__lubanoteSharedRole !== "owner" && !note.trashedAt
+    );
+    const preference = localStorage.getItem("cardSortDirection") === "asc"
+      ? "asc" : "desc";
+
+    const ziskejEfektivniPoradi = task => {
+      const helper = window.LubaNoteCardOrder?.ziskejEfektivniPoradi;
+      if (typeof helper === "function") {
+        return helper(task, zakladniSmer);
+      }
+      if (task?.cardOrder !== null && task?.cardOrder !== undefined &&
+          Number.isFinite(Number(task.cardOrder))) {
+        return Number(task.cardOrder);
+      }
+      const cas = new Date(task?.cardSortAt || task?.updatedAt || 0).getTime();
+      const bezpecnyCas = Number.isFinite(cas) ? cas : 0;
+      return zakladniSmer === "asc" ? -bezpecnyCas : bezpecnyCas;
+    };
+
+    const kandidati = [
+      ...(Array.isArray(beznePoznamky) ? beznePoznamky : []),
+      ...prijate.filter(note => ulozenePoradi.has(String(note.id)))
+        .map(note => ({
+          ...note,
+          cardOrder: ulozenePoradi.get(String(note.id))
+        }))
+    ];
+
+    /* Nejdrive starsi prijeti, pak novejsi. Pri volbe Nove nahore
+     * tak posledni nova Shared karta skutecne skonci nejvyse. */
+    const nove = prijate.filter(note => !ulozenePoradi.has(String(note.id)))
+      .sort((a, b) => {
+        const cas = note => new Date(
+          note.__lubanoteSharedAcceptedAt || note.updatedAt || 0
+        ).getTime() || 0;
+        return cas(a) - cas(b) || String(a.id).localeCompare(String(b.id));
+      });
+
+    for (const note of nove) {
+      const stejnePripnuti = kandidati
+        .filter(kandidat => (kandidat?.pinned === true) === (note.pinned === true))
+        .map(ziskejEfektivniPoradi)
+        .filter(Number.isFinite);
+      const poradi = stejnePripnuti.length
+        ? (preference === "asc"
+          ? Math.min(...stejnePripnuti) - 1
+          : Math.max(...stejnePripnuti) + 1)
+        : (preference === "asc" ? 1 : -1);
+
+      ulozenePoradi.set(String(note.id), poradi);
+      kandidati.push({ ...note, cardOrder: poradi });
+    }
+
+    if (nove.length) ulozPoradiSdilenychKaret();
+    return ulozenePoradi;
+  }
+
   function pripojKartuDoLayoutu(card) {
     if (!pinnedCards || !pinnedLeft || !pinnedRight) {
       return;
@@ -838,6 +953,7 @@
       sdilenePoznamky = sdilenePoznamky.filter(
         (item) => String(item?.id || "") !== noteId
       );
+      zapomenPoradiOdebranychKaret([noteId]);
       ulozCache(sdilenePoznamky);
 
       if (typeof window.renderTasks === "function") {
@@ -1086,12 +1202,17 @@
     const zakladniSmer = window.LubaNoteCardOrder
       ?.ziskejZakladniSmer?.(beznePoznamky) ||
       (localStorage.getItem("cardSortDirection") === "asc" ? "asc" : "desc");
+    const poradiShared = pripravPoradiPrijatychSdilenychKaret(
+      beznePoznamky, zakladniSmer
+    );
 
     const beznePolozky = bezneKarty.map((card, index) => {
       const dragKey = String(card.dataset.cardDragKey || "");
-      const note = dragKey.startsWith("id:")
-        ? podleId.get(dragKey.slice(3))
-        : beznePoznamky[Number(card.dataset.cardSourceIndex)];
+      const podlePuvodnihoIndexu = beznePoznamky[
+        Number(card.dataset.cardSourceIndex)
+      ];
+      const note = (dragKey.startsWith("id:")
+        ? podleId.get(dragKey.slice(3)) : null) || podlePuvodnihoIndexu;
       return {
         task: note,
         card,
@@ -1111,9 +1232,12 @@
 
     const vsechny = [
       ...beznePolozky,
-      ...visible.map((task, index) => ({
-        task,
-        card: vytvorSharedKartu(task),
+      ...visible.map((note, index) => ({
+        task: {
+          ...note,
+          cardOrder: poradiShared.get(String(note.id))
+        },
+        card: vytvorSharedKartu(note),
         originalIndex: beznePolozky.length + index
       }))
     ].sort((a, b) => porovnejKartyProZobrazeni(a, b, zakladniSmer));
@@ -1591,6 +1715,8 @@
         /* 680G: sdílení patří k místním metadatům, ne k čekání při open. */
         ulozLokalniVlastniSdileneId(userId, nove);
         ulozCache(nove);
+
+        zapomenPoradiOdebranychKaret(odebraneSharedIds);
 
         if (odebraneSharedIds.length) {
           window.dispatchEvent(
