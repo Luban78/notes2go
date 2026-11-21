@@ -1080,8 +1080,36 @@ function jePoznamkaVKosi(task) {
   return Boolean(task?.trashedAt);
 }
 
+/* 699D-CG: stav Koše vlastní E2E Shared poznámky je uložen odděleně
+ * na serveru. Soukromá lokální kopie poznámky není autoritativní a
+ * kvůli shared guardu se při shared save vůbec nepřepisuje. Pro čtení
+ * tedy promítneme stav z účetně oddělené Shared cache, bez uložení
+ * zastaralého obsahu do private syncu. */
+function ziskejStavKoseVlastniSdilenePoznamky(task) {
+  if (!task?.id) return null;
+  const shared = window.LubaNoteSharingNotes
+    ?.ziskejVlastniSdilenouPoznamku?.(task.id);
+  return shared?.__lubanoteSharedRole === "owner" ? shared : null;
+}
+
+function promitniStavKoseVlastnichSdilenych(tasks) {
+  return (Array.isArray(tasks) ? tasks : []).map((task) => {
+    const shared = ziskejStavKoseVlastniSdilenePoznamky(task);
+    if (!shared) return task;
+    if (shared.trashedAt) {
+      return { ...task, trashedAt: shared.trashedAt };
+    }
+    if (!task.trashedAt) return task;
+    const kopie = { ...task };
+    delete kopie.trashedAt;
+    return kopie;
+  });
+}
+
 function loadTask() {
-  const beznePoznamky = nactiBeznePoznamkyZUloziste();
+  const beznePoznamky = promitniStavKoseVlastnichSdilenych(
+    nactiBeznePoznamkyZUloziste()
+  );
 
   /*
    * Koš je oddělený od běžné aplikace. Poznámka v koši proto nesmí
@@ -1101,7 +1129,9 @@ function nactiPoznamkyVKosi({ tajne = false } = {}) {
       .map((task) => ({ ...task, isSecret: true }));
   }
 
-  return nactiBeznePoznamkyZUloziste()
+  return promitniStavKoseVlastnichSdilenych(
+    nactiBeznePoznamkyZUloziste()
+  )
     .filter((task) => jePoznamkaVKosi(task));
 }
 
@@ -1334,7 +1364,9 @@ function odstranDuplicitniPoznamkySeStejnymId(tasks) {
 }
 
 
-function slucPoznamkySPuvodnimKosem(prichozi, puvodni) {
+function slucPoznamkySPuvodnimKosem(
+  prichozi, puvodni, zachovatVlastniSharedVKosi = false
+) {
   const vysledek = [];
   const obsazenaId = new Set();
 
@@ -1353,7 +1385,9 @@ function slucPoznamkySPuvodnimKosem(prichozi, puvodni) {
   (Array.isArray(puvodni) ? puvodni : []).forEach((task) => {
     if (
       !task ||
-      !jePoznamkaVKosi(task) ||
+      (!jePoznamkaVKosi(task) &&
+        !(zachovatVlastniSharedVKosi &&
+          ziskejStavKoseVlastniSdilenePoznamky(task)?.trashedAt)) ||
       (task.id && obsazenaId.has(task.id))
     ) {
       return;
@@ -1680,7 +1714,8 @@ function saveAllTasks(tasks) {
   const beznePoznamky =
     slucPoznamkySPuvodnimKosem(
       beznePrichozi,
-      puvodniBezne
+      puvodniBezne,
+      true
     );
 
   const tajnePoznamky =
@@ -1929,8 +1964,11 @@ async function deleteTasksByIds(ids) {
 
     if (sharedVysledek?.ok === true) {
       pocetSdilenych += 1;
-      bezpecnaId.delete(id);
     }
+
+    /* Když server shared přesun odmítne (offline / aktivní editor),
+     * NIKDY nesmíme spadnout do normálního private delete fallbacku. */
+    bezpecnaId.delete(id);
   }
 
   if (bezpecnaId.size === 0) {
@@ -2116,7 +2154,10 @@ async function smazPoznamkuZKoseTrvale(noteId, tajne = false) {
     : nactiBeznePoznamkyZUloziste();
 
   const poznamka = zdroj.find(
-    (task) => task?.id === noteId && jePoznamkaVKosi(task)
+    (task) => task?.id === noteId &&
+      jePoznamkaVKosi(
+        promitniStavKoseVlastnichSdilenych([task])[0]
+      )
   );
 
   if (!poznamka) {
@@ -2264,7 +2305,9 @@ async function smazPoznamkyZKoseTrvale(noteIds, tajne = false) {
     (task) =>
       task?.id &&
       idSet.has(String(task.id)) &&
-      jePoznamkaVKosi(task)
+      jePoznamkaVKosi(
+        tajne ? task : promitniStavKoseVlastnichSdilenych([task])[0]
+      )
   );
 
   if (mazane.length === 0) {

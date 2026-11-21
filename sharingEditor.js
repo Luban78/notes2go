@@ -472,6 +472,17 @@
         );
       }
 
+      /* 699D-CG: Server potvrdi Shared trash/restore, ale private
+       * savedTask zustava zamerne beze zmeny. Promitneme potvrzeny
+       * stav do Shared cache HNED, i kdyby nasledujici refresh selhal.
+       * Zadny zapis stare soukrome E2E obalky do private syncu. */
+      if (trashAction || data.trashedAt !== note.trashedAt) {
+        window.LubaNoteSharingNotes
+          ?.nastavStavKoseVlastniSdilenePoznamky?.(
+            note.id, data.trashedAt || null
+          );
+      }
+
       await window.LubaNoteSharingNotes
         ?.obnovZeServeru?.({
           tichy: true,

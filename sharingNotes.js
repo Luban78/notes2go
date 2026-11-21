@@ -442,6 +442,15 @@
       return;
     }
 
+    const stavKoseVlastnich = notes => new Map(notes
+      .filter(note => note?.__lubanoteSharedRole === "owner")
+      .map(note => [String(note.id), String(note.trashedAt || "")]));
+    const predchoziKos = stavKoseVlastnich(sdilenePoznamky);
+    const novyKos = stavKoseVlastnich(plnaCache);
+    const zmenaKose = [...new Set([
+      ...predchoziKos.keys(), ...novyKos.keys()
+    ])].some(id => predchoziKos.get(id) !== novyKos.get(id));
+
     sdilenePoznamky = plnaCache;
 
     /* 696U: The regular notes have not changed. Hydrating the large
@@ -449,7 +458,11 @@
      * rebuild every private card and the entire masonry layout again.
      * The owner-shared icon index is maintained separately in localStorage.
      */
-    vykresliSdileneKarty();
+    if (zmenaKose && typeof window.renderTasks === "function") {
+      window.renderTasks();
+    } else {
+      vykresliSdileneKarty();
+    }
     window.LubaNoteStartupDiag?.zapis?.(
       "PERF", "696U SHARED IDB HYDRATION | shared cards only"
     );
@@ -1029,6 +1042,9 @@
       return;
     }
 
+    // Nehýbat s DOM pod prstem během drag gesta.
+    if (window.LubaNoteCardDrag?.jeAktivni?.()) return;
+
     document
       .querySelectorAll(".sharingSharedCard")
       .forEach((card) => card.remove());
@@ -1053,9 +1069,92 @@
       )
     ).filter(projdeAktualnimiFiltry);
 
-    for (const note of visible) {
-      pripojKartuDoLayoutu(vytvorSharedKartu(note));
+    if (!visible.length) return;
+
+    /* 699D-CG: Predchozi implementace seradila jen Shared karty a
+     * VSECHNY je vlozila za soukrome. Spojime jiz hotove DOM karty
+     * do jedineho poradi a rozdelime je do stejnych sloupcu jako
+     * renderTasks(). Presouvame DOM uzly, nikoli jejich event listenery. */
+    const bezneKarty = [
+      ...pinnedLeft.querySelectorAll(".taskCard:not(.sharingSharedCard)"),
+      ...pinnedRight.querySelectorAll(".taskCard:not(.sharingSharedCard)")
+    ];
+    const beznePoznamky = typeof loadTask === "function" ? loadTask() : [];
+    const podleId = new Map(beznePoznamky
+      .filter(note => note?.id)
+      .map(note => [String(note.id), note]));
+    const zakladniSmer = window.LubaNoteCardOrder
+      ?.ziskejZakladniSmer?.(beznePoznamky) ||
+      (localStorage.getItem("cardSortDirection") === "asc" ? "asc" : "desc");
+
+    const beznePolozky = bezneKarty.map((card, index) => {
+      const dragKey = String(card.dataset.cardDragKey || "");
+      const note = dragKey.startsWith("id:")
+        ? podleId.get(dragKey.slice(3))
+        : beznePoznamky[Number(card.dataset.cardSourceIndex)];
+      return {
+        task: note,
+        card,
+        originalIndex: Number(card.dataset.cardDisplayOrder) || index
+      };
+    });
+
+    // Pokud chybi zdrojovy model nektere karty, zachovame puvodni
+    // vykresleni a Shared pridame bez rizika nespravneho serazeni.
+    if (beznePolozky.some(polozka => !polozka.task) ||
+        typeof porovnejKartyProZobrazeni !== "function") {
+      for (const note of visible) {
+        pripojKartuDoLayoutu(vytvorSharedKartu(note));
+      }
+      return;
     }
+
+    const vsechny = [
+      ...beznePolozky,
+      ...visible.map((task, index) => ({
+        task,
+        card: vytvorSharedKartu(task),
+        originalIndex: beznePolozky.length + index
+      }))
+    ].sort((a, b) => porovnejKartyProZobrazeni(a, b, zakladniSmer));
+
+    const listMode = localStorage.getItem("cardView") === "list";
+    const desktop = window.matchMedia("(min-width: 900px)").matches;
+    const pocetSloupcu = desktop
+      ? (!listMode ? 4 :
+        (window.matchMedia("(min-width: 1100px) and (hover: hover) and (pointer: fine)").matches ? 3 : 0))
+      : 0;
+
+    if (pocetSloupcu > 0) {
+      let sloupce = Array.from(pinnedLeft.children)
+        .filter(el => el.classList?.contains("desktopMasonryColumn"));
+      if (sloupce.length !== pocetSloupcu) {
+        sloupce = Array.from({ length: pocetSloupcu }, () => {
+          const el = document.createElement("div");
+          el.className = "desktopMasonryColumn";
+          return el;
+        });
+      }
+      const fragmenty = sloupce.map(() => document.createDocumentFragment());
+      vsechny.forEach(({ card }, index) => {
+        fragmenty[index % pocetSloupcu].append(card);
+      });
+      sloupce.forEach((sloupec, index) =>
+        sloupec.replaceChildren(fragmenty[index]));
+      pinnedLeft.replaceChildren(...sloupce);
+      pinnedRight.replaceChildren();
+    } else {
+      const levy = document.createDocumentFragment();
+      const pravy = document.createDocumentFragment();
+      vsechny.forEach(({ card }, index) => {
+        if (listMode || index % 2 === 0) levy.append(card);
+        else pravy.append(card);
+      });
+      pinnedLeft.replaceChildren(levy);
+      pinnedRight.replaceChildren(pravy);
+    }
+
+    pinnedCards.hidden = false;
   }
 
   function bezpecneHtml(html) {
@@ -1456,6 +1555,7 @@
               __lubanoteSharedRole: note.__lubanoteSharedRole,
               __lubanoteSharedOwnerUsername: note.__lubanoteSharedOwnerUsername,
               __lubanoteSharedRevision: note.__lubanoteSharedRevision,
+              trashedAt: note.trashedAt || null,
               __lubanoteSharedE2ELocked: true
             };
           }
@@ -1701,7 +1801,14 @@
   sdilenePoznamky = nactiCache();
   lokalniVlastniSdileneId = nactiLokalniVlastniSdileneId();
   void doplnPlnouCachePokudJeAktualni(ziskejUserId());
-  vykresliSdileneKarty();
+  if (sdilenePoznamky.some(note =>
+      note?.__lubanoteSharedRole === "owner" && note.trashedAt) &&
+      typeof window.renderTasks === "function") {
+    // Prvni render bez Shared modulu jeste nezna stav Kose owner karet.
+    window.renderTasks();
+  } else {
+    vykresliSdileneKarty();
+  }
 
   window.addEventListener("lubanote:account-active", (event) => {
     nastavUcet(event.detail?.userId || null);
@@ -1848,6 +1955,16 @@
     ) || null;
   }
 
+  function nastavStavKoseVlastniSdilenePoznamky(noteId, trashedAt) {
+    const note = ziskejVlastniSdilenouPoznamku(noteId);
+    if (!note) return false;
+    if (trashedAt) note.trashedAt = trashedAt;
+    else delete note.trashedAt;
+    ulozCache(sdilenePoznamky);
+    if (typeof window.renderTasks === "function") window.renderTasks();
+    return true;
+  }
+
   window.LubaNoteSharingNotes = {
     nastavAktivniEditor,
     zrusAktivniEditor,
@@ -1859,6 +1976,7 @@
     zajistiAktualniSharedStav,
     jeVlastniSdilenaPoznamka,
     ziskejVlastniSdilenouPoznamku,
+    nastavStavKoseVlastniSdilenePoznamky,
     ziskejStavEditora: (noteId) => {
       const note = sdilenePoznamky.find(
         (item) => String(item?.id || "") === String(noteId || "")
