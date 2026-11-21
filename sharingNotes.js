@@ -43,6 +43,7 @@
   let poradiSdilenychKaret = new Map();
   let viewer = null;
   let viewerNoteId = null;
+  let viewerMediaRefreshToken = 0;
   let probihajiciNacteni = null;
   let serverovyStavNacten = false;
   let puvodniRenderTasks = null;
@@ -1521,6 +1522,39 @@
     }
   }
 
+  /* 699D-CI: Realtime refresh vraci Shared E2E text a odkazy na
+   * encrypted fotografie, nikoli rozbalene data:image. Drive volal
+   * naplnViewer() primo a viditelny obrazek tim smazal. Nechame
+   * stary obsah v DOM, dokud neni nova verze kompletne rozifrovana.
+   * Token brani pozdnim async vysledkum prepsat jinou/uzavrenou kartu. */
+  function naplnViewerPoObnoveSdilenePoznamky(note) {
+    if (!note?.id) return;
+    const token = ++viewerMediaRefreshToken;
+    const noteId = String(note.id);
+    const userId = ziskejUserId();
+
+    void (async () => {
+      try {
+        const aktualni = await window.LubaNoteSharedMediaCrypto
+          ?.desifrujSdilenouPoznamkuZCloudu?.(note) || note;
+
+        if (
+          token !== viewerMediaRefreshToken ||
+          String(viewerNoteId || "") !== noteId ||
+          ziskejUserId() !== userId ||
+          !viewer || viewer.overlay.hidden ||
+          !sdilenePoznamky.some(item => item === note)
+        ) return;
+
+        naplnViewer(aktualni);
+      } catch (error) {
+        // Ponechat dosavadni nacteny obrazek i text; zadny prazdny
+        // ani castecne desifrovany obsah nesmi prepsat otevreny viewer.
+        console.warn("Sdílení: obnovení fotografie v otevřeném náhledu selhalo.", error);
+      }
+    })();
+  }
+
   async function otevriReadOnly(noteId) {
     const note = sdilenePoznamky.find((item) => item.id === noteId);
 
@@ -1536,6 +1570,7 @@
       return;
     }
 
+    const token = ++viewerMediaRefreshToken;
     viewerNoteId = noteId;
     const modal = vytvorViewer();
     let noteProViewer = note;
@@ -1547,12 +1582,16 @@
       window.zobrazZpravuAplikace?.("Sdílená poznámka", "Šifrovanou fotografii se nepodařilo odemknout.");
       return;
     }
+    if (token !== viewerMediaRefreshToken || viewerNoteId !== noteId) {
+      return;
+    }
     naplnViewer(noteProViewer);
     modal.overlay.hidden = false;
     document.body.classList.add("sharingReadOnlyOpen");
   }
 
   function zavriReadOnly() {
+    viewerMediaRefreshToken += 1;
     if (!viewer) {
       return;
     }
@@ -1732,7 +1771,7 @@
         if (viewer && !viewer.overlay.hidden && viewerNoteId) {
           const otevrena = sdilenePoznamky.find((item) => item?.id === viewerNoteId);
           if (otevrena && !otevrena.trashedAt) {
-            naplnViewer(otevrena);
+            naplnViewerPoObnoveSdilenePoznamky(otevrena);
           } else {
             zavriReadOnly();
           }
