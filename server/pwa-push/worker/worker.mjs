@@ -21,7 +21,7 @@ async function request(pathname, body, prefer) {
     signal:AbortSignal.timeout(15000)
   });
   if (!response.ok) throw new Error(`PWA_DB_${response.status}`);
-  return response.status === 204 ? null : response.json();
+  return response.status === 204 || prefer?.includes('return=minimal') ? null : response.json();
 }
 function loadKeys() {
   fs.mkdirSync(path.dirname(keyFile),{recursive:true,mode:0o700});
