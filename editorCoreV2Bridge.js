@@ -365,6 +365,12 @@
     } catch (_error) {}
   }
 
+  /* 699D-CM – výhradně technické kódy pro podporu v APK i testovací PWA.
+     Žádné DOM texty, Range.toString(), note ID ani síť. */
+  function zapisBezpecnyVyber699DCM(kod, detail = "") {
+    try { window.LubaNoteSelectionDiag699DCM?.zapis?.(kod, detail); } catch (_) {}
+  }
+
   function ohlasV2SelectionEngineStav(extra = {}) {
     try {
       const drag = v2SelectionScroll?.handleDrag || null;
@@ -800,6 +806,7 @@
     selectionOverflow.hidden = false;
     selectionVice.setAttribute("aria-expanded", "true");
     selectionMenu.classList.add("selectionMenuRozsirene");
+    zapisBezpecnyVyber699DCM("OVERFLOW_OPEN");
 
     if (v2SelectionOverflowKotva) {
       pozicujV2SelectionOverflowKeTreckam(v2SelectionOverflowKotva);
@@ -959,10 +966,16 @@
   function zobrazV2SelectionMenuProOznaceni(rozsah = null, moznosti = {}) {
     if (jeDesktopSelection || !aktivni || !selectionMenu || v2SelectionMenuNuceneSkryty ||
         v2SelectionScroll?.handleDrag || probihaSingleCaretDrag699DBD() ||
-        performance.now() < potlacV2SelectionMenuDo) return false;
+        performance.now() < potlacV2SelectionMenuDo) {
+      zapisBezpecnyVyber699DCM("MENU_GUARD", `active=${aktivni ? 1 : 0} blocked=${v2SelectionMenuNuceneSkryty ? 1 : 0} drag=${v2SelectionScroll?.handleDrag ? 1 : 0} cooldown=${Math.max(0, Math.round(potlacV2SelectionMenuDo-performance.now()))}`);
+      return false;
+    }
     const vyber = window.getSelection();
     const range = rozsah || (vyber?.rangeCount ? vyber.getRangeAt(0) : null);
-    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return false;
+    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) {
+      zapisBezpecnyVyber699DCM("MENU_NO_VALID_RANGE");
+      return false;
+    }
 
     /* 673G23 – i obecný caller musí respektovat poslední tažený handle.
        Tím odstraníme poslední náhodný návrat panelu k hornímu rectu výběru. */
@@ -1004,6 +1017,7 @@
       odsazeniNad: v2SelectionMenuOdsazeniNad,
       preferovanyKonec: v2SelectionMenuPreferovanyKonec
     });
+    zapisBezpecnyVyber699DCM("MENU_OPEN_OK");
     return true;
   }
 
@@ -4391,11 +4405,17 @@
   }
 
   function aktivujV2SlovoZDoubleTap(clientX, clientY, duvod = "double-tap-fallback") {
-    if (!jeAndroidApkSelectionScroll() || !aktivni) return false;
+    if (!jeAndroidApkSelectionScroll() || !aktivni) {
+      zapisBezpecnyVyber699DCM("DOUBLE_MODE_SKIP", `active=${aktivni ? 1 : 0}`);
+      return false;
+    }
     const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
-    if (!editor) return false;
+    if (!editor) { zapisBezpecnyVyber699DCM("DOUBLE_NO_EDITOR"); return false; }
     const range = vytvorV2RangeSlovaVBodu(clientX, clientY, editor);
-    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return false;
+    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) {
+      zapisBezpecnyVyber699DCM("DOUBLE_NO_WORD_RANGE");
+      return false;
+    }
 
     if (v2SelectionPrevodTimer) {
       clearTimeout(v2SelectionPrevodTimer);
@@ -4403,8 +4423,12 @@
     }
     if (v2SelectionScroll) zrusV2SelectionScrollStav(v2SelectionScroll);
     try { window.getSelection()?.removeAllRanges?.(); } catch (_error) {}
-    if (!ulozV2VizualniRangeDoCore(range)) return false;
-    if (!nastavV2SelectionScrollHighlight(range)) return false;
+    if (!ulozV2VizualniRangeDoCore(range)) {
+      zapisBezpecnyVyber699DCM("DOUBLE_CORE_RANGE_FAIL"); return false;
+    }
+    if (!nastavV2SelectionScrollHighlight(range)) {
+      zapisBezpecnyVyber699DCM("DOUBLE_HIGHLIGHT_FAIL"); return false;
+    }
 
     const kopie = range.cloneRange?.() || range;
     const stav = {
@@ -4442,21 +4466,30 @@
       `reason=${duvod} chars=${String(kopie.toString?.() || "").length} top=${Math.round(editor.scrollTop || 0)}`
     );
     ohlasV2SelectionEngineStav({ engine: "CUSTOM", source: "double-tap-fallback" });
+    zapisBezpecnyVyber699DCM("DOUBLE_CUSTOM_READY", `source=${/pointer/i.test(duvod) ? "pointer" : "touch"}`);
     return true;
   }
 
   function prevedV2NativeSelectionNaVlastni(duvod = "settle") {
-    if (!jeAndroidApkSelectionScroll() || !aktivni || v2SelectionScroll?.range) return false;
+    if (!jeAndroidApkSelectionScroll() || !aktivni || v2SelectionScroll?.range) {
+      zapisBezpecnyVyber699DCM("CONVERT_GUARD", `mobile=${jeAndroidApkSelectionScroll() ? 1 : 0} active=${aktivni ? 1 : 0} custom=${v2SelectionScroll?.range ? 1 : 0}`);
+      return false;
+    }
     const vyber = window.getSelection();
     const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
-    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return false;
+    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) {
+      zapisBezpecnyVyber699DCM("CONVERT_NO_RANGE", `native=${!range ? "none" : range.collapsed ? "caret" : "outside"}`);
+      return false;
+    }
     const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor") || null;
-    if (!editor) return false;
-    if (!nastavV2SelectionScrollHighlight(range)) return false;
+    if (!editor) { zapisBezpecnyVyber699DCM("CONVERT_NO_EDITOR"); return false; }
+    if (!nastavV2SelectionScrollHighlight(range)) {
+      zapisBezpecnyVyber699DCM("CONVERT_HIGHLIGHT_FAIL"); return false;
+    }
 
     core()?.zachytAktualniVyber?.();
     const kopie = range.cloneRange?.() || null;
-    if (!kopie || kopie.collapsed) return false;
+    if (!kopie || kopie.collapsed) { zapisBezpecnyVyber699DCM("CONVERT_CLONE_FAIL"); return false; }
     const stav = {
       editor,
       range: kopie,
@@ -4479,11 +4512,16 @@
     zobrazV2MenuPoPrevzetiVyberu(stav);
     zapisSelectionScrollDiag("G21_CUSTOM_READY", null, `reason=${duvod} top=${Math.round(editor.scrollTop || 0)}`);
     ohlasV2SelectionEngineStav({ engine: "CUSTOM" });
+    zapisBezpecnyVyber699DCM("CONVERT_CUSTOM_READY", `source=${/selectionchange/.test(duvod) ? "selectionchange" : "settle"}`);
     return true;
   }
 
   function naplanujV2PrevodNativeSelection(duvod = "selectionchange") {
-    if (!jeAndroidApkSelectionScroll() || !aktivni || v2SelectionScroll?.range) return;
+    if (!jeAndroidApkSelectionScroll() || !aktivni || v2SelectionScroll?.range) {
+      zapisBezpecnyVyber699DCM("CONVERT_NOT_ARMED");
+      return;
+    }
+    zapisBezpecnyVyber699DCM("CONVERT_SCHEDULED");
     if (v2SelectionPrevodTimer) clearTimeout(v2SelectionPrevodTimer);
     v2SelectionPrevodTimer = setTimeout(() => {
       v2SelectionPrevodTimer = null;
@@ -5578,6 +5616,17 @@
     zobrazTodoPodleId: (id) => core()?.zobrazTodoPodleId?.(id) === true,
     jeTodoRezimAktivni: () => core()?.jeTodoRezimAktivni?.() === true,
     spravujeSelectionMenu: () => aktivni && !jeDesktopSelection,
+    /* 699D-CM – read-only rozhodovací stav, bez obsahu či identity poznámky. */
+    diagnostikaVyberu699DCM: () => ({
+      mobileEligible: jeAndroidApkSelectionScroll(),
+      desktop: jeDesktopSelection,
+      highlight: podporujeV2SelectionScrollHighlight(),
+      customRange: Boolean(v2SelectionScroll?.range && !v2SelectionScroll.range.collapsed),
+      handleDrag: Boolean(v2SelectionScroll?.handleDrag),
+      menuBlocked: Boolean(v2SelectionMenuNuceneSkryty),
+      listMove: jeV2MoveInterakce(),
+      cooldownMs: Math.max(0, Math.ceil(potlacV2SelectionMenuDo - performance.now()))
+    }),
     otevriExterniPastePanel,
     jeAktivni: () => aktivni
   });

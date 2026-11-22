@@ -2958,6 +2958,17 @@ async function zkopirujVykonCaretu699DBG(tlacitko) {
     setTimeout(() => { tlacitko.textContent = puvodni; }, 1800);
   }
 
+  async function zkopirujVyber699DCM(tlacitko) {
+    const puvodni = tlacitko.textContent;
+    let report = "";
+    try { report = window.LubaNoteSelectionDiag699DCM?.report?.() || ""; } catch (_error) {}
+    if (!report) report = "LUBANOTE 699D-CM – VYBER TEXTU\nDiagnosticky modul neni nacteny.";
+    let ok = false;
+    try { ok = await zkopirujTextRobustne(report); } catch (_error) {}
+    tlacitko.textContent = ok ? "Výběr textu zkopírován ✓" : "Kopírování selhalo";
+    setTimeout(() => { tlacitko.textContent = puvodni; }, 1800);
+  }
+
   function vytvorHub() {
     if (hub) return hub;
 
@@ -2999,6 +3010,7 @@ async function zkopirujVykonCaretu699DBG(tlacitko) {
       <pre class="ln-dh-log">Diagnostika zatím neběží.</pre>
 
       <div class="ln-dh-footer">
+        <button type="button" class="ln-dh-copy" data-dh="copy-selection-699DCM" style="grid-column:1/-1">✂ Kopírovat výběr textu</button>
         <button type="button" class="ln-dh-copy" data-dh="copy-invite-699DBT" style="grid-column:1/-1">Kopírovat diagnostiku pozvánky</button>
         <button type="button" class="ln-dh-copy" data-dh="copy-caret-699DBG" style="grid-column:1/-1">Kopírovat měření caretu</button>
         <!-- Primary SYNC + reminders report is attached on demand by 691BA. -->
@@ -3176,6 +3188,10 @@ async function zkopirujVykonCaretu699DBG(tlacitko) {
       }
       if (akce === "copy-resume") {
         zkopirujNavrat685G(tlacitko);
+        return;
+      }
+      if (akce === "copy-selection-699DCM") {
+        void zkopirujVyber699DCM(tlacitko);
         return;
       }
       if (akce === "copy-invite-699DBT") {

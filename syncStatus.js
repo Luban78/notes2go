@@ -547,6 +547,32 @@
     return done;
   }
 
+  /* 699D-CM – jeden privacy-safe report výběru textu pro testovací PWA
+     i APK. Na rozdíl od běžného support reportu neobsahuje Android alarmy.
+     Nepřepíná výběr, klávesnici ani stav poznámky. */
+  async function zkopirujVyber699DCM() {
+    let content = "";
+    try { content = window.LubaNoteSelectionDiag699DCM?.report?.() || ""; } catch (_) {}
+    if (!content) content = "LUBANOTE 699D-CM – VYBER TEXTU\nDiagnosticky modul neni nacteny. Zkontroluj nasazeni selectionDiagnostics699DCM.js.";
+    if (textarea) textarea.value = content;
+    let done = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(content);
+        done = true;
+      }
+    } catch (_) {}
+    if (!done && textarea) {
+      textarea.focus();
+      textarea.select();
+      try { done = document.execCommand('copy') === true; } catch (_) {}
+    }
+    if (copyStatus) copyStatus.textContent = done
+      ? 'Diagnostika výběru textu zkopírována.'
+      : 'Podrž text reportu a zkopíruj ho ručně.';
+    return done;
+  }
+
   function zavri() {
     if (!okno) return;
     okno.hidden = true;
@@ -659,6 +685,7 @@
       <textarea readonly rows="13" aria-label="Technický report LubaNote" spellcheck="false"></textarea>
       <p>Systémové měření zvuku/vibrací není v této APK aktivní. Historie nativních alarmů funguje i bez něj.</p>
       <div class="lnSupportActions699DF"><button type="button" data-ln-support-copy>Zkopírovat diagnostiku</button>
+      <button type="button" data-ln-support-selection-copy>✂ Kopírovat výběr textu</button>
       <button type="button" data-ln-alarm-history-button>Seznam alarmů</button>
       <button type="button" data-ln-support-close>Zavřít</button></div>
       <pre data-ln-alarm-history hidden aria-label="Historie alarmů" style="white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;max-height:42dvh;overflow:auto;font:12px/1.45 monospace;padding:10px;border:1px solid var(--color-border,#667);border-radius:8px"></pre>
@@ -679,6 +706,7 @@
     });
     okno.querySelector('[data-ln-alarm-history-button]').addEventListener('click', () => {void otevriHistorii699DAW();});
     okno.querySelector('[data-ln-support-copy]').addEventListener('click', () => {void zkopiruj();});
+    okno.querySelector('[data-ln-support-selection-copy]').addEventListener('click', () => {void zkopirujVyber699DCM();});
     okno.querySelectorAll('[data-ln-support-close]').forEach(el => el.addEventListener('click', zavri));
     okno.addEventListener('click', e => {if (e.target === okno) zavri();});
   }
