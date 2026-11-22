@@ -2412,6 +2412,16 @@
             <span class="themeSelectArrow lubaActionIcon" data-luba-icon="sipkaVpravo" aria-hidden="true"></span>
           </button>
         </div>
+
+        <!-- 699D-CP: displayed only in an installed Android PWA (never in APK or PC). -->
+        <div id="lnPwaPushRow699DCP" class="themeSetting" hidden>
+          <div>
+            <span>Oznámení v Android PWA</span>
+            <small id="lnPwaPushHint699DCP" style="display:block;opacity:.8;margin-top:.3em" aria-live="polite"></small>
+          </div>
+          <button id="lnPwaPushButton699DCP" type="button" class="themeSelectButton" disabled>Zapnout oznámení PWA</button>
+        </div>
+        <style>#lnPwaPushRow699DCP[hidden]{display:none!important}</style>
         
         <div class="themeSetting">
           
@@ -3161,6 +3171,7 @@
   <script src="sync.js?v=699AG-reconcile-progress"></script>
   <!-- 692P: Start FCM bridge on BOTH PC and Android after sync.js. Without this script, PC sends no background alarm updates. -->
   <script src="lubaFcmBridge692M.js?v=699W-native-single-recurring"></script>
+  <script src="pwaWebPush699DCP.js?v=699D-CP-android-push"></script>
   <script src="batteryGuide697C.js?v=697D"></script>
   <!-- Produkční Control Point: MAINTENANCE pouze zamkne aktivní SOURCE a vyprázdní existující Sync V2 frontu. -->
   <script src="maintenance.js?v=680a5-prod-version-realtime"></script>

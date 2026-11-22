@@ -1,0 +1,16 @@
+name: lubanote-pwa-push
+services:
+  notifications:
+    build: .
+    restart: unless-stopped
+    environment:
+      SUPABASE_URL: https://api.lubanote.com
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?Required from existing Supabase .env}
+      PWA_VAPID_SUBJECT: https://app.lubanote.com
+    volumes:
+      - ./pwa-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
