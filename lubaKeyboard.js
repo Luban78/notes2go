@@ -833,15 +833,19 @@
 
   function nastavLubaAtributy(editor) {
     if (!editor) return;
-    /* 683O – pro APK + LubaKeyboard nesmí být Core V2 nativní
+    /* 683O / 699D-CJ – pro APK a instalovanou Android PWA s LubaKeyboard nesmí být Core V2 nativní
        contenteditable. WebView by totiž i při user-select:none kreslil
        vlastní modrý insertion handle. LubaKeyboard zapisuje přímo do
        modelu Core V2, nikoli do DOM editoru. Je proto bezpečné zachovat
        Core jen jako fokusovatelnou projekci; jeho vlastní červený caret
        a vlastní úchyt se vykreslují z téhož modelového rectu.
-       Ostatní pole, název poznámky a PC se vůbec nemění. */
+       Ostatní pole, název poznámky, běžný web v kartě a PC se nemění. */
     const chromeMajor = Number(String(navigator.userAgent || "").match(/(?:Chrome|Chromium)\/(\d+)/i)?.[1] || 0);
-    if (document.body?.classList?.contains("nativeApp") && chromeMajor >= 120 &&
+    const jeApk = document.body?.classList?.contains("nativeApp") === true;
+    const jeAndroidPwa = !jeApk && /Android/i.test(String(navigator.userAgent || "")) &&
+      window.matchMedia?.("(display-mode: standalone)")?.matches === true &&
+      window.matchMedia?.("(pointer: coarse)")?.matches === true;
+    if ((jeApk || jeAndroidPwa) && chromeMajor >= 120 &&
         editor.matches?.(".ln-v2-editor[data-ln-v2-editor]")) {
       editor.setAttribute("contenteditable", "false");
       editor.setAttribute("tabindex", "0");

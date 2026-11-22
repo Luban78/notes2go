@@ -609,6 +609,79 @@
     return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
   }
 
+  /* 699D-CJ – ani rozšířená nabídka nesmí zakrýt 44x44 px dotykový hitbox
+     úchytu. Výběr ani úchyty neschováváme: hledáme volné místo pro PANEL.
+     Měříme pouze při otevření/přepozicování menu, nikdy v hot drag smyčce. */
+  function ziskejV2PrekazkyUchytuMenu(rozsah = null) {
+    const prekazky = [];
+    const aktivniUchyty = document.querySelectorAll(
+      '.ln-v2-selection-handle-custom:not([hidden]), .ln-v2-single-caret-handle:not([hidden])'
+    );
+    aktivniUchyty.forEach((el) => {
+      if (!el.isConnected) return;
+      const styl = getComputedStyle(el);
+      if (styl.display === 'none' || styl.visibility === 'hidden' || Number(styl.opacity) === 0) return;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        prekazky.push({ left: r.left - 7, right: r.right + 7, top: r.top - 7, bottom: r.bottom + 7 });
+      }
+    });
+
+    /* Nativní handle není DOM uzel. Než jej Android PWA převezme vlastním
+       výběrem, stále rezervujeme okolí obou známých endpointů Range. */
+    if (rozsah && !rozsah.collapsed && prekazky.length < 2) {
+      const body = ziskejV2SelectionHandleBody(rozsah);
+      body.forEach((bod, index) => {
+        if (!Number.isFinite(bod?.x) || !Number.isFinite(bod?.y)) return;
+        prekazky.push({
+          left: bod.x + (index === 0 ? -51 : -7),
+          right: bod.x + (index === 0 ? 7 : 51),
+          top: bod.y - 7,
+          bottom: bod.y + 51
+        });
+      });
+    }
+    return prekazky;
+  }
+
+  function umistiV2MenuMimoUchyty({ x, y, sirka, vyska, minX, maxX, minY, maxY, rozsah = null }) {
+    const prekazky = ziskejV2PrekazkyUchytuMenu(rozsah);
+    const xMin = Number(minX), xMax = Math.max(xMin, Number(maxX));
+    const yMin = Number(minY), yMax = Math.max(yMin, Number(maxY));
+    const omez = (a, min, max) => Math.max(min, Math.min(Number(a), max));
+    const puvodni = { x: omez(x, xMin, xMax), y: omez(y, yMin, yMax) };
+    if (!prekazky.length) return puvodni;
+
+    const kandidati = [puvodni];
+    const pridej = (cx, cy) => kandidati.push({ x: omez(cx, xMin, xMax), y: omez(cy, yMin, yMax) });
+    for (const p of prekazky) {
+      pridej(puvodni.x, p.top - vyska - 2);
+      pridej(puvodni.x, p.bottom + 2);
+      pridej(p.left - sirka - 2, puvodni.y);
+      pridej(p.right + 2, puvodni.y);
+      pridej(p.left - sirka - 2, p.top - vyska - 2);
+      pridej(p.right + 2, p.top - vyska - 2);
+      pridej(p.left - sirka - 2, p.bottom + 2);
+      pridej(p.right + 2, p.bottom + 2);
+    }
+    /* Pokud jsou oba konce výběru blízko sebe, neuhýbat od jednoho pod druhý. */
+    const nad = Math.min(...prekazky.map((p) => p.top)) - vyska - 2;
+    const pod = Math.max(...prekazky.map((p) => p.bottom)) + 2;
+    pridej(puvodni.x, nad);
+    pridej(puvodni.x, pod);
+
+    const skore = (k) => {
+      const rect = { left: k.x, top: k.y, right: k.x + sirka, bottom: k.y + vyska };
+      const prekryv = prekazky.reduce((s, p) => {
+        const w = Math.max(0, Math.min(rect.right, p.right) - Math.max(rect.left, p.left));
+        const h = Math.max(0, Math.min(rect.bottom, p.bottom) - Math.max(rect.top, p.top));
+        return s + w * h;
+      }, 0);
+      return prekryv * 1000 + Math.hypot(k.x - puvodni.x, k.y - puvodni.y);
+    };
+    return kandidati.reduce((nej, k) => skore(k) < skore(nej) ? k : nej, kandidati[0]);
+  }
+
   function pozicujV2SelectionOverflowKeTreckam(kotva = null) {
     if (!selectionMenu || selectionMenu.hidden || !kotva) return;
 
@@ -669,8 +742,14 @@
         Math.min(y, Math.max(horniBezpecnaHrana, spodniBezpecnaHrana - vyska))
       );
 
-      selectionMenu.style.left = `${Math.round(x)}px`;
-      selectionMenu.style.top = `${Math.round(y)}px`;
+      const volne = umistiV2MenuMimoUchyty({
+        x, y, sirka, vyska,
+        minX: offsetLeft + okraj, maxX: offsetLeft + viewportW - sirka - okraj,
+        minY: horniBezpecnaHrana, maxY: spodniBezpecnaHrana - vyska,
+        rozsah: v2SelectionScroll?.range || null
+      });
+      selectionMenu.style.left = `${Math.round(volne.x)}px`;
+      selectionMenu.style.top = `${Math.round(volne.y)}px`;
     });
   }
 
@@ -850,8 +929,21 @@
       x = Math.max(okraj, Math.min(x, viewportW - sirka - okraj));
       y = Math.max(horniBezpecnaHrana, Math.min(y, offsetTop + viewportH - vyska - okraj));
 
-      selectionMenu.style.left = `${Math.round(x)}px`;
-      selectionMenu.style.top = `${Math.round(y)}px`;
+      const klavesniceRect = document.querySelector('.ln-luba-keyboard:not([hidden])')?.getBoundingClientRect?.();
+      const spodniBezpecnaHrana = Math.min(
+        offsetTop + viewportH - okraj,
+        klavesniceRect && klavesniceRect.height > 0
+          ? klavesniceRect.top - okraj
+          : offsetTop + viewportH - okraj
+      );
+      const volne = umistiV2MenuMimoUchyty({
+        x, y, sirka, vyska,
+        minX: okraj, maxX: viewportW - sirka - okraj,
+        minY: horniBezpecnaHrana, maxY: spodniBezpecnaHrana - vyska,
+        rozsah: rozsah || v2SelectionScroll?.range || null
+      });
+      selectionMenu.style.left = `${Math.round(volne.x)}px`;
+      selectionMenu.style.top = `${Math.round(volne.y)}px`;
     });
   }
 
@@ -907,7 +999,8 @@
   }
 
   function zobrazV2SelectionMenuProKurzor(bod = null) {
-    if (jeDesktopSelection || !aktivni || !selectionMenu || probihaSingleCaretDrag699DBD() ||
+    if (jeDesktopSelection || !aktivni || !selectionMenu || v2SelectionMenuNuceneSkryty ||
+        v2SelectionScroll?.handleDrag || probihaSingleCaretDrag699DBD() ||
         performance.now() < potlacV2SelectionMenuDo) return false;
     core()?.zachytAktualniVyber?.();
     nastavV2SelectionMenuTlacitka(true);
@@ -2868,7 +2961,15 @@
 
   function jeAndroidApkSelectionScroll() {
     try {
-      return !jeDesktopSelection && window.Capacitor?.getPlatform?.() === "android";
+      /* 699D-CJ – instalovaná PWA běží v Chrome bez Capacitor bridge, přesto
+         používá stejný dotykový editor a LubaKeyboard jako APK. Dvojtap a
+         vlastní selection proto nesmí záviset na samotném Capacitoru. */
+      return !jeDesktopSelection && (
+        window.Capacitor?.getPlatform?.() === "android" ||
+        (/Android/i.test(String(navigator.userAgent || "")) &&
+          window.matchMedia?.("(display-mode: standalone)")?.matches === true &&
+          window.matchMedia?.("(pointer: coarse)")?.matches === true)
+      );
     } catch (_error) {
       return false;
     }
@@ -4274,8 +4375,17 @@
     nastavV2CustomSelectionAktivni(editor, true);
     ulozV2VizualniRangeDoCore(kopie);
     nastavV2SelectionMenuNuceneSkryti(false);
+    /* 699D-CJ – potvrzený nový dvojtap není dozvuk předchozího scrollu,
+       toolbaru ani MOVE. Starý cooldown nesmí nechat handles bez menu. */
+    potlacV2SelectionMenuDo = 0;
     zobrazV2SelectionHandles(kopie);
-    zobrazV2SelectionMenuProOznaceni(kopie);
+    if (!zobrazV2SelectionMenuProOznaceni(kopie)) {
+      requestAnimationFrame(() => {
+        if (aktivni && v2SelectionScroll === stav && !stav.handleDrag) {
+          zobrazV2SelectionMenuProOznaceni(stav.range);
+        }
+      });
+    }
     obnovToolbar();
     zapisSelectionScrollDiag(
       "G27F_DOUBLE_TAP_FALLBACK",
@@ -5048,6 +5158,11 @@
           Math.hypot(aktualni.x - predchozi.x, aktualni.y - predchozi.y) <= 34);
     if (!druhyTap) return;
     v2PosledniTapSelection = null;
+    /* Vlastní explicitní dvojtap má přednost před timeoutem starého gesta.
+       Ochrany při skutečném MOVE / dragu dál platí uvnitř zobrazovacích guardů. */
+    if (!jeV2MoveInterakce(event) && !probihaSingleCaretDrag699DBD()) {
+      potlacV2SelectionMenuDo = 0;
+    }
     zapisV2Stabilitu("DOUBLE_TAP_DETECTED", `x=${Math.round(aktualni.x)} y=${Math.round(aktualni.y)}`);
 
     /* 683S – jeden výběrový pokus. Pokud uživatel dvojtapnul na hranici
@@ -5127,11 +5242,20 @@
     const y = event.clientY;
     setTimeout(() => {
       if (!aktivni) return;
+      /* 699D-CJ – při Android longpressu mohl být nativní DOM Selection už
+         prázdný, i když náš custom Range stále žil. Neztratit jej. */
+      if (jeV2CustomSelectionRangePlatny(v2SelectionScroll)) {
+        zobrazV2SelectionMenuProOznaceni(v2SelectionScroll.range);
+        return;
+      }
       const vyber = window.getSelection();
       const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
       if (range && jeV2SelectionRozsah(range) && !range.collapsed) {
         zobrazV2SelectionMenuProOznaceni(range);
       } else {
+        /* Android PWA stejně jako APK umí vybrat slovo naším engine,
+           i když Chrome/WebView nevrátil nativní označení. */
+        if (aktivujV2SlovoZDoubleTap(x, y, 'longpress-no-native-selection')) return;
         zobrazV2SelectionMenuProKurzor({ x, y });
       }
     }, 0);
