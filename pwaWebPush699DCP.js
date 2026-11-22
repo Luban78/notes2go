@@ -197,7 +197,7 @@
       enabled = true;
       setHint('Oznámení PWA zapnutá. Synchronizuji termíny…');
       queueSync(50);
-    } catch (_) {setHint('Povolení nebo registrace se nezdařila. Zkus to znovu.');}
+    } catch (error) {setHint('Chyba PWA: ' + String(error?.message || error));}
     finally {busy = false;render();}
   });
   window.addEventListener('lubanote:sync-state',event => {
