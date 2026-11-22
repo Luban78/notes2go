@@ -237,6 +237,153 @@ function smazWebReloadRecoveryTicket() {
   }
 }
 
+/* 699D-CN – Android standalone PWA může po ukončení ztratit sessionStorage,
+ * zatímco server má ještě 120s lease téže instalace. Dlouhodobější ticket
+ * s PŘESNOU session uložíme jen tehdy, když původní dokument současně drží
+ * exkluzivní Web Lock. Nový dokument smí ticket použít pouze pokud tento
+ * zámek už nikdo nedrží. Dvě aktivní okna se nikdy automaticky nepřebírají.
+ * APK, iOS PWA a běžný Chrome tab touto cestou neprocházejí. */
+const EDITOR_ANDROID_PWA_RECOVERY_KEY_699DCN =
+  "lubanoteAndroidPwaEditorOwner699DCN";
+let aktivniPwaWebLock699DCN = null;
+
+function nazevPwaWebLock699DCN(noteId) {
+  return `lubanote-editor-pwa-699DCN:${String(noteId)}`;
+}
+
+function nactiPwaRecoveryTicket699DCN() {
+  if (!jeAndroidStandalonePwaEditorHandoff()) return null;
+  try {
+    const raw = localStorage.getItem(EDITOR_ANDROID_PWA_RECOVERY_KEY_699DCN);
+    const ticket = raw ? JSON.parse(raw) : null;
+    const age = Date.now() - Number(ticket?.updatedAt || 0);
+    if (ticket?.proof !== "web-lock" || !ticket.noteId || !ticket.sessionId ||
+        !ticket.deviceId || !ticket.userId || !Number.isFinite(age) || age < 0 ||
+        age > EDITOR_WEB_RELOAD_RECOVERY_MAX_AGE_MS) return null;
+    return ticket;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function ulozPwaRecoveryTicket699DCN() {
+  const session = aktivniVzdalenyEditor;
+  const lock = aktivniPwaWebLock699DCN;
+  if (!jeAndroidStandalonePwaEditorHandoff() || !session || !lock ||
+      session.noteId !== lock.noteId || session.sessionId !== lock.sessionId ||
+      !editorRealtimeUserId) return;
+  try {
+    localStorage.setItem(EDITOR_ANDROID_PWA_RECOVERY_KEY_699DCN,
+      JSON.stringify({
+        proof: "web-lock",
+        noteId: session.noteId,
+        sessionId: session.sessionId,
+        deviceId: ziskejDeviceIdEditoru(),
+        userId: editorRealtimeUserId,
+        updatedAt: Date.now()
+      }));
+  } catch (_error) {}
+}
+
+function smazPwaRecoveryTicket699DCN(session) {
+  if (!session?.noteId || !session?.sessionId) return;
+  try {
+    const raw = localStorage.getItem(EDITOR_ANDROID_PWA_RECOVERY_KEY_699DCN);
+    const ticket = raw ? JSON.parse(raw) : null;
+    if (ticket?.noteId === session.noteId &&
+        ticket?.sessionId === session.sessionId) {
+      localStorage.removeItem(EDITOR_ANDROID_PWA_RECOVERY_KEY_699DCN);
+    }
+  } catch (_error) {}
+}
+
+function uvolniPwaWebLock699DCN(session) {
+  if (!session) return;
+  const lock = aktivniPwaWebLock699DCN;
+  if (lock?.noteId === session.noteId && lock?.sessionId === session.sessionId) {
+    aktivniPwaWebLock699DCN = null;
+    lock.release();
+  }
+  smazPwaRecoveryTicket699DCN(session);
+}
+
+async function podrzPwaWebLock699DCN(session) {
+  if (!jeAndroidStandalonePwaEditorHandoff() ||
+      typeof navigator.locks?.request !== "function") return false;
+
+  let hotovo = false;
+  let potvrdit;
+  const ziskano = new Promise(resolve => { potvrdit = resolve; });
+  const dokoncit = vysledek => {
+    if (!hotovo) { hotovo = true; potvrdit(vysledek); }
+  };
+
+  try {
+    // request() běží po celou dobu otevření editoru. Nesmíme jej awaitovat:
+    // jeho Promise se vyřeší až po uvolnění zámku při zavření editoru.
+    void navigator.locks.request(
+      nazevPwaWebLock699DCN(session.noteId),
+      { mode: "exclusive", ifAvailable: true },
+      lock => {
+        if (!lock) { dokoncit(false); return; }
+        return new Promise(resolve => {
+          aktivniPwaWebLock699DCN = { ...session, release: resolve };
+          dokoncit(true);
+          ulozPwaRecoveryTicket699DCN();
+        });
+      }
+    ).catch(() => dokoncit(false));
+  } catch (_error) {
+    dokoncit(false);
+  }
+  return await ziskano;
+}
+
+async function zkusObnovitUkoncenouPwaSession699DCN(noteId, novaSessionId) {
+  if (!jeAndroidStandalonePwaEditorHandoff() ||
+      typeof navigator.locks?.request !== "function") return false;
+  const ticket = nactiPwaRecoveryTicket699DCN();
+  if (!ticket || ticket.noteId !== noteId ||
+      ticket.deviceId !== ziskejDeviceIdEditoru()) return false;
+
+  const user = await getCurrentUser();
+  if (!user?.id || ticket.userId !== user.id) return false;
+
+  let ziskano = false;
+  try {
+    // Atomický test životnosti původního dokumentu: pokud lock stále drží
+    // aktivní PWA/Chrome, callback dostane null a serverový lease zachováme.
+    await navigator.locks.request(
+      nazevPwaWebLock699DCN(noteId),
+      { mode: "exclusive", ifAvailable: true },
+      async lock => {
+        if (!lock) return;
+        const row = await ziskejServerovouEditorSession(noteId);
+        if (row?.owner_device_id !== ticket.deviceId ||
+            row?.owner_session_id !== ticket.sessionId) return;
+
+        const { data, error } = await supabaseClient.rpc(
+          "lubanote_release_note_editor", {
+            p_note_id: noteId,
+            p_device_id: ticket.deviceId,
+            p_session_id: ticket.sessionId
+          }
+        );
+        if (error || data !== true) return;
+        const claim = await claimEditorSession(noteId, novaSessionId);
+        ziskano = claim?.acquired === true;
+        if (ziskano) smazPwaRecoveryTicket699DCN(ticket);
+      }
+    );
+  } catch (error) {
+    console.warn("PWA restart handoff recovery selhalo:", error);
+  }
+
+  if (!ziskano) return false;
+  await aktivujVzdalenyEditorSession(noteId, novaSessionId);
+  return true;
+}
+
 function nactiCekajiciUvolneniEditoru() {
   try {
     const raw = localStorage.getItem(
@@ -820,6 +967,7 @@ async function obnovEditorLease() {
     zastavEditorHeartbeat();
     aktivniVzdalenyEditor = null;
     smazWebReloadRecoveryTicket();
+    uvolniPwaWebLock699DCN(session);
 
     window.dispatchEvent(
       new CustomEvent(
@@ -834,6 +982,7 @@ async function obnovEditorLease() {
      Některé desktopové prohlížeče při F5/page reloadu ukončí JS dřív,
      než se pozdní unload handler spolehlivě dostane k aktivní session. */
   ulozWebReloadRecoveryTicket();
+  ulozPwaRecoveryTicket699DCN();
 
   return true;
 }
@@ -962,6 +1111,8 @@ async function aktivujVzdalenyEditorSession(
      použít pouze při NavigationTiming.type === "reload" a pouze pokud
      server stále vlastní přesně tuto sessionId. */
   ulozWebReloadRecoveryTicket();
+  await podrzPwaWebLock699DCN({ noteId, sessionId });
+  ulozPwaRecoveryTicket699DCN();
 
   spustEditorHeartbeat();
 
@@ -979,6 +1130,10 @@ async function aktivujVzdalenyEditorSession(
       "Realtime kanál předání editoru není připravený."
     );
   }
+
+  // User ID může být dostupné až po přípravě Realtime kanálu.
+  // Ticket musí existovat hned, ne až po prvním 20s heartbeatu.
+  ulozPwaRecoveryTicket699DCN();
 
   return true;
 }
@@ -1016,6 +1171,11 @@ async function zkusObnovitVlastniEditorPoRestartu(
   noteId,
   novaSessionId
 ) {
+  /* 699D-CN – Android PWA se již nesmí řídit pouze sessionStorage ticketem.
+     Její samostatná bezpečná cesta ověřuje i to, že původní dokument
+     přestal držet exkluzivní Web Lock (viz zkusObnovitUkoncenouPwaSession). */
+  if (jeAndroidStandalonePwaEditorHandoff()) return false;
+
   /*
    * Android APK i iOS PWA spuštěná samostatně z plochy mají jednu
    * app instanci. Po hard killu / reloadu může server ještě držet
@@ -1499,6 +1659,42 @@ async function zrusPozadavekNaPredaniEditoru(
   };
 }
 
+/* 699D-CN – uživatel smí přerušit i probíhající 45s čekání.
+ * Serverový request vždy atomicky zrušíme. Pokud se předání mezitím
+ * dokončilo, přesně nově získanou session bezpečně uvolníme. */
+async function dokoncZruseniCekani699DCN(noteId, requestId, novaSessionId) {
+  let zruseni = await zrusPozadavekNaPredaniEditoru(
+    noteId, requestId, novaSessionId
+  );
+  if (zruseni?.error === true) {
+    // Jediný bezpečný retry při krátkém síťovém výpadku.
+    zruseni = await zrusPozadavekNaPredaniEditoru(
+      noteId, requestId, novaSessionId
+    );
+  }
+
+  let vlastnikNoveSession = zruseni?.acquired === true;
+  if (zruseni?.error === true || zruseni?.acquired !== true) {
+    const row = await ziskejServerovouEditorSession(noteId);
+    vlastnikNoveSession ||= row?.owner_device_id === ziskejDeviceIdEditoru() &&
+      row?.owner_session_id === novaSessionId;
+  }
+
+  if (vlastnikNoveSession) {
+    const session = {
+      noteId, deviceId: ziskejDeviceIdEditoru(), sessionId: novaSessionId
+    };
+    pridejCekajiciUvolneniEditoru(session);
+    const hotovo = await odesliJednoUvolneniEditoru(session);
+    if (!hotovo) return { ok: false, reason: "cancel_release_pending" };
+  }
+
+  return {
+    ok: false,
+    reason: zruseni?.error === true ? "cancel_unconfirmed" : "cancelled"
+  };
+}
+
 async function oznacPredaniJakoSelhane(
   row,
   duvod
@@ -1653,6 +1849,10 @@ async function zpracujEditorSessionUpdate(row) {
      * by v této chvíli nesměl smazat právě převedeného ownera.
      */
     aktivniVzdalenyEditor = null;
+    uvolniPwaWebLock699DCN({
+      noteId: row.note_id,
+      sessionId: row.owner_session_id
+    });
 
     api.zavriAktivniEditorPoPredani(
       row.note_id
@@ -1701,12 +1901,33 @@ async function cekejNaPrevzetiEditoru({
   requestId,
   novaSessionId
 }) {
+  const modal = ziskejEditorHandoffModal();
+  const zrusit = modal.querySelector("#editorHandoffCancelButton");
+  const pwaZruseni = jeAndroidStandalonePwaEditorHandoff();
+  let zruseniPozadovano = false;
+  const naZruseni = () => {
+    if (zruseniPozadovano) return;
+    zruseniPozadovano = true;
+    zrusit.disabled = true;
+    zrusit.textContent = "Ruším…";
+    modal.querySelector("#editorHandoffText").textContent =
+      "Bezpečně ruším požadavek na předání poznámky…";
+  };
+  if (pwaZruseni) {
+    zrusit.disabled = false;
+    zrusit.addEventListener("click", naZruseni);
+  }
+
+  try {
   const start = Date.now();
 
   while (
     Date.now() - start <
     EDITOR_HANDOFF_TIMEOUT_MS
   ) {
+    if (zruseniPozadovano) {
+      return await dokoncZruseniCekani699DCN(noteId, requestId, novaSessionId);
+    }
     aktualizujCekaniNaBeznePredani(
       EDITOR_HANDOFF_TIMEOUT_MS -
         (Date.now() - start)
@@ -1717,6 +1938,10 @@ async function cekejNaPrevzetiEditoru({
         noteId
       );
 
+    if (zruseniPozadovano) {
+      return await dokoncZruseniCekani699DCN(noteId, requestId, novaSessionId);
+    }
+
     if (!row) {
       /*
        * Původní zařízení mohlo mezitím editor samo zavřít.
@@ -1726,6 +1951,10 @@ async function cekejNaPrevzetiEditoru({
         noteId,
         novaSessionId
       );
+
+      if (zruseniPozadovano) {
+        return await dokoncZruseniCekani699DCN(noteId, requestId, novaSessionId);
+      }
 
       if (claim?.acquired === true) {
         return {
@@ -1774,6 +2003,10 @@ async function cekejNaPrevzetiEditoru({
     );
   }
 
+  if (zruseniPozadovano) {
+    return await dokoncZruseniCekani699DCN(noteId, requestId, novaSessionId);
+  }
+
   /*
    * DŮLEŽITÝ RACE GUARD:
    * samotný timeout nesmí jen odejít. Původní zařízení může právě
@@ -1787,6 +2020,10 @@ async function cekejNaPrevzetiEditoru({
       requestId,
       novaSessionId
     );
+
+  if (zruseniPozadovano) {
+    return await dokoncZruseniCekani699DCN(noteId, requestId, novaSessionId);
+  }
 
   if (zruseni?.acquired === true) {
     return {
@@ -1819,6 +2056,10 @@ async function cekejNaPrevzetiEditoru({
       noteId
     );
 
+  if (zruseniPozadovano) {
+    return await dokoncZruseniCekani699DCN(noteId, requestId, novaSessionId);
+  }
+
   if (
     finalRow?.owner_device_id === ziskejDeviceIdEditoru() &&
     finalRow?.owner_session_id === novaSessionId
@@ -1833,6 +2074,13 @@ async function cekejNaPrevzetiEditoru({
     ok: false,
     reason: "timeout"
   };
+  } finally {
+    if (pwaZruseni) {
+      zrusit.removeEventListener("click", naZruseni);
+      zrusit.disabled = true;
+      zrusit.textContent = "Zrušit";
+    }
+  }
 }
 
 async function pripravOtevreniEditoru(noteId) {
@@ -1951,6 +2199,12 @@ async function pripravOtevreniEditoru(noteId) {
       return true;
     }
 
+    /* 699D-CN – pouze instalovaná Android PWA a pouze když starý dokument
+       už nedrží Web Lock. Při živém původním editoru běží běžné předání. */
+    if (await zkusObnovitUkoncenouPwaSession699DCN(noteId, novaSessionId)) {
+      return true;
+    }
+
     if (claim?.stale === true) {
       return await zkusNucenePrevzetiStalehoEditoru(
         noteId,
@@ -2043,6 +2297,21 @@ async function pripravOtevreniEditoru(noteId) {
       });
 
     if (prevzeti?.ok !== true) {
+      if (prevzeti?.reason === "cancelled") {
+        skryjEditorHandoffModal();
+        return false;
+      }
+
+      if (prevzeti?.reason === "cancel_unconfirmed" ||
+          prevzeti?.reason === "cancel_release_pending") {
+        skryjEditorHandoffModal();
+        await zobrazEditorHandoffInfo(
+          "Zrušení se ověřuje",
+          "Předání už nebude pokračovat v tomto okně. Server zatím nepotvrdil uvolnění relace; LubaNote to bezpečně zkontroluje při příštím online návratu."
+        );
+        return false;
+      }
+
       if (prevzeti?.reason === "timeout") {
         const nouzove =
           await cekejNaMoznostNucenehoPrevzeti(
@@ -2160,6 +2429,7 @@ async function uvolniEditorPoznamky(noteId) {
   zastavEditorHeartbeat();
   smazWebReloadRecoveryTicket();
   aktivniVzdalenyEditor = null;
+  uvolniPwaWebLock699DCN(session);
 
   const releaseSession = {
     noteId: session.noteId,
@@ -2263,6 +2533,7 @@ window.addEventListener(
   "pagehide",
   () => {
     ulozWebReloadRecoveryTicket();
+    ulozPwaRecoveryTicket699DCN();
   }
 );
 
