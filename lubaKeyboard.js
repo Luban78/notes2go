@@ -842,9 +842,10 @@
        Ostatní pole, název poznámky, běžný web v kartě a PC se nemění. */
     const chromeMajor = Number(String(navigator.userAgent || "").match(/(?:Chrome|Chromium)\/(\d+)/i)?.[1] || 0);
     const jeApk = document.body?.classList?.contains("nativeApp") === true;
+    /* 699D-CK – stejný Android standalone kontrakt jako selection bridge;
+       příznak pointer:coarse se může změnit i bez změny režimu PWA. */
     const jeAndroidPwa = !jeApk && /Android/i.test(String(navigator.userAgent || "")) &&
-      window.matchMedia?.("(display-mode: standalone)")?.matches === true &&
-      window.matchMedia?.("(pointer: coarse)")?.matches === true;
+      window.matchMedia?.("(display-mode: standalone)")?.matches === true;
     if ((jeApk || jeAndroidPwa) && chromeMajor >= 120 &&
         editor.matches?.(".ln-v2-editor[data-ln-v2-editor]")) {
       editor.setAttribute("contenteditable", "false");

@@ -93,6 +93,8 @@
      První tap a normální caret ponecháváme průchozí. */
   let v2ZacatekDotykuDvojtap = null;
   let v2PrimyDruhyTap = null;
+  let v2PwaPointerTap = null;
+  let v2PwaPointerZacatek = null;
 
   /* 691X – media/selection bridge guard.
    * The 691U image-vs-caret handlers call this guard on touchstart,
@@ -627,10 +629,17 @@
       }
     });
 
-    /* Nativní handle není DOM uzel. Než jej Android PWA převezme vlastním
-       výběrem, stále rezervujeme okolí obou známých endpointů Range. */
-    if (rozsah && !rozsah.collapsed && prekazky.length < 2) {
-      const body = ziskejV2SelectionHandleBody(rozsah);
+    /* 699D-CK – native Android/Chrome handle není DOM uzel. Rozšířené menu
+       dosud předávalo jen v2SelectionScroll.range; při stále nativním výběru
+       byl null a kolizní geometrie neviděla žádný úchyt. V tomto jediném
+       layout kroku proto použijeme také aktuální platný DOM Selection Range. */
+    const vyber = !rozsah && !v2SelectionScroll?.range && !v2SelectionMenuKurzor
+      ? window.getSelection?.() : null;
+    const nativniRange = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    const aktualniRange = rozsah || v2SelectionScroll?.range ||
+      (nativniRange && !nativniRange.collapsed && jeV2SelectionRozsah(nativniRange) ? nativniRange : null);
+    if (aktualniRange && !aktualniRange.collapsed && prekazky.length < 2) {
+      const body = ziskejV2SelectionHandleBody(aktualniRange);
       body.forEach((bod, index) => {
         if (!Number.isFinite(bod?.x) || !Number.isFinite(bod?.y)) return;
         prekazky.push({
@@ -2961,18 +2970,23 @@
 
   function jeAndroidApkSelectionScroll() {
     try {
-      /* 699D-CJ – instalovaná PWA běží v Chrome bez Capacitor bridge, přesto
-         používá stejný dotykový editor a LubaKeyboard jako APK. Dvojtap a
-         vlastní selection proto nesmí záviset na samotném Capacitoru. */
+      /* 699D-CK – pointer:coarse není spolehlivý identifikátor instalované
+         PWA (např. změna aktivního ukazatele). Standalone + Android stačí;
+         desktop je už bezpečně oddělen přes jeDesktopSelection. */
       return !jeDesktopSelection && (
         window.Capacitor?.getPlatform?.() === "android" ||
         (/Android/i.test(String(navigator.userAgent || "")) &&
-          window.matchMedia?.("(display-mode: standalone)")?.matches === true &&
-          window.matchMedia?.("(pointer: coarse)")?.matches === true)
+          window.matchMedia?.("(display-mode: standalone)")?.matches === true)
       );
     } catch (_error) {
       return false;
     }
+  }
+
+  function jeAndroidPwaSelectionScroll() {
+    return !jeDesktopSelection && /Android/i.test(String(navigator.userAgent || "")) &&
+      window.matchMedia?.("(display-mode: standalone)")?.matches === true &&
+      document.body?.classList?.contains("nativeApp") !== true;
   }
 
   const V2_SELECTION_SCROLL_HIGHLIGHT = "lubanote-selection-scroll";
@@ -4225,6 +4239,10 @@
       clearTimeout(stav.obnovTimer);
       stav.obnovTimer = null;
     }
+    if (stav?.menuObnovTimer) {
+      clearTimeout(stav.menuObnovTimer);
+      stav.menuObnovTimer = null;
+    }
     if (stav?.handleDrag) stav.handleDrag = null;
     skryjV2SelectionLupu();
     nastavV2CustomSelectionAktivni(stav?.editor, false);
@@ -4275,6 +4293,37 @@
     });
   }
 
+  /* 699D-CK – nativní výběr může být převeden na naše handles ještě během
+     krátkého cooldownu předchozího touch/scroll gesta. Původní jediný pokus
+     otevřít menu selhal a další selectionchange už nepřišel. Doběhnutí
+     cooldownu kontrolujeme pouze JEDNOU, se stejným platným Range a stavem;
+     MOVE, modal a aktivní handle drag nikdy nepřebíjíme. */
+  function zobrazV2MenuPoPrevzetiVyberu(stav, moznosti = {}) {
+    if (!stav || v2SelectionScroll !== stav || !stav.range || stav.handleDrag) return false;
+    if (zobrazV2SelectionMenuProOznaceni(stav.range, moznosti)) {
+      if (stav.menuObnovTimer) clearTimeout(stav.menuObnovTimer);
+      stav.menuObnovTimer = null;
+      return true;
+    }
+    if (stav.menuObnovTimer) {
+      clearTimeout(stav.menuObnovTimer);
+      stav.menuObnovTimer = null;
+    }
+    if (v2SelectionMenuNuceneSkryty || probihaSingleCaretDrag699DBD() || jeV2MoveInterakce() ||
+        performance.now() >= potlacV2SelectionMenuDo) return false;
+    const prodleva = Math.max(20, Math.ceil(potlacV2SelectionMenuDo - performance.now() + 25));
+    stav.menuObnovTimer = setTimeout(() => {
+      stav.menuObnovTimer = null;
+      if (!aktivni || v2SelectionScroll !== stav || !jeV2CustomSelectionRangePlatny(stav) ||
+          stav.handleDrag || v2SelectionMenuNuceneSkryty || probihaSingleCaretDrag699DBD() ||
+          jeV2MoveInterakce()) return;
+      if (!selectionMenu?.hidden && selectionMenu?.dataset?.lnV2Owner === "1" &&
+          v2SelectionMenuAktivni && !v2SelectionMenuKurzor) return;
+      zobrazV2SelectionMenuProOznaceni(stav.range, moznosti);
+    }, prodleva);
+    return false;
+  }
+
   function zobrazV2VizualniSelectionPoScrollu(stav, duvod = "settle", preferovanyKonec = null) {
     if (!stav || v2SelectionScroll !== stav || !aktivni || !stav.range || stav.range.collapsed) return false;
     if (stav.obnovTimer) {
@@ -4290,7 +4339,7 @@
     const explicitniStrana = preferovanyKonec === "start" ? "start" : (preferovanyKonec === "end" ? "end" : null);
     const strana = explicitniStrana || (stav.menuKotvaStrana === "start" || stav.menuKotvaStrana === "end" ? stav.menuKotvaStrana : null);
     const bodHandle = strana ? ziskejV2SelectionHandleBodProMenu(stav.range, strana) : null;
-    zobrazV2SelectionMenuProOznaceni(stav.range, {
+    zobrazV2MenuPoPrevzetiVyberu(stav, {
       bod: bodHandle,
       // 673G22 – po handle/multiscroll výběru ještě cca o 20 px výš.
       odsazeniNad: strana ? 32 : 12,
@@ -4427,7 +4476,7 @@
     try { vyber.removeAllRanges(); } catch (_error) {}
     nastavV2SelectionMenuNuceneSkryti(false);
     zobrazV2SelectionHandles(kopie);
-    zobrazV2SelectionMenuProOznaceni(kopie);
+    zobrazV2MenuPoPrevzetiVyberu(stav);
     zapisSelectionScrollDiag("G21_CUSTOM_READY", null, `reason=${duvod} top=${Math.round(editor.scrollTop || 0)}`);
     ohlasV2SelectionEngineStav({ engine: "CUSTOM" });
     return true;
@@ -4645,6 +4694,57 @@
     if (event.cancelable) event.preventDefault();
     zapisSelectionScrollDiag("683M_SECOND_TAP_GUARD", event, `x=${Math.round(aktualni.x)} y=${Math.round(aktualni.y)}`);
   }, { passive: false, capture: true });
+
+  /* 699D-CK – v instalované Android PWA může Chrome při druhém tapu
+     zrušit touch sekvenci (touchcancel) nebo nedoručit dblclick. Pointer
+     sekvence je nezávislá záloha pro skutečné DVA krátké tapy na text.
+     Nezasahuje do APK, longpress MOVE, obrázků, ovladačů ani scrollu.
+     Výběr provádíme až v RAF po touchend: pokud už to zvládla běžná cesta,
+     nic nepřepisujeme. */
+  document.addEventListener("pointerdown", (event) => {
+    if (!jeAndroidPwaSelectionScroll() || !aktivni || event.pointerType !== "touch" ||
+        event.isPrimary === false) return;
+    v2PwaPointerZacatek = null;
+    const editor = core()?.ziskejEditorElement?.();
+    if (!editor?.contains(event.target) ||
+        event.target.closest?.("button, figure, img, a[href], input, textarea, select, .noteInternalLink, .plannedTextLink, .ln-v2-odkaz, [data-v2-list-marker], [data-v2-list-toggle], [data-v2-todo-check]") ||
+        jeMediaObrazekPodDotykem(event) || jeV2MoveInterakce(event)) {
+      v2PwaPointerTap = null;
+      return;
+    }
+    v2PwaPointerZacatek = {
+      id: event.pointerId, editor, x: event.clientX, y: event.clientY,
+      cas: performance.now(), scroll: Number(editor.scrollTop || 0)
+    };
+  }, true);
+
+  document.addEventListener("pointerup", (event) => {
+    if (!jeAndroidPwaSelectionScroll() || event.pointerType !== "touch") return;
+    const prvniFaze = v2PwaPointerZacatek;
+    v2PwaPointerZacatek = null;
+    if (!aktivni || !prvniFaze || prvniFaze.id !== event.pointerId ||
+        performance.now() - prvniFaze.cas > 320 ||
+        Math.hypot(event.clientX - prvniFaze.x, event.clientY - prvniFaze.y) > 12 ||
+        Math.abs(Number(prvniFaze.editor.scrollTop || 0) - prvniFaze.scroll) > 3 ||
+        jeV2MoveInterakce(event)) {
+      v2PwaPointerTap = null;
+      return;
+    }
+    const aktualni = { editor: prvniFaze.editor, x: event.clientX, y: event.clientY, cas: performance.now() };
+    const predchozi = v2PwaPointerTap;
+    v2PwaPointerTap = aktualni;
+    if (!predchozi || predchozi.editor !== aktualni.editor ||
+        aktualni.cas - predchozi.cas > 380 ||
+        Math.hypot(aktualni.x - predchozi.x, aktualni.y - predchozi.y) > 34) return;
+    v2PwaPointerTap = null;
+    requestAnimationFrame(() => {
+      if (!aktivni || !aktualni.editor.isConnected || v2SelectionScroll?.range ||
+          v2SelectionMenuNuceneSkryty || jeV2MoveInterakce() || probihaSingleCaretDrag699DBD()) return;
+      aktivujV2SlovoZDoubleTap(aktualni.x, aktualni.y, "699D-CK-pwa-pointer-doubletap");
+    });
+  }, true);
+
+  document.addEventListener("pointercancel", () => { v2PwaPointerZacatek = null; }, true);
 
   /* 673G16 – po prvním scrollu drží výběr CSS Highlight a naše LubaNote handles.
      Běžný scroll zůstává compositorový. Vlastní handle drag má nově bezpečný
