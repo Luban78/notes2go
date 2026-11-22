@@ -4704,6 +4704,14 @@ window.LubaNoteSharedEditorHost = {
   zavriPoZtrateLocku:
     zavriSdilenyEditorPoZtrateLocku,
 
+  /* 699D-CO: pri ztrate lease nikdy nezavirat rozepsanou sdilenou
+   * poznamku. Otisk uz bere aktualni Core V2 model i titul/formatovani. */
+  maNeulozeneZmeny:
+    () => {
+      if (!aktivniSdilenaEditace) return false;
+      try { return bylEditorZmenen(); } catch (_) { return true; }
+    },
+
   aktualizujRevision:
     aktualizujRevisionSdilenehoEditoru,
 

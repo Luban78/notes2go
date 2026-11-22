@@ -3328,6 +3328,56 @@
     return null;
   }
 
+  /* 699D-CO: WebView muze pro konec DOM Range vratit caret az na prazdnem
+   * radku ZA poslednim oznacenym znakem. Najdeme krajni skutecne vybrany
+   * glyph, ale nemenime samotny Range ani modelovy obsah. Zpetne hledani
+   * je omezene na hranicni uzly, nikoliv na vsechny znaky poznamky. */
+  function ziskejV2VybranyKrajniGlyph(range, zacatek) {
+    const editor = core()?.ziskejEditorElement?.() || hostitel?.querySelector?.(".ln-v2-editor");
+    if (!editor) return null;
+    let uzel = zacatek ? range.startContainer : range.endContainer;
+    let offset = zacatek ? range.startOffset : range.endOffset;
+    for (let hloubka = 0; uzel && editor.contains(uzel) && hloubka < 28; hloubka++) {
+      const bod = ziskejV2TextovyBodProHandle(uzel, offset, zacatek);
+      const textovy = bod?.node;
+      if (textovy?.nodeType === Node.TEXT_NODE && textovy.nodeValue?.length) {
+        const hodnota = textovy.nodeValue;
+        const hranice = Math.max(0, Math.min(hodnota.length, bod.offset));
+        let i = zacatek ? hranice : hranice - 1;
+        for (let zkontrolovano = 0;
+          i >= 0 && i < hodnota.length && zkontrolovano < 64;
+          i += zacatek ? 1 : -1, zkontrolovano++) {
+          if (/[\r\n\u200b]/.test(hodnota[i])) continue;
+          try {
+            /* Nevybirat znak mimo oznaceny rozsah (napr. z vedlejsiho
+             * odstavce, ktery helper pouzil jen jako zalozni kandidat). */
+            if (range.comparePoint(textovy, i) !== 0 ||
+                range.comparePoint(textovy, i + 1) !== 0) continue;
+            const znak = document.createRange();
+            znak.setStart(textovy, i);
+            znak.setEnd(textovy, i + 1);
+            const rect = Array.from(znak.getClientRects?.() || [])
+              .find((r) => r.width > 0 && r.height > 0);
+            if (rect) return {
+              x: zacatek ? rect.left : rect.right,
+              y: rect.bottom,
+              hitY: (rect.top + rect.bottom) / 2,
+              height: rect.height
+            };
+          } catch (_) {}
+        }
+      }
+      if (uzel === editor) break;
+      const rodic = uzel.parentNode;
+      if (!rodic) break;
+      const index = Array.prototype.indexOf.call(rodic.childNodes, uzel);
+      if (index < 0) break;
+      offset = index + (zacatek ? 1 : 0);
+      uzel = rodic;
+    }
+    return null;
+  }
+
   function ziskejV2SelectionHandleBod(range, strana) {
     if (!range || range.collapsed) return null;
     try {
@@ -3343,7 +3393,19 @@
       caret.collapse(true);
       const rects = Array.from(caret.getClientRects?.() || []);
       const rect = rects.find((r) => Number.isFinite(r.left) && Number.isFinite(r.bottom) && r.height > 0);
-      if (rect) return { x: rect.left, y: rect.bottom, hitY: (rect.top + rect.bottom) / 2 };
+      const naHranici = uzel.nodeType === Node.ELEMENT_NODE ||
+        (uzel.nodeType === Node.TEXT_NODE &&
+          (offset === 0 || offset === (uzel.nodeValue?.length || 0)));
+      const glyph = (!rect || naHranici)
+        ? ziskejV2VybranyKrajniGlyph(range, zacatek) : null;
+      if (rect) {
+        /* Nezasahovat do normalniho caretu mezi pismeny. Posunout pouze
+         * koncovy handle, kdyz se WebView preklopil o cely vizualni radek. */
+        if (glyph && Math.abs((rect.top + rect.bottom) / 2 - glyph.hitY) >
+            Math.max(6, glyph.height * 0.65)) return glyph;
+        return { x: rect.left, y: rect.bottom, hitY: (rect.top + rect.bottom) / 2 };
+      }
+      if (glyph) return glyph;
 
       /* Fallback pro WebView bez collapsed rectu: pouzijeme jediný znak
          pripojeny k tomuto endpointu, ne obdelnik pres cely code blok. */
@@ -4528,6 +4590,29 @@
       prevedV2NativeSelectionNaVlastni(duvod);
     }, 90);
   }
+
+  /* 699D-CO: po Android longpressu umi Chromium vytvorit nativni handles,
+   * ale vynechat posledni selectionchange. Jako zaloha prevzit EXISTUJICI
+   * vyber po zvednuti prstu, nevyvolavat novy vyber, nemenit text a nechat
+   * desktop/bezny tap/ovladace/drag listek beze zmeny. */
+  document.addEventListener("pointerup", (event) => {
+    if (!jeAndroidApkSelectionScroll() || !aktivni || core()?.jeImeKompoziceAktivni?.() ||
+        event.pointerType !== "touch" || v2SelectionScroll?.range ||
+        jeV2MoveInterakce(event)) return;
+    const editor = core()?.ziskejEditorElement?.();
+    if (!editor?.contains(event.target) ||
+        event.target.closest?.("button, figure, img, a[href], input, textarea, select, [data-v2-list-marker], [data-v2-list-toggle], [data-v2-todo-check]")) return;
+    const vyber = window.getSelection?.();
+    const range = vyber?.rangeCount ? vyber.getRangeAt(0) : null;
+    if (!range || range.collapsed || !jeV2SelectionRozsah(range)) return;
+    setTimeout(() => {
+      if (!aktivni || v2SelectionScroll?.range || jeV2MoveInterakce() ||
+          core()?.jeImeKompoziceAktivni?.()) return;
+      if (prevedV2NativeSelectionNaVlastni("699D-CO-pointerup-fallback")) {
+        zapisBezpecnyVyber699DCM("CO_NATIVE_TO_CUSTOM");
+      }
+    }, 135);
+  }, true);
 
   function pripravV2DalsiScrollVizualnihoVyberu(stav, dotyk) {
     if (!stav || !stav.range || stav.range.collapsed) return false;

@@ -18,6 +18,7 @@
 
   let aktivniSession = null;
   let heartbeatTimer = null;
+  let probihaObnovaLease = null;
   let probihaUlozeni = false;
   let probihaOtevreni = false;
 
@@ -115,53 +116,83 @@
     heartbeatTimer = null;
   }
 
-  async function obnovLease() {
-    const session = aktivniSession;
-
-    if (!session || !navigator.onLine) {
-      return false;
+  /* 699D-CO: RPC chyba NENI dukaz ztraty zamku. Tri stavy: true = platny,
+   * false = server potvrdil cizi relaci, null = docasne nelze overit. */
+  async function obnovLease(session = aktivniSession) {
+    if (!session || !navigator.onLine) return null;
+    if (probihaObnovaLease?.session === session) {
+      return probihaObnovaLease.promise;
     }
+    const promise = (async () => {
+      try {
+        const klient = await zajistiSupabase();
+        if (!klient) return null;
+        const parametry = {
+          p_note_id: session.noteId,
+          p_device_id: session.deviceId,
+          p_session_id: session.sessionId,
+          p_lease_seconds: LEASE_SECONDS
+        };
+        const { data, error } = await klient.rpc(
+          "lubanote_refresh_shared_note_editor", parametry
+        );
+        if (error) return null;
+        if (data === true) return true;
+        if (data !== false) return null;
+        if (aktivniSession !== session) return null;
 
-    const klient = await zajistiSupabase();
-
-    if (!klient) {
-      return false;
-    }
-
-    const { data, error } = await klient.rpc(
-      "lubanote_refresh_shared_note_editor",
-      {
-        p_note_id: session.noteId,
-        p_device_id: session.deviceId,
-        p_session_id: session.sessionId,
-        p_lease_seconds: LEASE_SECONDS
+        /* Server umi stejnou session bezpecne claimnout. Nikdy nevolame
+         * force takeover, nemenime ID ani revizi (ochrana CAS pri save). */
+        const { data: claim, error: claimError } = await klient.rpc(
+          "lubanote_claim_shared_note_editor", parametry
+        );
+        if (claimError) {
+          return String(claimError.code || "") === "42501" ? false : null;
+        }
+        if (claim?.acquired === true) return true;
+        if (claim?.acquired === false) return false;
+        return null;
+      } catch (error) {
+        console.warn("Sdílený editor: dočasně nelze ověřit lock.", error);
+        return null;
       }
-    );
-
-    if (error || data !== true) {
-      return false;
+    })();
+    probihaObnovaLease = { session, promise };
+    try {
+      const vysledek = await promise;
+      if (vysledek === true && aktivniSession === session) {
+        session.lockZtracen = false;
+        if (!heartbeatTimer) spustHeartbeat();
+      }
+      return vysledek;
+    } finally {
+      if (probihaObnovaLease?.promise === promise) {
+        probihaObnovaLease = null;
+      }
     }
-
-    return true;
   }
 
-  async function zpracujZtratuLocku() {
-    if (!aktivniSession) {
+  async function zpracujZtratuLocku(session = aktivniSession) {
+    /* Opozdena odpoved stare relace nesmi zavrit novy editor. */
+    if (!session || aktivniSession !== session || session.lockZtracen) return;
+    zastavHeartbeat();
+    session.lockZtracen = true;
+    const host = window.LubaNoteSharedEditorHost;
+    let zmeneno = true;
+    try { zmeneno = host?.maNeulozeneZmeny?.() !== false; } catch (_) {}
+    if (zmeneno || probihaUlozeni) {
+      /* Rozpracovany E2E obsah nesmime pri ztrate lease zahodit. */
+      zobrazZpravu(
+        t("sharing.readOnlyTitle", "Sdílená poznámka"),
+        "Zámek sdíleného editoru se nepodařilo obnovit. Rozpracované změny zůstaly v editoru, ale zatím je nelze uložit. Můžeš je zkopírovat; další pokus o uložení zámek znovu bezpečně ověří."
+      );
       return;
     }
-
     aktivniSession = null;
-    zastavHeartbeat();
-
-    window.LubaNoteSharedEditorHost
-      ?.zavriPoZtrateLocku?.();
-
+    host?.zavriPoZtrateLocku?.();
     zobrazZpravu(
       t("sharing.readOnlyTitle", "Sdílená poznámka"),
-      t(
-        "sharing.sharedEditorLockLost",
-        "Editor lock už není platný. Sdílený editor byl bezpečně zavřen."
-      )
+      "Zámek sdíleného editoru už vlastní jiná relace nebo byl odebrán. Editor bez neuložených změn byl zavřen."
     );
   }
 
@@ -169,20 +200,22 @@
     zastavHeartbeat();
 
     heartbeatTimer = setInterval(async () => {
-      if (!aktivniSession) {
+      const session = aktivniSession;
+      if (!session) {
         zastavHeartbeat();
         return;
       }
 
-      if (!navigator.onLine) {
+      if (!navigator.onLine || document.visibilityState === "hidden" ||
+          probihaUlozeni || session.lockZtracen) {
         return;
       }
 
       try {
-        const ok = await obnovLease();
+        const ok = await obnovLease(session);
 
-        if (!ok) {
-          await zpracujZtratuLocku();
+        if (ok === false && aktivniSession === session) {
+          await zpracujZtratuLocku(session);
         }
       } catch (error) {
         console.warn(
@@ -1120,13 +1153,24 @@
       ) || (() => {});
 
     try {
-      const leaseOk = await obnovLease();
+      const leaseOk = await obnovLease(session);
 
-      if (!leaseOk) {
-        await zpracujZtratuLocku();
+      if (aktivniSession !== session) {
+        return { ok: false, reason: "shared_editor_session_changed" };
+      }
+      if (leaseOk !== true) {
+        if (leaseOk === false) {
+          await zpracujZtratuLocku(session);
+        } else if (moznosti?.tichyRezim !== true) {
+          zobrazZpravu(
+            t("sharing.readOnlyTitle", "Sdílená poznámka"),
+            "Nepodařilo se ověřit spojení se serverem. Rozpracované změny zůstaly v editoru. Zkus uložení znovu po obnovení sítě."
+          );
+        }
         return {
           ok: false,
-          reason: "shared_editor_lock_lost"
+          reason: leaseOk === false
+            ? "shared_editor_lock_lost" : "shared_editor_lock_unverified"
         };
       }
 
@@ -1360,19 +1404,19 @@
      */
   });
 
-  window.addEventListener("online", async () => {
-    if (!aktivniSession) {
-      return;
+  async function overLeasePoNavratu() {
+    const session = aktivniSession;
+    if (!session || session.lockZtracen || !navigator.onLine ||
+        document.visibilityState === "hidden") return;
+    const ok = await obnovLease(session);
+    if (ok === false && aktivniSession === session) {
+      await zpracujZtratuLocku(session);
     }
+  }
 
-    try {
-      const ok = await obnovLease();
-      if (!ok) {
-        await zpracujZtratuLocku();
-      }
-    } catch (_) {
-      // Další heartbeat rozhodne autoritativně.
-    }
+  window.addEventListener("online", () => { void overLeasePoNavratu(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void overLeasePoNavratu();
   });
 
   window.LubaNoteSharedEditor = {
