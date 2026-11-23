@@ -22,6 +22,17 @@
   let lastSyncState = 'unknown';
   let timer = null;
   let revisionBusy = false;
+  // 699D-CQ: The server and push payload contain only hashes and times.
+  // Keep the same anonymous pairs locally so a tap can find the decrypted
+  // reminder after a cold PWA launch, including AFTER the scheduled time.
+  const TAP_PARAM = 'lnPwaReminder';
+  const TAP_MESSAGE = 'LUBANOTE_PWA_REMINDER_TAP';
+  const TAP_MAP_PREFIX = 'lnPwaPushTapMap699DCQ:';
+  const TAP_MAX_AGE = 7 * 86400000;
+  let pendingTap = null;
+  let tapTimer = null;
+  let openingTap = false;
+  const openedTaps = new Set();
   const setHint = value => {hint.textContent = value;};
   const client = () => typeof supabaseClient !== 'undefined' ? supabaseClient : window.supabaseClient;
   const hex = bytes => Array.from(new Uint8Array(bytes), x=>x.toString(16).padStart(2,'0')).join('');
@@ -81,6 +92,93 @@
   async function hashKey(input) {
     return hex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(input))).slice(0,40);
   }
+  function storedTapRows(userId) {
+    try {
+      const raw = JSON.parse(localStorage.getItem(TAP_MAP_PREFIX+userId) || '[]');
+      return Array.isArray(raw) ? raw.filter(row =>
+        row && /^[a-f0-9]{40}$/.test(row.k) && Number.isSafeInteger(row.t) &&
+        row.t > Date.now()-TAP_MAX_AGE && row.t < Date.now()+366*86400000
+      ) : [];
+    } catch (_) {return [];}
+  }
+  function rememberTapRows(userId, jobs) {
+    try {
+      const rows = new Map();
+      for (const row of [...storedTapRows(userId),...jobs]) {
+        rows.set(row.k,{k:row.k,t:row.t});
+      }
+      // Keep recent fired reminders too: a freshly synchronized future-only
+      // schedule must not erase a notification the user has yet to tap.
+      const kept = [...rows.values()].sort((a,b)=>a.t-b.t).slice(-1000);
+      localStorage.setItem(TAP_MAP_PREFIX+userId,JSON.stringify(kept));
+    } catch (_) {/* Registration and delivery must not depend on storage quota. */}
+  }
+  function queueTap(delay = 400) {
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(()=>{void openPendingTap();},delay);
+  }
+  function receiveTap(key) {
+    if (!/^[a-f0-9]{40}$/.test(String(key || '')) || openedTaps.has(key)) return;
+    if (pendingTap?.key !== key) pendingTap = {key,started:Date.now()};
+    queueTap(100);
+  }
+  async function openPendingTap() {
+    const pending = pendingTap;
+    if (!pending || openingTap) return;
+    if (Date.now()-pending.started > 60000) {pendingTap = null;return;}
+    openingTap = true;
+    let opened = false;
+    try {
+      const sess = await session();
+      if (!sess?.user?.id || document.body.classList.contains('authPending') ||
+          typeof getReminderEntries !== 'function' ||
+          typeof getReminderEntry !== 'function' ||
+          typeof openReminderCenterEntry !== 'function') return;
+      const match = storedTapRows(sess.user.id).find(row=>row.k===pending.key);
+      if (!match) return;
+      const entries = getReminderEntries('all');
+      if (!Array.isArray(entries)) return;
+      for (const entry of entries) {
+        if (pendingTap !== pending || !entry?.reminder || !entry?.id ||
+            !['note','planned'].includes(entry.kind)) break;
+        const recurring = entry.sourceType === 'recurring-note';
+        const currentTime = new Date(entry.date).getTime();
+        if (!recurring && (!Number.isFinite(currentTime) ||
+            Math.abs(currentTime-match.t) > 60000)) continue;
+        // Recompute the anonymous key in the user's LOCAL decrypted data.
+        // Neither the SW nor the server receives a note or Planner ID.
+        const computed = await hashKey(`${entry.kind}:${String(entry.id)}:${match.t}`);
+        if (computed !== pending.key) continue;
+        const current = getReminderEntry(entry.kind,entry.id);
+        if (!current?.reminder || current.completed) break;
+        const options = recurring && typeof formatReminderLocalDateTime === 'function'
+          ? {dateOverride:formatReminderLocalDateTime(new Date(match.t))} : undefined;
+        opened = openReminderCenterEntry(current,options) === true;
+        break;
+      }
+    } catch (_) {/* Startup/auth/sync may still be completing. */}
+    finally {
+      openingTap = false;
+      if (opened && pendingTap === pending) {
+        openedTaps.add(pending.key);
+        pendingTap = null;
+      } else if (pendingTap === pending) queueTap(500);
+    }
+  }
+  navigator.serviceWorker?.addEventListener?.('message',event => {
+    if (event?.data?.type === TAP_MESSAGE) receiveTap(event.data.key);
+  });
+  // For a closed PWA, notificationclick opens this URL. Clear only our own
+  // parameter; preserve history.state used by the Android PWA Back handler.
+  try {
+    const url = new URL(location.href);
+    const key = url.searchParams.get(TAP_PARAM);
+    if (key) {
+      url.searchParams.delete(TAP_PARAM);
+      history.replaceState(history.state,'',url.href);
+      receiveTap(key);
+    }
+  } catch (_) {}
   function reminderDates() {
     if (typeof getReminderEntries !== 'function' || typeof loadTask !== 'function') return null;
     const notes = loadTask() || [];
@@ -135,6 +233,7 @@
       const deviceId = localDeviceId();
       if (!deviceId) return;
       const value = await invoke({action:'sync',deviceId,revision:revision(),jobs});
+      rememberTapRows(sess.user.id,jobs);
       setHint(`Aktivní: ${value.scheduled} naplánovaných připomínek v PWA.`);
     } catch (_) {setHint('Plán připomínek se neodeslal. Zkus obnovení synchronizace.');}
     finally {revisionBusy = false;}
@@ -147,7 +246,7 @@
     render();
     if (!supported) return;
     try {
-      registration = await navigator.serviceWorker.register('./luba-webpush-sw.js',{
+      registration = await navigator.serviceWorker.register('./luba-webpush-sw.js?v=699D-CQ-tap',{
         scope:'./',updateViaCache:'none'
       });
       await navigator.serviceWorker.ready;
@@ -206,7 +305,8 @@
   });
   window.addEventListener('lubanote:cloud-write-confirmed',()=>queueSync(1500));
   window.addEventListener('online',()=>queueSync(3000));
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden) queueSync(3000);});
-  window.addEventListener('pageshow',()=>queueSync(3500));
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden) {queueSync(3000);if(pendingTap) queueTap(100);}});
+  window.addEventListener('pageshow',()=>{queueSync(3500);if(pendingTap) queueTap(100);});
   setTimeout(()=>{void start();},700);
 })();
+
