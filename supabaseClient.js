@@ -2705,6 +2705,27 @@ async function overPrihlaseniOnline({
   }
 }
 
+/* 699D-CU: On standalone mobile PWA, the browser's "online" callback and
+ * delayed network recovery must join one auth verification. No APK/PC change.
+ * Existing ownership, access, provenance and E2E gates still run as before.
+ */
+let probihajiciPwaObnovaAuth699DCU = null;
+function jeInstalovanaMobilniPwa699DCU() {
+  return !window.Capacitor?.isNativePlatform?.() &&
+    (window.matchMedia?.('(display-mode: standalone)')?.matches ||
+      navigator.standalone === true) &&
+    (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+}
+function obnovPrihlaseniOnlinePwa699DCU() {
+  if (probihajiciPwaObnovaAuth699DCU) return probihajiciPwaObnovaAuth699DCU;
+  probihajiciPwaObnovaAuth699DCU = Promise.resolve()
+    .then(()=>overPrihlaseniOnline({zobrazitLoginPriNeuspechu:false}))
+    .catch(()=>false)
+    .finally(()=>{probihajiciPwaObnovaAuth699DCU=null;});
+  return probihajiciPwaObnovaAuth699DCU;
+}
+
 async function dokonciBackendSessionHandoffPokudJe() {
   let handoff = null;
   try {
@@ -3702,6 +3723,9 @@ window.LubaNoteSupabase = {
   nactiZmenyStudijnihoSlovniku660,
   ulozZmenyStudijnihoSlovniku660,
   pripravClient: pripravSupabaseClient,
+  /* 699D-CU: Opt-in recovery for installed PWA only. Uses the existing
+     account, ownership, provenance and E2E gates unchanged. */
+  obnovPrihlaseniPoNavratuPwa: obnovPrihlaseniOnlinePwa699DCU,
   jePripraven: () => Boolean(supabaseClient),
   maPredchoziPrihlaseni:
     existujePredchoziPrihlaseni,
@@ -3728,9 +3752,13 @@ window.addEventListener("online", () => {
    * Když se internet vrátí po offline startu,
    * načteme Supabase a obnovíme session bez restartu aplikace.
    */
-  overPrihlaseniOnline({
-    zobrazitLoginPriNeuspechu: false
-  });
+  if (jeInstalovanaMobilniPwa699DCU()) {
+    void obnovPrihlaseniOnlinePwa699DCU();
+  } else {
+    overPrihlaseniOnline({
+      zobrazitLoginPriNeuspechu: false
+    });
+  }
 });
 
 async function spustAuthBootstrap679F() {

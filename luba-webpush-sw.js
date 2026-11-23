@@ -1,4 +1,4 @@
-/* 699D-CT: One service worker for Web Push AND offline Android/iOS PWA shell.
+/* 699D-CU: One service worker for Web Push AND offline Android/iOS PWA shell.
    Cache contains public static app files only. E2E data, API, auth, storage,
    uploaded media and user responses are never added to Cache Storage. */
 const TAP_POLL = 'LUBANOTE_PWA_REMINDER_POLL';
@@ -9,7 +9,7 @@ const TAP_DB = 'lubanote-pwa-notification-tap-699DCR';
 const TAP_LIFETIME_MS = 15 * 60 * 1000;
 const SHELL_WARM = 'LUBANOTE_PWA_SHELL_WARM_699DCT';
 const SHELL_STATUS = 'LUBANOTE_PWA_SHELL_STATUS_699DCT';
-const SHELL_CACHE = 'lubanote-pwa-app-shell-699DCT';
+const SHELL_CACHE = 'lubanote-pwa-app-shell-699DCU';
 const SHELL_CACHE_PREFIX = 'lubanote-pwa-app-shell-';
 const SHELL_ROOT = new URL(self.registration.scope);
 let memoryTap = null;
@@ -49,7 +49,19 @@ function safeShellAsset(value) {
 
 async function cachedShellResponse(request) {
   const cache = await caches.open(SHELL_CACHE);
-  return cache.match(request,{ignoreSearch:true});
+  const hit = await cache.match(request,{ignoreSearch:true});
+  if (hit) return hit;
+  // 699D-CU: A new SW may activate seconds before its ~150 assets finish
+  // warming. Until then, preserve the previous complete PUBLIC shell as an
+  // offline fallback. It is removed only after the new shell is complete.
+  const oldCaches = (await caches.keys()).filter(name =>
+    name !== SHELL_CACHE && name.startsWith(SHELL_CACHE_PREFIX)).reverse();
+  for (const name of oldCaches) {
+    const previous = await caches.open(name);
+    const saved = await previous.match(request,{ignoreSearch:true});
+    if (saved) return saved;
+  }
+  return null;
 }
 
 async function navigateWithOfflineFallback(request) {
@@ -64,7 +76,7 @@ async function navigateWithOfflineFallback(request) {
     }
     return response;
   } catch (_) {
-    const saved = await cache.match(SHELL_ROOT.href);
+    const saved = await cachedShellResponse(SHELL_ROOT.href);
     return saved || Response.error();
   }
 }
@@ -80,7 +92,7 @@ async function staticAssetWithOfflineFallback(request) {
     }
     return response;
   } catch (_) {
-    return (await cache.match(request,{ignoreSearch:true})) || Response.error();
+    return (await cachedShellResponse(request)) || Response.error();
   }
 }
 
@@ -107,6 +119,7 @@ async function warmAppShell(urls,source) {
   const cache = await caches.open(SHELL_CACHE);
   let cached = 0;
   let missing = 0;
+  let fallback = 0;
   // Bounded parallelism: avoid starving sync and push while warming ~150 files.
   for (let i=0;i<files.length;i+=8) {
     const batch = await Promise.all(files.slice(i,i+8).map(async url => {
@@ -114,6 +127,13 @@ async function warmAppShell(urls,source) {
         // Most files were already cached by normal online page loads.
         // Do not re-download the whole app on every foreground transition.
         if (await cache.match(url)) return true;
+        // 699D-CU: These four resources deliberately get a fresh timestamp
+        // query on every launch. Offline, their already saved file is valid;
+        // a different ?v must not be reported as a missing app resource.
+        const path = new URL(url).pathname.slice(SHELL_ROOT.pathname.length);
+        if (/^(?:build-version\.js|debug(?:Mobile|Tablet|Desktop)Generated\.css)$/.test(path) &&
+            /^\?v=\d{10,}$/.test(new URL(url).search) &&
+            await cache.match(url,{ignoreSearch:true})) return 'fallback';
         const response = await fetch(url,{cache:'reload',credentials:'same-origin'});
         const isHtml = /text\/html/i.test(response.headers.get('content-type') || '');
         if (!response.ok || response.type !== 'basic' ||
@@ -122,7 +142,10 @@ async function warmAppShell(urls,source) {
         return true;
       } catch (_) {return false;}
     }));
-    for (const ok of batch) {if (ok) cached++;else missing++;}
+    for (const ok of batch) {
+      if (ok) cached++; else missing++;
+      if (ok === 'fallback') fallback++;
+    }
   }
   const ready = files.length >= 50 && missing === 0;
   if (ready) {
@@ -132,7 +155,7 @@ async function warmAppShell(urls,source) {
         await caches.delete(name);
     }
   }
-  try {source?.postMessage({type:SHELL_STATUS,ready,cached,missing});} catch (_) {}
+  try {source?.postMessage({type:SHELL_STATUS,ready,cached,missing,fallback});} catch (_) {}
 }
 
 function tapDb(mode, run) {

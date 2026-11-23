@@ -358,7 +358,7 @@
     render();
     if (!supported) return;
     try {
-      registration = await navigator.serviceWorker.register('./luba-webpush-sw.js?v=699D-CT-offline-shell',{
+      registration = await navigator.serviceWorker.register('./luba-webpush-sw.js?v=699D-CU-pwa-reconnect',{
         scope:'./',updateViaCache:'none'
       });
       traceTap('WORKER_REGISTERED');
