@@ -29,23 +29,75 @@
   const TAP_MESSAGE = 'LUBANOTE_PWA_REMINDER_TAP';
   const TAP_POLL = 'LUBANOTE_PWA_REMINDER_POLL';
   const TAP_ACK = 'LUBANOTE_PWA_REMINDER_ACK';
+  const TAP_STATUS = 'LUBANOTE_PWA_REMINDER_STATUS_699DCS';
   const TAP_MAP_PREFIX = 'lnPwaPushTapMap699DCQ:';
   const TAP_MAX_AGE = 7 * 86400000;
+  const TAP_DIAG_KEY = 'lnPwaPushTapDiag699DCS';
+  const TAP_DIAG_LIMIT = 70;
+  const TAP_DIAG_STAGES = new Set([
+    'CLIENT_READY','WORKER_REGISTERED','WORKER_REGISTER_FAILED',
+    'POLL_SENT','POLL_NO_WORKER','POLL_FAILED','POLL_NO_REPLY',
+    'WORKER_CS_EMPTY','WORKER_CS_PENDING','TAP_FROM_MESSAGE',
+    'TAP_FROM_URL','TAP_INVALID','TAP_RECEIVED','TAP_ALREADY_OPENED',
+    'WAIT_SESSION','WAIT_AUTH','WAIT_REMINDER_API','WAIT_ENTRIES',
+    'LOCAL_MAP_FOUND','LOCAL_MAP_MISSING','REMINDERS_EMPTY',
+    'REMINDER_MATCHED','REMINDER_NOT_MATCHED','REMINDER_NOT_ACTIVE',
+    'MODAL_OPENED','MODAL_NOT_OPENED','OPEN_EXCEPTION','TAP_TIMEOUT',
+    'TAP_ACK_SENT'
+  ]);
   let pendingTap = null;
   let tapTimer = null;
   let openingTap = false;
+  let pollSequence = 0;
   const openedTaps = new Set();
   const setHint = value => {hint.textContent = value;};
+  function safeTapDiagRows() {
+    try {
+      const data = JSON.parse(localStorage.getItem(TAP_DIAG_KEY) || '[]');
+      return Array.isArray(data) ? data.filter(row => row &&
+        Number.isSafeInteger(row.at) && row.at > Date.now()-7*86400000 &&
+        row.at < Date.now()+60000 && TAP_DIAG_STAGES.has(row.stage)
+      ).slice(-TAP_DIAG_LIMIT) : [];
+    } catch (_) {return [];}
+  }
   const traceTap = stage => {
-    try {window.LubaNoteStartupDiag?.zapis?.('PWA-TAP','699D-CR '+stage);} catch (_) {}
+    if (!TAP_DIAG_STAGES.has(stage)) return;
+    try {
+      const rows = safeTapDiagRows();
+      rows.push({at:Date.now(),stage});
+      localStorage.setItem(TAP_DIAG_KEY,JSON.stringify(rows.slice(-TAP_DIAG_LIMIT)));
+    } catch (_) {}
+    try {window.LubaNoteStartupDiag?.zapis?.('PWA-TAP','699D-CS '+stage);} catch (_) {}
   };
+  // Only fixed event codes and timestamps. No account/note IDs, title, body,
+  // opaque notification hash, token, URL, or reminder date in the report.
+  window.LubaNotePwaTapDiagnostics699DCS = Object.freeze({
+    report() {
+      const rows = safeTapDiagRows();
+      return ['--- PWA KLEPNUTI NA OZNAMENI 699D-CS ---',
+        'Rezim: samostatna Android PWA; pouze stavy predani, bez soukromych dat.',
+        ...rows.map(row=>`${new Date(row.at).toISOString()} | ${row.stage}`),
+        '--- KONEC PWA KLEPNUTI ---'].join('\n');
+    }
+  });
   function sendToTapWorker(type,key = undefined) {
     try {
       const worker = registration?.active || navigator.serviceWorker?.controller;
-      if (worker) worker.postMessage(key ? {type,key} : {type});
-    } catch (_) {}
+      if (!worker) return false;
+      worker.postMessage(key ? {type,key} : {type});
+      return true;
+    } catch (_) {return false;}
   }
-  const pollTapWorker = () => sendToTapWorker(TAP_POLL);
+  function pollTapWorker() {
+    const sequence = ++pollSequence;
+    if (!sendToTapWorker(TAP_POLL)) {
+      traceTap('POLL_NO_WORKER');
+      return;
+    }
+    traceTap('POLL_SENT');
+    setTimeout(()=>{if (pollSequence === sequence) traceTap('POLL_NO_REPLY');},6000);
+  }
+  traceTap('CLIENT_READY');
   const client = () => typeof supabaseClient !== 'undefined' ? supabaseClient : window.supabaseClient;
   const hex = bytes => Array.from(new Uint8Array(bytes), x=>x.toString(16).padStart(2,'0')).join('');
   function bytesOf(base64url) {
@@ -130,18 +182,29 @@
     tapTimer = setTimeout(()=>{void openPendingTap();},delay);
   }
   function receiveTap(key) {
-    if (!/^[a-f0-9]{40}$/.test(String(key || ''))) return;
-    if (openedTaps.has(key)) {sendToTapWorker(TAP_ACK,key);return;}
-    traceTap('RECEIVED');
-    if (pendingTap?.key !== key) pendingTap = {key,started:Date.now()};
+    if (!/^[a-f0-9]{40}$/.test(String(key || ''))) {
+      traceTap('TAP_INVALID');return;
+    }
+    if (openedTaps.has(key)) {
+      traceTap('TAP_ALREADY_OPENED');
+      sendToTapWorker(TAP_ACK,key);return;
+    }
+    traceTap('TAP_RECEIVED');
+    if (pendingTap?.key !== key) pendingTap = {key,started:Date.now(),seen:new Set()};
     queueTap(100);
+  }
+  function tracePending(pending, stage) {
+    if (!pending.seen.has(stage)) {
+      pending.seen.add(stage);
+      traceTap(stage);
+    }
   }
   async function openPendingTap() {
     const pending = pendingTap;
     if (!pending || openingTap) return;
     if (Date.now()-pending.started > 60000) {
       pendingTap = null;
-      traceTap('NO_MATCH_TIMEOUT');
+      tracePending(pending,'TAP_TIMEOUT');
       setHint('Klepnutí na PWA oznámení: nepodařilo se dohledat termín.');
       return;
     }
@@ -149,13 +212,21 @@
     let opened = false;
     try {
       const sess = await session();
-      if (!sess?.user?.id || document.body.classList.contains('authPending') ||
-          typeof getReminderEntries !== 'function' ||
+      if (!sess?.user?.id) {tracePending(pending,'WAIT_SESSION');return;}
+      if (document.body.classList.contains('authPending')) {
+        tracePending(pending,'WAIT_AUTH');return;
+      }
+      if (typeof getReminderEntries !== 'function' ||
           typeof getReminderEntry !== 'function' ||
-          typeof openReminderCenterEntry !== 'function') return;
+          typeof openReminderCenterEntry !== 'function') {
+        tracePending(pending,'WAIT_REMINDER_API');return;
+      }
       const match = storedTapRows(sess.user.id).find(row=>row.k===pending.key);
+      tracePending(pending,match?'LOCAL_MAP_FOUND':'LOCAL_MAP_MISSING');
       const entries = getReminderEntries('all');
-      if (!Array.isArray(entries)) return;
+      if (!Array.isArray(entries)) {tracePending(pending,'WAIT_ENTRIES');return;}
+      if (!entries.length) tracePending(pending,'REMINDERS_EMPTY');
+      let found = false;
       for (const entry of entries) {
         if (pendingTap !== pending || !entry?.reminder || !entry?.id ||
             !['note','planned'].includes(entry.kind)) break;
@@ -171,26 +242,39 @@
         // Neither the SW nor the server receives a note or Planner ID.
         const computed = await hashKey(`${entry.kind}:${String(entry.id)}:${timestamp}`);
         if (computed !== pending.key) continue;
+        found = true;
+        tracePending(pending,'REMINDER_MATCHED');
         const current = getReminderEntry(entry.kind,entry.id);
-        if (!current?.reminder || current.completed) break;
+        if (!current?.reminder || current.completed) {
+          tracePending(pending,'REMINDER_NOT_ACTIVE');break;
+        }
         const options = recurring && typeof formatReminderLocalDateTime === 'function'
           ? {dateOverride:formatReminderLocalDateTime(new Date(timestamp))} : undefined;
         opened = openReminderCenterEntry(current,options) === true;
-        traceTap(opened?'MODAL_OPENED':'MODAL_DEFERRED');
+        tracePending(pending,opened?'MODAL_OPENED':'MODAL_NOT_OPENED');
         break;
       }
-    } catch (_) {/* Startup/auth/sync may still be completing. */}
+      if (!found && entries.length) tracePending(pending,'REMINDER_NOT_MATCHED');
+    } catch (_) {tracePending(pending,'OPEN_EXCEPTION');}
     finally {
       openingTap = false;
       if (opened && pendingTap === pending) {
         openedTaps.add(pending.key);
         sendToTapWorker(TAP_ACK,pending.key);
+        traceTap('TAP_ACK_SENT');
         pendingTap = null;
       } else if (pendingTap === pending) queueTap(500);
     }
   }
   navigator.serviceWorker?.addEventListener?.('message',event => {
-    if (event?.data?.type === TAP_MESSAGE) receiveTap(event.data.key);
+    if (event?.data?.type === TAP_STATUS && event.data.revision === '699D-CS') {
+      ++pollSequence;
+      traceTap(event.data.pending?'WORKER_CS_PENDING':'WORKER_CS_EMPTY');
+    }
+    if (event?.data?.type === TAP_MESSAGE) {
+      traceTap('TAP_FROM_MESSAGE');
+      receiveTap(event.data.key);
+    }
   });
   navigator.serviceWorker?.addEventListener?.('controllerchange',() => {
     setTimeout(pollTapWorker,150);
@@ -201,6 +285,7 @@
     const url = new URL(location.href);
     const key = url.searchParams.get(TAP_PARAM);
     if (key) {
+      traceTap('TAP_FROM_URL');
       url.searchParams.delete(TAP_PARAM);
       history.replaceState(history.state,'',url.href);
       receiveTap(key);
@@ -273,9 +358,10 @@
     render();
     if (!supported) return;
     try {
-      registration = await navigator.serviceWorker.register('./luba-webpush-sw.js?v=699D-CR-tap',{
+      registration = await navigator.serviceWorker.register('./luba-webpush-sw.js?v=699D-CS-tap-diag',{
         scope:'./',updateViaCache:'none'
       });
+      traceTap('WORKER_REGISTERED');
       await navigator.serviceWorker.ready;
       pollTapWorker();
       const current = await registration.pushManager.getSubscription();
@@ -295,7 +381,10 @@
         setHint('Zapnutím dostaneš připomínky i při zavřené PWA.');
       }
       await config();
-    } catch (_) {setHint('Nepodařilo se připravit službu oznámení PWA.');}
+    } catch (_) {
+      traceTap('WORKER_REGISTER_FAILED');
+      setHint('Nepodařilo se připravit službu oznámení PWA.');
+    }
     finally {render();}
   }
   button.addEventListener('click',async () => {

@@ -1,8 +1,9 @@
-/* 699D-CR: Android installed PWA push and reliable notification tap handoff.
+/* 699D-CS: Android installed PWA push, plus anonymous tap-pipeline diagnostics.
    NO fetch/cache handling; APK/PC notifications and offline strategy unchanged. */
 const TAP_POLL = 'LUBANOTE_PWA_REMINDER_POLL';
 const TAP_ACK = 'LUBANOTE_PWA_REMINDER_ACK';
 const TAP_MESSAGE = 'LUBANOTE_PWA_REMINDER_TAP';
+const TAP_STATUS = 'LUBANOTE_PWA_REMINDER_STATUS_699DCS';
 const TAP_DB = 'lubanote-pwa-notification-tap-699DCR';
 const TAP_LIFETIME_MS = 15 * 60 * 1000;
 let memoryTap = null;
@@ -67,6 +68,11 @@ self.addEventListener('message',event => {
   if (type === TAP_POLL) {
     event.waitUntil((async () => {
       const key = await readTap();
+      try {
+        // The PWA can distinguish an old/missing SW from an empty click queue.
+        // Neither the key nor any note data is present in this status message.
+        event.source.postMessage({type:TAP_STATUS,revision:'699D-CS',pending:!!key});
+      } catch (_) {/* Diagnostic-only reply; keep the existing tap handoff. */}
       if (key) event.source.postMessage({type:TAP_MESSAGE,key});
     })());
   } else if (type === TAP_ACK && /^[a-f0-9]{40}$/.test(event.data?.key || '')) {

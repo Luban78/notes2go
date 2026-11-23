@@ -488,7 +488,15 @@
   }
 
   async function kompletniReport699DAR() {
-    return report() + '\n--- ANDROID ALARM DIAGNOSTIKA 699D-AR ---\n' +
+    let pwaTapReport = '';
+    try {
+      // Present only in Android standalone PWA. APK and PC output unchanged.
+      const pwaDiag = window.LubaNotePwaTapDiagnostics699DCS;
+      if (typeof pwaDiag?.report === 'function') {
+        pwaTapReport = '\n' + pwaDiag.report();
+      }
+    } catch (_) {pwaTapReport = '\nPWA diagnostiku se nepodarilo nacist.';}
+    return report() + pwaTapReport + '\n--- ANDROID ALARM DIAGNOSTIKA 699D-AR ---\n' +
       await alarmReport699DAR() + '\n--- KONEC ALARM DIAGNOSTIKY ---' +
       '\n--- ANDROID NOTIFICATION CHANNEL 699D-AT ---\n' +
       await channelReport699DAT() + '\n--- KONEC NOTIFICATION CHANNEL ---' +
