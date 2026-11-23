@@ -1,17 +1,139 @@
-/* 699D-CS: Android installed PWA push, plus anonymous tap-pipeline diagnostics.
-   NO fetch/cache handling; APK/PC notifications and offline strategy unchanged. */
+/* 699D-CT: One service worker for Web Push AND offline Android/iOS PWA shell.
+   Cache contains public static app files only. E2E data, API, auth, storage,
+   uploaded media and user responses are never added to Cache Storage. */
 const TAP_POLL = 'LUBANOTE_PWA_REMINDER_POLL';
 const TAP_ACK = 'LUBANOTE_PWA_REMINDER_ACK';
 const TAP_MESSAGE = 'LUBANOTE_PWA_REMINDER_TAP';
 const TAP_STATUS = 'LUBANOTE_PWA_REMINDER_STATUS_699DCS';
 const TAP_DB = 'lubanote-pwa-notification-tap-699DCR';
 const TAP_LIFETIME_MS = 15 * 60 * 1000;
+const SHELL_WARM = 'LUBANOTE_PWA_SHELL_WARM_699DCT';
+const SHELL_STATUS = 'LUBANOTE_PWA_SHELL_STATUS_699DCT';
+const SHELL_CACHE = 'lubanote-pwa-app-shell-699DCT';
+const SHELL_CACHE_PREFIX = 'lubanote-pwa-app-shell-';
+const SHELL_ROOT = new URL(self.registration.scope);
 let memoryTap = null;
 
-// The previous version can otherwise remain active indefinitely while PWA
-// windows exist, so its old notificationclick handler keeps opening only home.
-self.addEventListener('install', event => event.waitUntil(self.skipWaiting()));
+// The shell must be cached BEFORE a new SW can replace working notifications.
+// A failed/offline install keeps the previous SW active and unchanged.
+self.addEventListener('install', event => event.waitUntil((async () => {
+  const cache = await caches.open(SHELL_CACHE);
+  const response = await fetch(SHELL_ROOT.href,{cache:'reload',credentials:'same-origin'});
+  if (!response.ok || !/text\/html/i.test(response.headers.get('content-type') || ''))
+    throw new Error('PWA_SHELL_INSTALL_UNAVAILABLE');
+  await cache.put(SHELL_ROOT.href,response);
+  await self.skipWaiting();
+})()));
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+
+function safeShellAsset(value) {
+  try {
+    const url = new URL(value,SHELL_ROOT);
+    if (url.origin !== SHELL_ROOT.origin ||
+        !url.pathname.startsWith(SHELL_ROOT.pathname)) return null;
+    const path = url.pathname.slice(SHELL_ROOT.pathname.length);
+    if (!path || path.startsWith('.') || path.includes('..') ||
+        /^(?:api|auth|rest|storage|functions|rpc|user|uploads)\//i.test(path))
+      return null;
+    const extension = path.split('.').at(-1)?.toLowerCase();
+    if (!['js','css','woff','woff2','svg','png','ico','webmanifest'].includes(extension) &&
+        path !== 'index.html')
+      return null;
+    // User images are not app-shell assets, even when served on our origin.
+    if (['svg','png','ico'].includes(extension) &&
+        !/^(?:icons|assets|images\/ui)\//i.test(path)) return null;
+    if (url.search && !/^\?v=[a-zA-Z0-9_.-]{1,140}$/.test(url.search)) return null;
+    return url.href;
+  } catch (_) {return null;}
+}
+
+async function cachedShellResponse(request) {
+  const cache = await caches.open(SHELL_CACHE);
+  return cache.match(request,{ignoreSearch:true});
+}
+
+async function navigateWithOfflineFallback(request) {
+  const cache = await caches.open(SHELL_CACHE);
+  try {
+    const response = await fetch(request);
+    if (response.ok && response.type === 'basic') {
+      const url = new URL(request.url);
+      if ((url.pathname === SHELL_ROOT.pathname ||
+           url.pathname === SHELL_ROOT.pathname+'index.html') && !url.search)
+        await cache.put(SHELL_ROOT.href,response.clone());
+    }
+    return response;
+  } catch (_) {
+    const saved = await cache.match(SHELL_ROOT.href);
+    return saved || Response.error();
+  }
+}
+
+async function staticAssetWithOfflineFallback(request) {
+  const cache = await caches.open(SHELL_CACHE);
+  try {
+    const response = await fetch(request);
+    if (response.ok && response.type === 'basic' &&
+        !/text\/html/i.test(response.headers.get('content-type') || '')) {
+      // Cache failures (quota / private browsing) must never prevent loading.
+      try {await cache.put(request,response.clone());} catch (_) {}
+    }
+    return response;
+  } catch (_) {
+    return (await cache.match(request,{ignoreSearch:true})) || Response.error();
+  }
+}
+
+// Same-origin public shell only. All API / auth / sync / media requests go to
+// the network or the application's existing local data store unmodified.
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== SHELL_ROOT.origin ||
+      !url.pathname.startsWith(SHELL_ROOT.pathname)) return;
+  if (request.mode === 'navigate') {
+    event.respondWith(navigateWithOfflineFallback(request));
+    return;
+  }
+  if (!['script','style','font','image','manifest'].includes(request.destination) ||
+      !safeShellAsset(request.url)) return;
+  event.respondWith(staticAssetWithOfflineFallback(request));
+});
+
+async function warmAppShell(urls,source) {
+  const files = [...new Set((Array.isArray(urls) ? urls : [])
+    .slice(0,240).map(safeShellAsset).filter(Boolean))];
+  const cache = await caches.open(SHELL_CACHE);
+  let cached = 0;
+  let missing = 0;
+  // Bounded parallelism: avoid starving sync and push while warming ~150 files.
+  for (let i=0;i<files.length;i+=8) {
+    const batch = await Promise.all(files.slice(i,i+8).map(async url => {
+      try {
+        // Most files were already cached by normal online page loads.
+        // Do not re-download the whole app on every foreground transition.
+        if (await cache.match(url)) return true;
+        const response = await fetch(url,{cache:'reload',credentials:'same-origin'});
+        const isHtml = /text\/html/i.test(response.headers.get('content-type') || '');
+        if (!response.ok || response.type !== 'basic' ||
+            (isHtml && !url.split('?')[0].endsWith('/index.html'))) return false;
+        await cache.put(url,response);
+        return true;
+      } catch (_) {return false;}
+    }));
+    for (const ok of batch) {if (ok) cached++;else missing++;}
+  }
+  const ready = files.length >= 50 && missing === 0;
+  if (ready) {
+    // Only our old PUBLIC shell caches; never app data, media or worker tap DB.
+    for (const name of await caches.keys()) {
+      if (name !== SHELL_CACHE && name.startsWith(SHELL_CACHE_PREFIX))
+        await caches.delete(name);
+    }
+  }
+  try {source?.postMessage({type:SHELL_STATUS,ready,cached,missing});} catch (_) {}
+}
 
 function tapDb(mode, run) {
   return new Promise((resolve,reject) => {
@@ -65,7 +187,9 @@ async function acknowledgeTap(key) {
 self.addEventListener('message',event => {
   if (!event.source?.url?.startsWith(self.registration.scope)) return;
   const type = event.data?.type;
-  if (type === TAP_POLL) {
+  if (type === SHELL_WARM) {
+    event.waitUntil(warmAppShell(event.data?.urls,event.source));
+  } else if (type === TAP_POLL) {
     event.waitUntil((async () => {
       const key = await readTap();
       try {
