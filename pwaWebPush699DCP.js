@@ -27,6 +27,8 @@
   // reminder after a cold PWA launch, including AFTER the scheduled time.
   const TAP_PARAM = 'lnPwaReminder';
   const TAP_MESSAGE = 'LUBANOTE_PWA_REMINDER_TAP';
+  const TAP_POLL = 'LUBANOTE_PWA_REMINDER_POLL';
+  const TAP_ACK = 'LUBANOTE_PWA_REMINDER_ACK';
   const TAP_MAP_PREFIX = 'lnPwaPushTapMap699DCQ:';
   const TAP_MAX_AGE = 7 * 86400000;
   let pendingTap = null;
@@ -34,6 +36,16 @@
   let openingTap = false;
   const openedTaps = new Set();
   const setHint = value => {hint.textContent = value;};
+  const traceTap = stage => {
+    try {window.LubaNoteStartupDiag?.zapis?.('PWA-TAP','699D-CR '+stage);} catch (_) {}
+  };
+  function sendToTapWorker(type,key = undefined) {
+    try {
+      const worker = registration?.active || navigator.serviceWorker?.controller;
+      if (worker) worker.postMessage(key ? {type,key} : {type});
+    } catch (_) {}
+  }
+  const pollTapWorker = () => sendToTapWorker(TAP_POLL);
   const client = () => typeof supabaseClient !== 'undefined' ? supabaseClient : window.supabaseClient;
   const hex = bytes => Array.from(new Uint8Array(bytes), x=>x.toString(16).padStart(2,'0')).join('');
   function bytesOf(base64url) {
@@ -118,14 +130,21 @@
     tapTimer = setTimeout(()=>{void openPendingTap();},delay);
   }
   function receiveTap(key) {
-    if (!/^[a-f0-9]{40}$/.test(String(key || '')) || openedTaps.has(key)) return;
+    if (!/^[a-f0-9]{40}$/.test(String(key || ''))) return;
+    if (openedTaps.has(key)) {sendToTapWorker(TAP_ACK,key);return;}
+    traceTap('RECEIVED');
     if (pendingTap?.key !== key) pendingTap = {key,started:Date.now()};
     queueTap(100);
   }
   async function openPendingTap() {
     const pending = pendingTap;
     if (!pending || openingTap) return;
-    if (Date.now()-pending.started > 60000) {pendingTap = null;return;}
+    if (Date.now()-pending.started > 60000) {
+      pendingTap = null;
+      traceTap('NO_MATCH_TIMEOUT');
+      setHint('Klepnutí na PWA oznámení: nepodařilo se dohledat termín.');
+      return;
+    }
     openingTap = true;
     let opened = false;
     try {
@@ -135,7 +154,6 @@
           typeof getReminderEntry !== 'function' ||
           typeof openReminderCenterEntry !== 'function') return;
       const match = storedTapRows(sess.user.id).find(row=>row.k===pending.key);
-      if (!match) return;
       const entries = getReminderEntries('all');
       if (!Array.isArray(entries)) return;
       for (const entry of entries) {
@@ -143,17 +161,22 @@
             !['note','planned'].includes(entry.kind)) break;
         const recurring = entry.sourceType === 'recurring-note';
         const currentTime = new Date(entry.date).getTime();
+        // Existing scheduled notifications may predate the local tap map.
+        // A non-recurring reminder can still be matched by its own date.
+        const timestamp = match?.t ?? (!recurring ? currentTime : NaN);
+        if (!Number.isSafeInteger(timestamp)) continue;
         if (!recurring && (!Number.isFinite(currentTime) ||
-            Math.abs(currentTime-match.t) > 60000)) continue;
+            Math.abs(currentTime-timestamp) > 60000)) continue;
         // Recompute the anonymous key in the user's LOCAL decrypted data.
         // Neither the SW nor the server receives a note or Planner ID.
-        const computed = await hashKey(`${entry.kind}:${String(entry.id)}:${match.t}`);
+        const computed = await hashKey(`${entry.kind}:${String(entry.id)}:${timestamp}`);
         if (computed !== pending.key) continue;
         const current = getReminderEntry(entry.kind,entry.id);
         if (!current?.reminder || current.completed) break;
         const options = recurring && typeof formatReminderLocalDateTime === 'function'
-          ? {dateOverride:formatReminderLocalDateTime(new Date(match.t))} : undefined;
+          ? {dateOverride:formatReminderLocalDateTime(new Date(timestamp))} : undefined;
         opened = openReminderCenterEntry(current,options) === true;
+        traceTap(opened?'MODAL_OPENED':'MODAL_DEFERRED');
         break;
       }
     } catch (_) {/* Startup/auth/sync may still be completing. */}
@@ -161,12 +184,16 @@
       openingTap = false;
       if (opened && pendingTap === pending) {
         openedTaps.add(pending.key);
+        sendToTapWorker(TAP_ACK,pending.key);
         pendingTap = null;
       } else if (pendingTap === pending) queueTap(500);
     }
   }
   navigator.serviceWorker?.addEventListener?.('message',event => {
     if (event?.data?.type === TAP_MESSAGE) receiveTap(event.data.key);
+  });
+  navigator.serviceWorker?.addEventListener?.('controllerchange',() => {
+    setTimeout(pollTapWorker,150);
   });
   // For a closed PWA, notificationclick opens this URL. Clear only our own
   // parameter; preserve history.state used by the Android PWA Back handler.
@@ -246,10 +273,11 @@
     render();
     if (!supported) return;
     try {
-      registration = await navigator.serviceWorker.register('./luba-webpush-sw.js?v=699D-CQ-tap',{
+      registration = await navigator.serviceWorker.register('./luba-webpush-sw.js?v=699D-CR-tap',{
         scope:'./',updateViaCache:'none'
       });
       await navigator.serviceWorker.ready;
+      pollTapWorker();
       const current = await registration.pushManager.getSubscription();
       const sess = await session();
       if (!sess) {setHint('Přihlas se pro nastavení PWA oznámení.');return;}
@@ -305,8 +333,9 @@
   });
   window.addEventListener('lubanote:cloud-write-confirmed',()=>queueSync(1500));
   window.addEventListener('online',()=>queueSync(3000));
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden) {queueSync(3000);if(pendingTap) queueTap(100);}});
-  window.addEventListener('pageshow',()=>{queueSync(3500);if(pendingTap) queueTap(100);});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden) {queueSync(3000);pollTapWorker();if(pendingTap) queueTap(100);}});
+  window.addEventListener('pageshow',()=>{queueSync(3500);pollTapWorker();if(pendingTap) queueTap(100);});
   setTimeout(()=>{void start();},700);
 })();
+
 
